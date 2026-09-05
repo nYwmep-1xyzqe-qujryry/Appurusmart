@@ -29,7 +29,7 @@ import { useTranslation } from "react-i18next";
 import { onLoginSuccess } from "../services/notificationService";
 import { API_BASE_URL, STORAGE_KEYS } from "../config";
 import { saveAuthSession } from "../services/authStorage";
-import { checkSupport, isBiometricEnabled, hasBiometricToken, saveBiometricToken, setBiometricEnabled, clearBiometricToken } from "../services/biometricService";
+import { checkSupport, getBiometricPresentation, isBiometricEnabled, hasBiometricToken, saveBiometricToken, setBiometricEnabled, clearBiometricToken } from "../services/biometricService";
 import { isPinSet } from "../services/pinService";
 import { resolveUserId, setCurrentUserId } from "../services/userSecurityKeys";
 import { ensureExpertProfile } from "../services/infoApi";
@@ -262,14 +262,12 @@ const Login = ({ navigation, route }) => {
     transform: [{ translateY: cardY.value }],
     opacity: cardOpacity.value,
   }));
-  // Android: ใช้ "ลายนิ้วมือ" เสมอ ไม่พึ่ง support.hasFaceId — บาง Android มี
-  // กล้องหน้ารองรับ face unlock (report FACIAL_RECOGNITION) แม้ผู้ใช้ enroll
-  // แค่ลายนิ้วมือเป็นหลัก ต่างจาก iOS ที่ hasFaceId บอก Face ID ตรงตัวได้จริง
-  // (เหมือน pattern เดียวกับที่ LockOverlay.js ใช้เลือก icon)
-  const getBiometricLabel = (support) =>
-    Platform.OS === "android"
-      ? t("login.fingerprint")
-      : support?.hasFaceId ? t("login.faceId") : t("login.fingerprint");
+  const getBiometricLabel = (support) => {
+    const { kind } = getBiometricPresentation(support);
+    if (kind === "face") return Platform.OS === "ios" ? t("login.faceId") : t("login.faceUnlock");
+    if (kind === "both") return t("login.biometric");
+    return t("login.fingerprint");
+  };
 
   const navigateToMain = () => {
     navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PinKeypad from "./PinKeypad";
 import { colors } from "../theme/tokens";
 import { verifyPin } from "../services/pinService";
-import { checkSupport, isBiometricEnabled, authenticateLocally } from "../services/biometricService";
+import { checkSupport, getBiometricPresentation, isBiometricEnabled, authenticateLocally } from "../services/biometricService";
 import { recordFailedPinAttempt, resetPinAttempts, wipeForPinFailure, clearSessionOnly } from "../services/lockService";
 import { getCurrentUserId } from "../services/userSecurityKeys";
 import { navigationRef } from "../navigation/navigationRef";
@@ -91,20 +91,7 @@ export default function LockOverlay({ locked, onUnlock }) {
       const [enabled, support] = await Promise.all([isBiometricEnabled(userId), checkSupport()]);
       const available = enabled && support.supported;
       setBiometricAvailable(available);
-      // Android: บังคับใช้ fingerprint icon เสมอ ไม่ว่าเครื่องจะ report
-      // FACIAL_RECOGNITION ด้วยหรือไม่ (บาง Android มีกล้องหน้ารองรับ face
-      // unlock แต่ผู้ใช้ enrolled แค่ลายนิ้วมือเป็นหลัก) — Android ไม่มี
-      // มาตรฐาน UI icon สำหรับ face unlock ที่ชัดเจนแบบ iOS's Face ID เลย
-      // จึงต้องยึด fingerprint เป็นสัญลักษณ์ biometric หลักบน Android เสมอ
-      if (Platform.OS === "android") {
-        setBiometricIcon(support.hasFingerprint || support.hasFaceId ? "fingerprint" : "finger-print-outline");
-      } else if (support.hasFaceId) {
-        setBiometricIcon("faceid");
-      } else if (support.hasFingerprint) {
-        setBiometricIcon("fingerprint");
-      } else {
-        setBiometricIcon("finger-print-outline");
-      }
+      setBiometricIcon(getBiometricPresentation(support).icon);
       setCheckingBiometric(false);
 
       if (available) {

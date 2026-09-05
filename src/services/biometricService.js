@@ -36,6 +36,23 @@ export async function checkSupport() {
   };
 }
 
+// เลือกข้อความ/ไอคอนตาม biometric ที่อุปกรณ์รายงานจริง
+// ถ้า Android รองรับหลายแบบ ให้ใช้คำกลาง เพราะระบบปฏิบัติการเป็นผู้เลือกวิธี
+export const getBiometricPresentation = (support, platform = Platform.OS) => {
+  const hasFaceId = !!support?.hasFaceId;
+  const hasFingerprint = !!support?.hasFingerprint;
+
+  if (platform === "ios") {
+    return hasFaceId
+      ? { kind: "face", icon: "faceid" }
+      : { kind: "fingerprint", icon: "fingerprint" };
+  }
+  if (hasFaceId && hasFingerprint) return { kind: "both", icon: "fingerprint" };
+  if (hasFaceId) return { kind: "face", icon: "faceid" };
+  if (hasFingerprint) return { kind: "fingerprint", icon: "fingerprint" };
+  return { kind: "biometric", icon: "finger-print-outline" };
+};
+
 // Biometric preference เป็น per-account เสมอ — User A เปิด biometric ไว้ไม่ได้
 // แปลว่า User B (login บนเครื่องเดียวกัน) เปิดด้วย ทุกฟังก์ชันด้านล่างต้องมี userId
 export const setBiometricEnabled = (userId, val) => {

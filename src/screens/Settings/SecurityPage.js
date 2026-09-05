@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Platform, ScrollView, StatusBar, Switch, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Image, Platform, ScrollView, StatusBar, Switch, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getAuthToken } from "../../services/authStorage";
 import {
   checkSupport,
+  getBiometricPresentation,
   setBiometricEnabled,
   isBiometricEnabled,
   saveBiometricToken,
@@ -15,6 +16,8 @@ import {
 import { isPinSet } from "../../services/pinService";
 import { wipeForPinFailure } from "../../services/lockService";
 import { getCurrentUserId } from "../../services/userSecurityKeys";
+
+const FACE_ID_ICON = require("../../assets/Face_ID.png");
 
 const getRootNavigation = (navigation) => {
   let current = navigation;
@@ -134,13 +137,13 @@ export default function SecurityPage() {
     }
   };
 
-  // Android: ใช้ "ลายนิ้วมือ" เสมอ ไม่พึ่ง hasFaceId — บาง Android มีกล้องหน้า
-  // รองรับ face unlock (report FACIAL_RECOGNITION) แม้ผู้ใช้ enroll แค่
-  // ลายนิ้วมือเป็นหลัก ต่างจาก iOS ที่ hasFaceId บอก Face ID ตรงตัวได้จริง
-  // (pattern เดียวกับ Login.js/LockOverlay.js)
-  const isAndroidBiometric = Platform.OS === "android";
-  const biometricLabel = isAndroidBiometric || !biometricInfo?.hasFaceId ? t("security.biometricFinger") : "Face ID";
-  const biometricIcon  = isAndroidBiometric || !biometricInfo?.hasFaceId ? "finger-print-outline" : "scan-outline";
+  const biometricPresentation = getBiometricPresentation(biometricInfo);
+  const biometricLabel = biometricPresentation.kind === "face"
+    ? Platform.OS === "ios" ? "Face ID" : t("security.biometricFace")
+    : biometricPresentation.kind === "both"
+      ? t("security.biometricGeneric")
+      : t("security.biometricFinger");
+  const biometricIcon = biometricPresentation.icon;
 
   return (
     <View className="flex-1 bg-[#eaf5ef]">
@@ -166,7 +169,11 @@ export default function SecurityPage() {
         <View className="bg-white rounded-2xl mx-4 overflow-hidden border border-[#e0ebe4]">
           <View className="flex-row items-center gap-[14px] px-4 py-[16px]">
             <View className="w-10 h-10 rounded-xl bg-brand items-center justify-center shrink-0">
-              <Ionicons name={biometricIcon} size={20} color="#fff" />
+              {biometricIcon === "faceid" ? (
+                <Image source={FACE_ID_ICON} style={{ width: 22, height: 22 }} resizeMode="contain" />
+              ) : (
+                <Ionicons name={biometricIcon} size={20} color="#fff" />
+              )}
             </View>
             <View className="flex-1 min-w-0">
               <Text
