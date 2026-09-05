@@ -348,7 +348,11 @@ const ProfileForm = ({ navigation, route }) => {
       position: resolveId(options.positions, prev.position),
       line: resolveId(options.lines, prev.line),
       main_unit: resolveId(options.mainUnits, prev.main_unit),
-      sub_unit: resolveId(options.subUnits, prev.sub_unit),
+      // หน่วยงานรองโหลดแยกหลังรู้ main_unit — อย่าล้างค่าที่ GET /me คืนมา
+      // ขณะที่ options ยังว่าง เพราะจะทำให้ค่าที่บันทึกไว้หายจากฟอร์ม
+      sub_unit: options.subUnits.length
+        ? resolveId(options.subUnits, prev.sub_unit)
+        : prev.sub_unit,
     }));
   }, [loadingOptions, loadingProfile]);
 
@@ -376,6 +380,13 @@ const ProfileForm = ({ navigation, route }) => {
       });
     return () => { cancelled = true; };
   }, [loadingProfile, form.main_unit, t]);
+
+  // หลังรายการหน่วยงานรองโหลดเสร็จ ให้ normalize ค่าเดิม (กรณี backend ส่งชื่อมา)
+  useEffect(() => {
+    if (!options.subUnits.length || !form.sub_unit) return;
+    const resolved = resolveId(options.subUnits, form.sub_unit);
+    if (resolved !== form.sub_unit) set("sub_unit", resolved);
+  }, [options.subUnits]);
 
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
