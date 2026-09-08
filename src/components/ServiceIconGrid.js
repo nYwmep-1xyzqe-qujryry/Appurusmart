@@ -46,7 +46,6 @@ const ServiceIconGrid = ({ navigation }) => {
       navigation?.navigate("InAppBrowser", {
         url: item.url,
         title: getLabel(item),
-        passAuthToken: true,
       });
     }
   };

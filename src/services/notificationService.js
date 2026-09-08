@@ -7,7 +7,7 @@ import { API_BASE_URL, EXPO_PROJECT_ID, STORAGE_KEYS } from "../config";
 import { isExpoGo } from "../utils/runtime";
 import i18n from "../i18n/i18n";
 import api from "./api";
-import { getAuthToken } from "./authStorage";
+import { getAuthToken, captureAuthSession, runWithSession, isAuthSessionCurrent, subscribeAuthSession } from "./authStorage";
 
 const NOTIFICATION_INBOX_LIMIT = 100;
 const inboxListeners = new Set();
@@ -30,6 +30,18 @@ const getNotifications = () => {
   return require("expo-notifications");
 };
 
+// Expo documents separate iOS authorization states. Provisional and ephemeral
+// authorization can receive notifications, so they must not be treated as a
+// hard denial simply because the root `status` is not sufficient for iOS.
+const hasNotificationPermission = (permission, Notifications) => {
+  if (!permission) return false;
+  if (Platform.OS !== "ios") return permission.status === "granted";
+  const iosStatus = permission.ios?.status;
+  if (iosStatus == null) return permission.status === "granted";
+  const status = Notifications?.IosAuthorizationStatus ?? {};
+  return [status.AUTHORIZED, status.PROVISIONAL, status.EPHEMERAL].includes(iosStatus);
+};
+
 const isMissingPushEntitlementError = (error) => {
   const message = String(error?.message ?? error ?? "").toLowerCase();
   return (
@@ -43,6 +55,8 @@ const getExpoProjectId = () =>
   EXPO_PROJECT_ID ??
   Constants.expoConfig?.extra?.eas?.projectId ??
   Constants.easConfig?.projectId;
+
+export const isExpoPushToken = (token) => typeof token === "string" && /^(ExponentPushToken|ExpoPushToken)\[[^\]\s]+\]$/.test(token);
 
 const getPushTokenPayload = (token) => ({
   push_token: token,
@@ -172,36 +186,40 @@ const extractServerNotifications = (responseData) => {
   return [];
 };
 
-const updateNotificationInbox = (updater) => {
-  inboxWriteQueue = inboxWriteQueue
-    .catch(() => {})
-    .then(async () => {
-      const current = await loadNotificationInbox();
-      const next = updater(current);
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.NOTIFICATION_INBOX,
-        JSON.stringify(next),
-      );
+const inboxKey = (session) => `${STORAGE_KEYS.NOTIFICATION_INBOX}:user:${encodeURIComponent(session.userId)}`;
+const pushTokenKey = (session) => `${STORAGE_KEYS.PUSH_TOKEN}:user:${encodeURIComponent(session.userId)}`;
+const notificationSettingsKey = (session) => `${STORAGE_KEYS.NOTIF_SETTINGS}:user:${encodeURIComponent(session.userId)}`;
+const readInbox = async (session) => {
+  const raw = await AsyncStorage.getItem(inboxKey(session));
+  try {
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+};
+subscribeAuthSession(() => {
+  backendInboxUnavailableUntil = 0;
+  emitInbox([]);
+});
+
+const updateNotificationInbox = async (updater, session = null) => {
+  session ??= await captureAuthSession();
+  if (!session?.userId) return [];
+  const result = inboxWriteQueue.catch(() => {}).then(() =>
+    runWithSession(session, async () => {
+      const next = updater(await readInbox(session));
+      await AsyncStorage.setItem(inboxKey(session), JSON.stringify(next));
       emitInbox(next);
       return next;
-    })
-    .catch((error) => {
-      if (__DEV__) {
-        console.warn("[Notifications] บันทึก inbox ไม่สำเร็จ:", error.message);
-      }
-      return [];
-    });
-  return inboxWriteQueue;
+    }),
+  );
+  inboxWriteQueue = result.catch(() => {});
+  return (await result) ?? [];
 };
 
 export async function loadNotificationInbox() {
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATION_INBOX);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (_) {
-    return [];
-  }
+  const session = await captureAuthSession();
+  if (!session?.userId) return [];
+  return (await runWithSession(session, () => readInbox(session))) ?? [];
 }
 
 export function subscribeNotificationInbox(listener) {
@@ -212,11 +230,12 @@ export function subscribeNotificationInbox(listener) {
 export async function syncNotificationInboxFromBackend() {
   if (isBackendInboxUnavailable()) return loadNotificationInbox();
 
-  const authToken = await getAuthToken();
-  if (!authToken) return loadNotificationInbox();
+  const session = await captureAuthSession();
+  if (!session?.userId) return [];
 
   try {
     const response = await api.get("/notifications", {
+      authSession: session,
       params: { page: 1, per_page: NOTIFICATION_INBOX_LIMIT },
       timeout: 5000,
       suppressErrorLog: true,
@@ -236,9 +255,9 @@ export async function syncNotificationInboxFromBackend() {
             new Date(a.receivedAt).getTime(),
         )
         .slice(0, NOTIFICATION_INBOX_LIMIT);
-    });
+    }, session);
   } catch (error) {
-    if (error.response?.status === 404 || error.response?.status === 405) {
+    if (await isAuthSessionCurrent(session) && (error.response?.status === 404 || error.response?.status === 405)) {
       markBackendInboxUnavailable();
     }
     if (
@@ -251,84 +270,55 @@ export async function syncNotificationInboxFromBackend() {
         error.response?.status ?? error.message,
       );
     }
-    return loadNotificationInbox();
+    // Do not replace an old account's failed request with the new account's
+    // inbox when a logout/login happened while the request was in flight.
+    return (await runWithSession(session, () => readInbox(session))) ?? [];
   }
 }
 
-export function saveNotificationToInbox(notification) {
-  const request = notification?.request;
-  const content = request?.content;
-  if (!content) return Promise.resolve([]);
-
-  const data = content.data ?? {};
-  const id = String(
-    data.notification_id ??
-      request.identifier ??
-      `${Date.now()}-${Math.random()}`,
-  );
-  const icon = getInboxIcon(data.type);
-  const item = {
-    id,
-    serverId:
-      data.notification_id == null ? null : String(data.notification_id),
-    title: content.title ?? i18n.t("notifications.defaultTitle"),
-    body: content.body ?? "",
-    receivedAt: notification.date ?? Date.now(),
-    read: false,
-    data,
-    ...icon,
-  };
-
-  return updateNotificationInbox((current) => {
-    if (current.some((entry) => entry.id === id)) return current;
-    return [item, ...current].slice(0, NOTIFICATION_INBOX_LIMIT);
-  });
+// Remote payloads may arrive after an account switch. Only the authenticated
+// inbox response can confirm ownership; never persist unverified push content.
+export async function saveNotificationToInbox(notification) {
+  if (!notification?.request?.content) return [];
+  return syncNotificationInboxFromBackend();
 }
 
-export function markNotificationRead(id) {
+export async function markNotificationRead(id) {
+  const session = await captureAuthSession();
+  if (!session?.userId) return [];
   let serverId = null;
-  return updateNotificationInbox((current) =>
-    current.map((item) => {
-      if (item.id !== id) return item;
-      serverId = item.serverId;
-      return { ...item, read: true };
-    }),
-  ).then(async (items) => {
-    if (!serverId || isBackendInboxUnavailable()) return items;
+  const items = await updateNotificationInbox((current) => current.map((item) => {
+    if (item.id !== id) return item;
+    serverId = item.serverId;
+    return { ...item, read: true };
+  }), session);
+  if (serverId && !isBackendInboxUnavailable() && await isAuthSessionCurrent(session)) {
     try {
       await api.patch(`/notifications/${encodeURIComponent(serverId)}/read`, null, {
-        suppressAuthRedirect: true,
+        authSession: session, suppressAuthRedirect: true,
       });
-    } catch (error) {
-      if (error.response?.status === 404 || error.response?.status === 405) {
-        markBackendInboxUnavailable();
-      }
-    }
-    return items;
-  });
+    } catch { /* Keep optimistic read state until the next server sync. */ }
+  }
+  return items;
 }
 
-export function markAllNotificationsRead() {
-  return updateNotificationInbox((current) =>
-    current.map((item) => ({ ...item, read: true })),
-  ).then(async (items) => {
-    if (isBackendInboxUnavailable()) return items;
+export async function markAllNotificationsRead() {
+  const session = await captureAuthSession();
+  if (!session?.userId) return [];
+  const items = await updateNotificationInbox(
+    (current) => current.map((item) => ({ ...item, read: true })), session,
+  );
+  if (!isBackendInboxUnavailable() && await isAuthSessionCurrent(session)) {
     try {
-      await api.post("/notifications/read-all", null, {
-        suppressAuthRedirect: true,
-      });
-    } catch (error) {
-      if (error.response?.status === 404 || error.response?.status === 405) {
-        markBackendInboxUnavailable();
-      }
-    }
-    return items;
-  });
+      await api.post("/notifications/read-all", null, { authSession: session, suppressAuthRedirect: true });
+    } catch { /* Retry through a subsequent sync/action. */ }
+  }
+  return items;
 }
 
 const requestPermissionWithRationale = async (Notifications) => {
   const current = await Notifications.getPermissionsAsync();
-  if (current.status === "granted") return current.status;
+  if (hasNotificationPermission(current, Notifications)) return "granted";
 
   const prompted = await AsyncStorage.getItem(
     STORAGE_KEYS.NOTIF_PERMISSION_PROMPTED,
@@ -394,7 +384,7 @@ const requestPermissionWithRationale = async (Notifications) => {
                 "true",
               );
               const result = await Notifications.requestPermissionsAsync();
-              resolve(result.status);
+              resolve(hasNotificationPermission(result, Notifications) ? "granted" : result.status);
             } catch (_) {
               resolve("denied");
             }
@@ -428,6 +418,8 @@ if (Platform.OS !== "web" && !isExpoGo) {
 
 // ── ขอ permission + ดึง push token ───────────────────────────
 export async function registerForPushNotificationsAsync() {
+  const session = await captureAuthSession();
+  if (!session) return null;
   if (Platform.OS === "web") return null;
   if (isExpoGo) {
     if (__DEV__) {
@@ -456,9 +448,12 @@ export async function registerForPushNotificationsAsync() {
     const projectId = getExpoProjectId();
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
-    if (__DEV__) console.log("EXPO PUSH TOKEN:", token);
-    await AsyncStorage.setItem(STORAGE_KEYS.PUSH_TOKEN, token);
-    return token;
+    if (!isExpoPushToken(token)) throw new Error("Invalid Expo push token");
+    return (await runWithSession(session, async () => {
+      if (!session.userId) return null;
+      await AsyncStorage.setItem(pushTokenKey(session), token);
+      return token;
+    })) ?? null;
   } catch (e) {
     // A free Apple Personal Team cannot sign an app with Push Notifications.
     // Keep local development usable; distribution builds retain this flow.
@@ -480,7 +475,7 @@ export async function getNotificationPermissionStatus() {
   if (!Notifications) return "unavailable";
   try {
     const permission = await Notifications.getPermissionsAsync();
-    return permission.status;
+    return hasNotificationPermission(permission, Notifications) ? "granted" : permission.status;
   } catch (_) {
     return "unavailable";
   }
@@ -493,10 +488,11 @@ export async function openNotificationSystemSettings() {
 
 // ── ส่ง token ไปที่ backend ───────────────────────────────────
 export async function sendTokenToBackend(token, sanctumToken) {
-  if (!token) throw new Error("Expo push token is missing");
+  if (!isExpoPushToken(token)) throw new Error("Expected an Expo push token");
   const authToken =
     sanctumToken ?? (await getAuthToken());
-  if (!authToken) throw new Error("Sanctum token is missing");
+  const session = await captureAuthSession();
+  if (!authToken || session?.token !== authToken) throw new Error("Session changed");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
@@ -514,7 +510,7 @@ export async function sendTokenToBackend(token, sanctumToken) {
       signal: controller.signal,
     });
     const result = await response.text();
-    if (__DEV__) console.log("PUSH TOKEN API:", response.status, result);
+    if (__DEV__) console.log("PUSH TOKEN API:", response.status);
 
     if (!response.ok) throw new Error(result || `HTTP ${response.status}`);
     return true;
@@ -523,42 +519,56 @@ export async function sendTokenToBackend(token, sanctumToken) {
   }
 }
 
-export async function handlePushTokenChange(tokenData) {
-  const token = tokenData?.data ?? tokenData;
-  if (!token) return;
-
-  await AsyncStorage.setItem(STORAGE_KEYS.PUSH_TOKEN, String(token));
-  const authToken = await getAuthToken();
-  if (!authToken) return;
-  try {
-    await sendTokenToBackend(String(token), authToken);
-  } catch (error) {
-    console.error("PUSH TOKEN ROTATION ERROR:", error);
+let rotationQueue = Promise.resolve();
+export async function handlePushTokenChange(devicePushToken) {
+  const session = await captureAuthSession();
+  if (!session || !devicePushToken?.data || !["android", "ios"].includes(devicePushToken.type)) return;
+  const work = rotationQueue.catch(() => {}).then(async () => {
+    if (!await isAuthSessionCurrent(session)) return;
+    const Notifications = getNotifications();
+    if (!Notifications) return;
+    // Supplying the native token avoids calling getDevicePushTokenAsync from
+    // its own listener, which would trigger another token event.
+    const { data: token } = await Notifications.getExpoPushTokenAsync({
+      projectId: getExpoProjectId(), devicePushToken,
+    });
+    if (!isExpoPushToken(token)) throw new Error("Invalid Expo push token");
+    const active = await runWithSession(session, async () => {
+      if (!session.userId) return false;
+      await AsyncStorage.setItem(pushTokenKey(session), token);
+      return true;
+    });
+    if (active) await sendTokenToBackend(token, session.token);
+  });
+  rotationQueue = work.catch(() => {});
+  try { await work; } catch {
+    if (__DEV__) console.warn("[Notifications] Token registration failed; retry at next login");
   }
 }
 
-export async function removeTokenFromBackend(token) {
-  if (!token) return false;
+export async function removeTokenFromBackend(token, session = null) {
+  if (!isExpoPushToken(token)) return false;
+  session ??= await captureAuthSession();
+  if (!session) return false;
   try {
     await api.delete("/push-token", {
-      data: getDeletePushTokenPayload(token),
+      data: getDeletePushTokenPayload(token), authSession: session, suppressAuthRedirect: true,
     });
-    if (__DEV__) console.log("[Notifications] ลบ push token สำเร็จ");
     return true;
-  } catch (error) {
-    if (__DEV__) {
-      console.warn(
-        "[Notifications] ลบ push token ไม่สำเร็จ:",
-        error.response?.status ?? error.message,
-      );
-    }
-    return false;
-  }
+  } catch { return false; }
 }
 
-export async function loadNotificationSettings() {
+export async function getStoredPushToken(session = null) {
+  session ??= await captureAuthSession();
+  if (!session?.userId) return null;
+  return (await runWithSession(session, () => AsyncStorage.getItem(pushTokenKey(session)))) ?? null;
+}
+
+export async function loadNotificationSettings(session = null) {
+  session ??= await captureAuthSession();
+  if (!session?.userId) return DEFAULT_NOTIFICATION_SETTINGS;
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_SETTINGS);
+    const raw = await runWithSession(session, () => AsyncStorage.getItem(notificationSettingsKey(session)));
     if (!raw) return DEFAULT_NOTIFICATION_SETTINGS;
     return { ...DEFAULT_NOTIFICATION_SETTINGS, ...JSON.parse(raw) };
   } catch (_) {
@@ -566,18 +576,24 @@ export async function loadNotificationSettings() {
   }
 }
 
-export async function saveNotificationSettings(settings) {
+export async function saveNotificationSettings(settings, session = null) {
+  session ??= await captureAuthSession();
+  if (!session?.userId) return DEFAULT_NOTIFICATION_SETTINGS;
   const next = { ...DEFAULT_NOTIFICATION_SETTINGS, ...settings };
-  await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_SETTINGS, JSON.stringify(next));
-  return next;
+  return (await runWithSession(session, async () => {
+    await AsyncStorage.setItem(notificationSettingsKey(session), JSON.stringify(next));
+    return next;
+  })) ?? DEFAULT_NOTIFICATION_SETTINGS;
 }
 
-export async function syncNotificationSettingsToBackend(settings) {
+export async function syncNotificationSettingsToBackend(settings, session = null) {
+  session ??= await captureAuthSession();
+  if (!session) return false;
   try {
     await api.put(
       "/notification-settings",
       getNotificationSettingsPayload(settings),
-      { suppressErrorLog: true, suppressAuthRedirect: true },
+      { authSession: session, suppressErrorLog: true, suppressAuthRedirect: true },
     );
     if (__DEV__) console.log("[Notifications] บันทึก settings สำเร็จ");
     return true;
@@ -594,6 +610,8 @@ export async function syncNotificationSettingsToBackend(settings) {
 
 // ── เรียกตอน login สำเร็จ ────────────────────────────────────
 export async function onLoginSuccess() {
+  const session = await captureAuthSession();
+  if (!session) return;
   if (Platform.OS === "web") {
     syncNotificationInboxFromBackend().catch(() => {});
     return;
@@ -602,8 +620,7 @@ export async function onLoginSuccess() {
   const registerPushToken = async () => {
     const token = await registerForPushNotificationsAsync();
     if (token) {
-      const sanctumToken = await getAuthToken();
-      await sendTokenToBackend(token, sanctumToken);
+      if (await isAuthSessionCurrent(session)) await sendTokenToBackend(token, session.token);
     } else if (!isExpoGo && Device.isDevice) {
       console.warn(
         "PUSH TOKEN SKIPPED: permission, device หรือ build ยังไม่พร้อม",
@@ -613,7 +630,7 @@ export async function onLoginSuccess() {
 
   const [pushResult, settingsResult] = await Promise.allSettled([
     registerPushToken(),
-    loadNotificationSettings().then(syncNotificationSettingsToBackend),
+    loadNotificationSettings(session).then((settings) => syncNotificationSettingsToBackend(settings, session)),
   ]);
   if (pushResult.status === "rejected") {
     console.warn("PUSH NOTIFICATION SETUP ERROR:", pushResult.reason);
@@ -638,26 +655,28 @@ const getNotificationResponseKey = (response) => {
   return `${identifier ?? "unknown"}:${actionIdentifier ?? "default"}`;
 };
 
-const shouldHandleNotificationResponse = async (response) => {
-  const authToken = await getAuthToken();
-  if (!authToken) return false;
+const shouldHandleNotificationResponse = async (response, session) => {
+  if (!session || !await isAuthSessionCurrent(session)) return false;
 
   const key = getNotificationResponseKey(response);
   if (!key) return true;
 
-  const previousKey = await AsyncStorage.getItem(
-    STORAGE_KEYS.LAST_NOTIFICATION_RESPONSE,
-  );
+  const responseKey = `${STORAGE_KEYS.LAST_NOTIFICATION_RESPONSE}:user:${encodeURIComponent(session.userId ?? "unknown")}`;
+  const previousKey = await AsyncStorage.getItem(responseKey);
   if (previousKey === key) return false;
 
-  await AsyncStorage.setItem(STORAGE_KEYS.LAST_NOTIFICATION_RESPONSE, key);
-  return true;
+  return (await runWithSession(session, async () => {
+    await AsyncStorage.setItem(responseKey, key);
+    return true;
+  })) ?? false;
 };
 
 // ── handle เมื่อผู้ใช้แตะ notification ──────────────────────
 export async function handleNotificationResponse(response) {
+  const session = await captureAuthSession();
+  if (!session) return;
   saveNotificationToInbox(response?.notification).catch(() => {});
-  const shouldNavigate = await shouldHandleNotificationResponse(response);
+  const shouldNavigate = await shouldHandleNotificationResponse(response, session);
   if (!shouldNavigate) return;
 
   const data = response?.notification?.request?.content?.data;
@@ -665,7 +684,9 @@ export async function handleNotificationResponse(response) {
 
   if (data.type === "announcement") {
     setTimeout(
-      () => navigate("Announcements", { highlightId: data.announcement_id }),
+      async () => {
+        if (await isAuthSessionCurrent(session)) navigate("Announcements", { highlightId: data.announcement_id });
+      },
       500,
     );
     return;
@@ -675,5 +696,7 @@ export async function handleNotificationResponse(response) {
     ? data.screen
     : "Notifications";
   const params = data.params ?? {};
-  setTimeout(() => navigate(screen, params), 500);
+  setTimeout(async () => {
+    if (await isAuthSessionCurrent(session)) navigate(screen, params);
+  }, 500);
 }

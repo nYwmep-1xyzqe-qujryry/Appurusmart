@@ -12,6 +12,7 @@ import {
   saveNotificationSettings,
   syncNotificationSettingsToBackend,
 } from "../../services/notificationService";
+import { captureAuthSession } from "../../services/authStorage";
 
 const ITEM_ICONS = {
   beforeClass:   { icon: "alarm-outline",         iconBg: "#2167b2" },
@@ -43,8 +44,10 @@ export default function NotificationSettingPage() {
   const toggle = async (key) => {
     const next = { ...settings, [key]: !settings[key] };
     setSettings(next);
-    await saveNotificationSettings(next);
-    syncNotificationSettingsToBackend(next);
+    const session = await captureAuthSession();
+    if (!session) return;
+    await saveNotificationSettings(next, session);
+    syncNotificationSettingsToBackend(next, session);
   };
 
   const ITEMS = useMemo(() => [

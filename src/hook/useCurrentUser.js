@@ -1,25 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { Alert, AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTranslation } from "react-i18next";
 import { STORAGE_KEYS } from "../config";
-import { clearBiometricToken } from "../services/biometricService";
-import { clearAuthSession } from "../services/authStorage";
-import { getCurrentUserId, clearCurrentUserId } from "../services/userSecurityKeys";
-import { removeTokenFromBackend } from "../services/notificationService";
+import { clearBiometricToken, setBiometricEnabled } from "../services/biometricService";
+import { captureAuthSession, invalidateAuthSession } from "../services/authStorage";
+import { clearCurrentUserId } from "../services/userSecurityKeys";
+import { getStoredPushToken, removeTokenFromBackend } from "../services/notificationService";
 import api from "../services/api";
-import { stripNamePrefix } from "../utils/name";
-import { fixPhotoUrl } from "../utils/image";
-
-const normalizeUser = (data = {}) => {
-  const raw = data.full_name_th ?? data.full_name_en ?? data.name ?? data.full_name ?? data.teacher_name ?? data.username ?? "";
-  const rawPhoto = data.picture ?? data.photo_url ?? data.photoUrl ?? data.avatar ?? data.profile_image ?? data.image ?? "";
-  return {
-    name:     stripNamePrefix(raw),
-    faculty:  data.faculty_name_th ?? data.faculty_name ?? data.faculty ?? data.department ?? "",
-    photoUrl: fixPhotoUrl(rawPhoto),
-  };
-};
+import { getCurrentUserSnapshot, subscribeCurrentUser, refreshCurrentUser } from "../services/currentUserStore";
 
 const getRootNavigation = (navigation) => {
   let current = navigation;
@@ -28,29 +17,11 @@ const getRootNavigation = (navigation) => {
 };
 
 export default function useCurrentUser(navigation) {
-  const [user, setUser] = useState(normalizeUser());
+  const user = useSyncExternalStore(subscribeCurrentUser, getCurrentUserSnapshot, getCurrentUserSnapshot);
   const { t } = useTranslation();
   const appState = useRef(AppState.currentState);
 
-  const refresh = useCallback(async () => {
-    // อ่าน AsyncStorage ก่อน (เร็ว)
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEYS.USER);
-      if (raw) setUser(normalizeUser(JSON.parse(raw)));
-    } catch (_) {}
-    // fetch /me เพื่อให้ได้ picture ล่าสุดเสมอ
-    try {
-      const res = await api.get("/me");
-      const data = res.data?.data ?? res.data;
-      if (data) {
-        setUser(normalizeUser(data));
-        // อัปเดต AsyncStorage ด้วย เพื่อให้ครั้งต่อไปอ่านได้ทันที
-        const raw = await AsyncStorage.getItem(STORAGE_KEYS.USER);
-        const stored = raw ? JSON.parse(raw) : {};
-        await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify({ ...stored, ...data }));
-      }
-    } catch (_) {}
-  }, []);
+  const refresh = useCallback(() => { refreshCurrentUser().catch(() => {}); }, []);
 
   useEffect(() => {
     refresh();
@@ -78,27 +49,29 @@ export default function useCurrentUser(navigation) {
         onPress: async () => {
           // อ่าน userId ก่อนล้างอะไรทั้งนั้น — ต้องใช้ scope การลบ biometric
           // token ให้ตรงบัญชีที่กำลัง logout เท่านั้น ไม่กระทบบัญชีอื่นบนเครื่อง
-          const userId = await getCurrentUserId();
+          const session = await captureAuthSession();
+          if (!session) return;
+          const userId = session.userId;
 
-          const pushToken = await AsyncStorage.getItem(STORAGE_KEYS.PUSH_TOKEN);
-          await removeTokenFromBackend(pushToken);
-          try { await api.post("/auth/logout"); } catch (_) {}
-          await clearAuthSession();
+          const pushToken = await getStoredPushToken(session);
+          await removeTokenFromBackend(pushToken, session);
+          try { await api.post("/auth/logout", null, { authSession: session, suppressAuthRedirect: true }); } catch (_) {}
+          await invalidateAuthSession(session, async () => {
           await AsyncStorage.multiRemove([
             STORAGE_KEYS.USER,
-            STORAGE_KEYS.PUSH_TOKEN,
             STORAGE_KEYS.NOTIFICATION_INBOX,
           ]);
-          // ลบเฉพาะ biometric token ของบัญชีนี้ (ผูกกับ session ที่ logout ไปแล้ว
-          // ต้องลบ ป้องกัน Face ID เข้าบัญชีเก่า) — ไม่ลบ flag "เคยเปิด biometric
-          // ไว้" ของบัญชีนี้ เพื่อให้ login ครั้งถัดไปด้วยบัญชีเดิมไม่ต้องถาม popup ซ้ำ
+          // ลบ token และสถานะของบัญชีนี้ เพื่อให้การ login ครั้งถัดไปต้องบันทึก
+          // biometric token ใหม่เสมอ ไม่ใช้ session ที่ logout แล้ว
           if (userId) await clearBiometricToken(userId);
+          if (userId) await setBiometricEnabled(userId, false);
           // ไม่ลบ PIN ของบัญชีนี้ตอน logout — PIN เป็น per-account security
           // preference ที่ต้องคงอยู่ให้บัญชีเดิม login กลับมาแล้วเข้าแอปได้ทันที
           // โดยไม่ต้องตั้ง PIN ซ้ำ — ไม่กระทบบัญชีอื่นเพราะ key แยกตาม userId แล้ว
           await clearCurrentUserId();
           await AsyncStorage.multiRemove([STORAGE_KEYS.PIN_ATTEMPTS, STORAGE_KEYS.LAST_BACKGROUND_AT]);
           getRootNavigation(navigation).reset({ index: 0, routes: [{ name: "Login" }] });
+          });
         },
       },
     ]);

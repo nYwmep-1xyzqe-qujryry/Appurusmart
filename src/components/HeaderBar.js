@@ -13,6 +13,9 @@ const logo = require("../assets/urusmartlogo.png");
 const HeaderBar = ({ name, photoUrl, onNotification, onLogout }) => {
   const { top } = useSafeAreaInsets();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [photoFailed, setPhotoFailed] = useState(false);
+
+  useEffect(() => setPhotoFailed(false), [photoUrl]);
 
   useEffect(() => {
     const updateCount = (items) => {
@@ -31,8 +34,12 @@ const HeaderBar = ({ name, photoUrl, onNotification, onLogout }) => {
       <View className="flex-row items-center">
         {/* Avatar — fixed width */}
         <View className="w-[40px] h-[40px] rounded-full bg-white/10 border-2 border-white items-center justify-center overflow-hidden">
-          {photoUrl ? (
-            <Image source={{ uri: photoUrl }} className="w-full h-full" />
+          {photoUrl && !photoFailed ? (
+            <Image
+              source={{ uri: photoUrl }}
+              className="w-full h-full"
+              onError={() => setPhotoFailed(true)}
+            />
           ) : (
             <Text className="text-white text-[14px] font-extrabold">{initials}</Text>
           )}

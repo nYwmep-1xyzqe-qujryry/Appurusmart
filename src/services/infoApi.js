@@ -1,10 +1,6 @@
 import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { INFO_API_BASE_URL, STORAGE_KEYS } from "../config";
-import { navigate } from "../navigation/navigationRef";
-import { clearBiometricToken, setBiometricEnabled } from "./biometricService";
-import { clearAuthSession, getAuthToken } from "./authStorage";
-import { getCurrentUserId } from "./userSecurityKeys";
+import { INFO_API_BASE_URL } from "../config";
+import { attachRequestSession, handleUnauthorized } from "./sessionRequest";
 
 // API สำหรับข้อมูล Expert/LRD โดยเฉพาะ ใช้ token เดียวกับ URU Smart API
 // แต่แยก instance เพื่อป้องกันการส่ง request ของโมดูลอื่นไป Info โดยไม่ตั้งใจ
@@ -39,27 +35,14 @@ infoApi.interceptors.request.use(async (config) => {
     }
   }
 
-  try {
-    const token = await getAuthToken();
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-  } catch (_) {}
-  return config;
+  return attachRequestSession(config);
 }, (error) => Promise.reject(error));
 
 // Token ของ Info เป็น token เดียวกับ app หลัก จึงจัดการ session หมดอายุเหมือน API หลัก
 infoApi.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401 && !error.config?.suppressAuthRedirect) {
-      const userId = await getCurrentUserId();
-      await clearAuthSession();
-      await AsyncStorage.removeItem(STORAGE_KEYS.USER);
-      if (userId) {
-        await clearBiometricToken(userId);
-        await setBiometricEnabled(userId, false);
-      }
-      navigate("Login");
-    }
+    await handleUnauthorized(error);
     if (__DEV__ && !error.config?.suppressErrorLog) {
       console.warn(`[Info API] ${error.response?.status ?? error.code ?? "NETWORK_ERROR"} ${error.config?.method?.toUpperCase()} ${error.config?.url}`, error.message);
     }

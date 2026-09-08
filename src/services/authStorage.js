@@ -18,11 +18,52 @@ const webSession = {
 };
 
 const removeLegacyAuth = () => AsyncStorage.multiRemove(LEGACY_AUTH_KEYS);
+let generation = 0;
+let sessionQueue = Promise.resolve();
+const listeners = new Set();
+const enqueue = (operation) => {
+  const result = sessionQueue.then(operation);
+  sessionQueue = result.catch(() => {});
+  return result;
+};
+const changed = () => {
+  generation += 1;
+  listeners.forEach((listener) => listener());
+};
+export const subscribeAuthSession = (listener) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+const readToken = () => Platform.OS === "web"
+  ? Promise.resolve(webSession.get(SECURE_KEYS.AUTH_TOKEN))
+  : SecureStore.getItemAsync(SECURE_KEYS.AUTH_TOKEN);
 
-export async function saveAuthSession(token) {
+// Serialize session transitions and scoped cache writes. Never call another
+// queued operation inside a runWithSession/cleanup callback.
+export async function captureAuthSession() {
+  await sessionQueue;
+  const version = generation;
+  const token = await getAuthToken();
+  const userId = await AsyncStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
+  if (version !== generation) return captureAuthSession();
+  return token ? { token, generation: version, userId } : null;
+}
+export async function isAuthSessionCurrent(session) {
+  if (!session || session.generation !== generation) return false;
+  const token = await readToken();
+  return session.generation === generation && token === session.token;
+}
+export const runWithSession = (session, operation) => enqueue(async () => {
+  if (!await isAuthSessionCurrent(session)) return undefined;
+  return operation();
+});
+
+export async function saveAuthSession(token, user, userId) {
   const value = String(token || "");
   if (!value) throw new Error("Auth token is missing");
 
+  return enqueue(async () => {
+  changed();
   if (Platform.OS === "web") {
     webSession.set(SECURE_KEYS.AUTH_TOKEN, value);
   } else {
@@ -32,6 +73,13 @@ export async function saveAuthSession(token) {
   }
 
   await removeLegacyAuth();
+  if (user && userId) {
+    await AsyncStorage.multiSet([
+      [STORAGE_KEYS.USER, JSON.stringify(user)],
+      [STORAGE_KEYS.CURRENT_USER_ID, String(userId)],
+    ]);
+  }
+  });
 }
 
 export async function getAuthToken() {
@@ -53,7 +101,8 @@ export async function getAuthToken() {
   }
 }
 
-export async function clearAuthSession() {
+async function clearStoredSession() {
+  changed();
   if (Platform.OS === "web") {
     webSession.remove(SECURE_KEYS.AUTH_TOKEN);
   } else {
@@ -61,3 +110,11 @@ export async function clearAuthSession() {
   }
   await removeLegacyAuth();
 }
+
+export const clearAuthSession = () => enqueue(clearStoredSession);
+export const invalidateAuthSession = (session, cleanup = async () => {}) => enqueue(async () => {
+  if (!await isAuthSessionCurrent(session)) return false;
+  await clearStoredSession();
+  await cleanup();
+  return true;
+});

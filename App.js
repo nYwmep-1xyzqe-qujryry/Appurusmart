@@ -15,7 +15,7 @@ import { initI18n } from './src/i18n/i18n';
 import { isExpoGo } from './src/utils/runtime';
 import NotificationToast, { showToast } from './src/components/NotificationToast';
 import LockOverlay from './src/components/LockOverlay';
-import { getAuthToken } from './src/services/authStorage';
+import { getAuthToken, captureAuthSession, runWithSession } from './src/services/authStorage';
 import { isPinSet } from './src/services/pinService';
 import { clearBackgroundTime, recordBackgroundTime, shouldShowLock } from './src/services/lockService';
 import { getCurrentUserId } from './src/services/userSecurityKeys';
@@ -121,9 +121,20 @@ export default function App() {
       );
 
       receivedSubscription = Notifications.addNotificationReceivedListener(
-        (notification) => {
-          saveNotificationToInbox(notification);
-          showToast(notification);
+        async (notification) => {
+          const session = await captureAuthSession();
+          if (!session) return;
+          try {
+            const items = await saveNotificationToInbox(notification);
+            const id = notification?.request?.content?.data?.notification_id;
+            const verified = items.find((item) => id != null && String(item.serverId) === String(id));
+            if (verified) await runWithSession(session, () => showToast({
+              ...notification,
+              request: { ...notification.request, content: {
+                ...notification.request.content, title: verified.title, body: verified.body, data: verified.data,
+              } },
+            }));
+          } catch { /* A push payload alone does not prove inbox ownership. */ }
         },
       );
 

@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { STORAGE_KEYS } from "../config";
 import { isPinSet, clearPin } from "./pinService";
-import { clearAuthSession } from "./authStorage";
+import { captureAuthSession, invalidateAuthSession, clearAuthSession } from "./authStorage";
+import { getStoredPushToken, removeTokenFromBackend } from "./notificationService";
 import { clearBiometricToken, setBiometricEnabled } from "./biometricService";
 import { clearCurrentUserId } from "./userSecurityKeys";
 
@@ -49,21 +50,32 @@ export const shouldShowLock = async (userId) => {
 // useCurrentUser.logout() และ api.js เพื่อไม่แตะโค้ด logout เดิมที่ทำงานอยู่แล้ว
 // ต้อง scope ด้วย userId เสมอ ห้ามลบ PIN/biometric ของบัญชีอื่นบนเครื่องเดียวกัน
 export const wipeForPinFailure = async (userId) => {
-  await clearAuthSession();
-  await AsyncStorage.multiRemove([
-    STORAGE_KEYS.USER,
-    STORAGE_KEYS.PUSH_TOKEN,
-    STORAGE_KEYS.NOTIFICATION_INBOX,
-  ]);
-  await clearCurrentUserId();
-  if (userId) {
-    await clearBiometricToken(userId);
-    await setBiometricEnabled(userId, false);
-    await clearPin(userId);
-  }
-  await resetPinAttempts();
-  await AsyncStorage.removeItem(STORAGE_KEYS.LAST_BACKGROUND_AT);
+  const session = await captureAuthSession();
+  if (!session || (userId && session.userId !== String(userId))) return false;
+  return invalidateAuthSession(session, async () => {
+    await AsyncStorage.multiRemove([
+      STORAGE_KEYS.USER,
+      `${STORAGE_KEYS.PUSH_TOKEN}:user:${encodeURIComponent(session.userId ?? "")}`,
+      STORAGE_KEYS.NOTIFICATION_INBOX,
+      STORAGE_KEYS.PIN_ATTEMPTS,
+      STORAGE_KEYS.LAST_BACKGROUND_AT,
+    ]);
+    await clearCurrentUserId();
+    if (userId) {
+      await clearBiometricToken(userId);
+      await setBiometricEnabled(userId, false);
+      await clearPin(userId);
+    }
+    return true;
+  });
 };
 
 // "Sign in with SSO instead" — ล้างแค่ session ปัจจุบัน ไม่แตะ PIN/biometric เลย
-export const clearSessionOnly = () => clearAuthSession();
+export const clearSessionOnly = async () => {
+  const session = await captureAuthSession();
+  if (session) {
+    const pushToken = await getStoredPushToken(session);
+    await removeTokenFromBackend(pushToken, session);
+  }
+  return clearAuthSession();
+};

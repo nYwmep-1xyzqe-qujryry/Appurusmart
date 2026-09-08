@@ -85,6 +85,7 @@ const photoShadow = {
 export default function Cardpage({ navigation }) {
   const { t } = useTranslation();
   const { user, logout } = useCurrentUser(navigation);
+  const [photoFailed, setPhotoFailed] = useState(false);
 
   // แสดงข้อมูล user ทันที ไม่รอ API
   const [teacher, setTeacher] = useState(null);
@@ -142,8 +143,10 @@ export default function Cardpage({ navigation }) {
     phone:      raw.phone      || "",
     phoneWork:  raw.phoneWork  || "",
     profileId:  raw.profileId  || "",
-    photoUrl:   user.photoUrl  || raw.photoUrl    || "",
+    photoUrl:   user.photoUrl,
   };
+
+  useEffect(() => setPhotoFailed(false), [tc.photoUrl]);
 
   const displayName = stripNamePrefix(tc.name);
 
@@ -225,8 +228,12 @@ export default function Cardpage({ navigation }) {
                 className="self-center w-[112px] h-[112px] rounded-full bg-white overflow-hidden"
                 style={{ marginTop: -56, borderWidth: 4, borderColor: "#fff", ...photoShadow }}
               >
-                {tc.photoUrl ? (
-                  <Image source={{ uri: tc.photoUrl }} className="w-full h-full" />
+                {tc.photoUrl && !photoFailed ? (
+                  <Image
+                    source={{ uri: tc.photoUrl }}
+                    className="w-full h-full"
+                    onError={() => setPhotoFailed(true)}
+                  />
                 ) : (
                   <LinearGradient colors={["#d4efe5", "#b8dfd0"]} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
                     <Text style={{ color: "#0f7a55", fontSize: 52, fontWeight: "900" }}>{ini}</Text>

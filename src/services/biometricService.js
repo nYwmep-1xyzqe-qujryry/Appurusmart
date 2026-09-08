@@ -1,5 +1,6 @@
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
+import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { STORAGE_KEYS, SECURE_KEYS } from "../config";
@@ -76,6 +77,13 @@ export const hasBiometricToken = async (userId) => {
   return raw ? JSON.parse(raw) : false;
 };
 
+const tokenFingerprintKey = (userId) => userScopedKey(`${STORAGE_KEYS.BIOMETRIC_TOKEN_SAVED_PREFIX}_session`, userId);
+export const biometricTokenMatches = async (userId, token) => {
+  if (!requireUserId(userId) || !token) return false;
+  const fingerprint = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, String(token));
+  return await AsyncStorage.getItem(tokenFingerprintKey(userId)) === fingerprint;
+};
+
 export const saveBiometricToken = async (userId, token, authenticationPrompt) => {
   if (!requireUserId(userId)) throw new Error("Missing userId for saveBiometricToken");
   await SecureStore.setItemAsync(userScopedKey(SECURE_KEYS.BIOMETRIC_TOKEN_PREFIX, userId), token, {
@@ -85,6 +93,7 @@ export const saveBiometricToken = async (userId, token, authenticationPrompt) =>
   });
   await AsyncStorage.removeItem(userScopedKey(STORAGE_KEYS.BIOMETRIC_FALLBACK_PREFIX, userId));
   await AsyncStorage.setItem(userScopedKey(STORAGE_KEYS.BIOMETRIC_TOKEN_SAVED_PREFIX, userId), JSON.stringify(true));
+  await AsyncStorage.setItem(tokenFingerprintKey(userId), await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, String(token)));
 };
 
 export const getBiometricToken = async (
@@ -104,6 +113,7 @@ export const clearBiometricToken = async (userId) => {
   try { await SecureStore.deleteItemAsync(userScopedKey(SECURE_KEYS.BIOMETRIC_TOKEN_PREFIX, userId)); } catch (_) {}
   try { await AsyncStorage.removeItem(userScopedKey(STORAGE_KEYS.BIOMETRIC_FALLBACK_PREFIX, userId)); } catch (_) {}
   try { await AsyncStorage.removeItem(userScopedKey(STORAGE_KEYS.BIOMETRIC_TOKEN_SAVED_PREFIX, userId)); } catch (_) {}
+  try { await AsyncStorage.removeItem(tokenFingerprintKey(userId)); } catch (_) {}
 };
 
 // เช็คตัวตนแบบ local เฉยๆ (ไม่ดึง token ใดๆ) — ใช้สำหรับหน้าจอ lock screen

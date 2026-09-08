@@ -1,4 +1,12 @@
 const hasHttpProtocol = (value) => /^https?:\/\//i.test(value);
+export const isExternalWebUrl = (value) => {
+  try {
+    const url = new URL(value);
+    return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+};
 const isIPv4 = (hostname) => /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
 
 const hasValidHostname = (hostname) => {

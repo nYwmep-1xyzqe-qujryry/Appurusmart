@@ -21,11 +21,12 @@ import FormField from "../../../components/expert/FormField";
 import InlineDropdown from "../../../components/expert/InlineDropdown";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import useCurrentUser from "../../../hook/useCurrentUser";
+import { captureAuthSession, isAuthSessionCurrent } from "../../../services/authStorage";
+import { refreshCurrentUser, updateCurrentPhoto, normalizeExpertPhoto } from "../../../services/currentUserStore";
 import api from "../../../services/api";
 import infoApi from "../../../services/infoApi";
-import { INFO_API_BASE_URL, STORAGE_KEYS } from "../../../config";
-import { fixPhotoUrl } from "../../../utils/image";
+
 import useConfirm from "../../../hook/useConfirm";
 import {
   formatThaiDate,
@@ -50,12 +51,6 @@ const withCacheBust = (url) => {
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}v=${Date.now()}`;
 };
-
-const isDisplayableImageUri = (uri) =>
-  typeof uri === "string" &&
-  /^(https?:\/\/|file:\/\/|content:\/\/|ph:\/\/|assets-library:\/\/)/.test(
-    uri,
-  );
 
 const getUploadedPhotoUrl = (payload) => {
   const data = payload?.data ?? payload ?? {};
@@ -148,11 +143,15 @@ const ProfileForm = ({ navigation, route }) => {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [photoUrl, setPhotoUrl] = useState("");
+  const { user: currentUser } = useCurrentUser(navigation);
+  const [photoPreview, setPhotoUrl] = useState(null);
+  const photoUrl = photoPreview ?? currentUser.photoUrl;
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState(null);
+  const photoOperation = useRef(false);
   const [photoLoading, setPhotoLoading] = useState(false);
   const scrollRef = useRef(null);
   const fieldLayouts = useRef({});
-  const lastLocalPhotoUri = useRef("");
+
 
   const refs = {
     prefix: useRef(null),
@@ -269,14 +268,6 @@ const ProfileForm = ({ navigation, route }) => {
         if (__DEV__)
           console.log("[ProfileForm] GET /me keys:", Object.keys(data));
 
-        const currentPhoto =
-          data.photo_url ??
-          data.picture ??
-          data.avatar ??
-          data.profile_image ??
-          "";
-        if (currentPhoto) setPhotoUrl(fixPhotoUrl(currentPhoto));
-
         const fullTh = data.full_name_th ?? "";
         const fullEn = data.full_name_en ?? "";
         const splitTh = stripNamePrefix(fullTh).trim().split(/\s+/);
@@ -328,6 +319,8 @@ const ProfileForm = ({ navigation, route }) => {
               data.sub_dep_id ?? "",
           ),
         });
+
+
       })
       .catch((err) => {
         if (__DEV__) console.warn("[ProfileForm] GET /me:", err.message);
@@ -398,7 +391,12 @@ const ProfileForm = ({ navigation, route }) => {
   };
 
   const pickImage = async (source) => {
+    if (photoOperation.current) return;
+    photoOperation.current = true;
+    let session;
     try {
+      session = await captureAuthSession();
+      if (!session) return;
       let result;
       if (source === "camera") {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -438,7 +436,8 @@ const ProfileForm = ({ navigation, route }) => {
       const asset = result.assets[0];
       const pickedImage = await preparePickedImage(asset);
       // แสดงรูปจาก local ทันที ไม่ต้องรอ server
-      lastLocalPhotoUri.current = pickedImage.uri;
+      if (!await isAuthSessionCurrent(session)) return;
+      setFailedPhotoUrl(null);
       setPhotoUrl(pickedImage.uri);
       setPhotoLoading(true);
 
@@ -452,53 +451,43 @@ const ProfileForm = ({ navigation, route }) => {
       // รูป Expert ต้องอัปโหลดเข้า Info API เพื่อให้ backend ผูกเจ้าของจาก
       // Bearer token และบันทึก URL ลง expert2.users.picture
       const res = await infoApi.post("/info/expert/profile/photo", formData, {
+        authSession: session,
         headers: { "Content-Type": "multipart/form-data" },
         transformRequest: (data) => data,
       });
-      const serverUrl = getUploadedPhotoUrl(res.data);
-      if (__DEV__) {
-        console.log(
-          "[ProfileForm] server photo URL:",
-          res.data,
-          "→ extracted:",
-          serverUrl,
-          "→ fixed:",
-          fixPhotoUrl(serverUrl, INFO_API_BASE_URL),
-        );
-      }
-      const fixedServerUrl = withCacheBust(
-        fixPhotoUrl(serverUrl, INFO_API_BASE_URL),
-      );
-      const finalUrl = isDisplayableImageUri(fixedServerUrl)
-        ? fixedServerUrl
-        : pickedImage.uri;
-      setPhotoUrl(finalUrl);
-      // อัปเดต AsyncStorage ให้หน้าอื่น (Setting, Chatbot) เห็นรูปใหม่ทันที
+      const serverUrl = normalizeExpertPhoto(getUploadedPhotoUrl(res.data));
+      if (!serverUrl) throw new Error("Upload response did not contain a photo URL");
+      const finalUrl = withCacheBust(serverUrl);
+      const saved = await updateCurrentPhoto(session, finalUrl);
+      if (!saved) return;
+      setPhotoUrl(null);
+      // A successful upload response does not prove the public file is served.
+      let reachable = false;
+      let timer;
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEYS.USER);
-        if (raw) {
-          const stored = JSON.parse(raw);
-          stored.picture = finalUrl;
-          stored.photo_url = finalUrl;
-          await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(stored));
-        }
-      } catch (_) {}
+        reachable = await Promise.race([
+          Image.prefetch(finalUrl),
+          new Promise((resolve) => { timer = setTimeout(() => resolve(false), 8000); }),
+        ]);
+      } catch { /* Show a distinct server-file warning below. */ }
+      finally { clearTimeout(timer); }
+      if (!await isAuthSessionCurrent(session)) return;
       Alert.alert(
-        t("research.profile.photoSuccessTitle"),
-        t("research.profile.photoSuccessMsg"),
+        t(reachable ? "research.profile.photoSuccessTitle" : "research.profile.photoErrorTitle"),
+        t(reachable ? "research.profile.photoSuccessMsg" : "research.profile.photoFileUnavailable"),
       );
     } catch (e) {
-      console.warn(
-        "[ProfileForm] Photo upload:",
-        e?.message,
-        e?.response?.data,
-      );
+      if (!await isAuthSessionCurrent(session)) return;
+      if (__DEV__) console.warn("[ProfileForm] Photo upload failed:", e?.response?.status ?? e?.code ?? "UPLOAD_ERROR");
+      refreshCurrentUser({ force: true }).catch(() => {});
       Alert.alert(
         t("research.profile.photoErrorTitle"),
         t("research.profile.photoErrorMsg"),
       );
     } finally {
+      setPhotoUrl(null);
       setPhotoLoading(false);
+      photoOperation.current = false;
     }
   };
 
@@ -519,42 +508,39 @@ const ProfileForm = ({ navigation, route }) => {
   };
 
   const removePhoto = async () => {
+    if (photoOperation.current) return;
+    photoOperation.current = true;
     setPhotoLoading(true);
+    let session;
     try {
+      session = await captureAuthSession();
+      if (!session) return;
       const res = await infoApi.post(
         "/info/expert/profile/photo",
         { _method: "DELETE" },
         {
+          authSession: session,
           headers: {
             "Content-Type": "application/json",
             "X-HTTP-Method-Override": "DELETE",
           },
         },
       );
-      const fallbackUrl = getUploadedPhotoUrl(res.data);
-      const resolvedFallback = fallbackUrl
-        ? fixPhotoUrl(fallbackUrl, INFO_API_BASE_URL)
-        : "";
-      setPhotoUrl(resolvedFallback);
-      lastLocalPhotoUri.current = "";
-      try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEYS.USER);
-        if (raw) {
-          const stored = JSON.parse(raw);
-          stored.picture = resolvedFallback;
-          stored.photo_url = resolvedFallback;
-          await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(stored));
-        }
-      } catch (_) {}
+      const fallbackUrl = normalizeExpertPhoto(getUploadedPhotoUrl(res.data));
+      if (!await updateCurrentPhoto(session, fallbackUrl)) return;
+      setPhotoUrl(null);
+      setFailedPhotoUrl(null);
       Alert.alert(
         t("research.profile.photoDeleteSuccessTitle"),
         t("research.profile.photoDeleteSuccessMsg"),
       );
     } catch (e) {
-      console.warn("[ProfileForm] Photo delete:", e?.message, e?.response?.data);
+      if (!await isAuthSessionCurrent(session)) return;
+      if (__DEV__) console.warn("[ProfileForm] Photo delete failed:", e?.response?.status);
       Alert.alert(t("research.profile.photoErrorTitle"), t("research.profile.photoDeleteErrorMsg"));
     } finally {
       setPhotoLoading(false);
+      photoOperation.current = false;
     }
   };
 
@@ -717,25 +703,12 @@ const ProfileForm = ({ navigation, route }) => {
                   borderColor: "#007a5a",
                 }}
               >
-                {photoUrl ? (
+                {photoUrl && failedPhotoUrl !== photoUrl ? (
                   <Image
                     source={{ uri: photoUrl }}
                     style={{ width: "100%", height: "100%" }}
                     resizeMode="cover"
-                    onError={(e) => {
-                      console.warn(
-                        "[ProfileForm] Image load error:",
-                        e.nativeEvent.error,
-                        "url:",
-                        photoUrl,
-                      );
-                      if (
-                        lastLocalPhotoUri.current &&
-                        photoUrl !== lastLocalPhotoUri.current
-                      ) {
-                        setPhotoUrl(lastLocalPhotoUri.current);
-                      }
-                    }}
+                    onError={() => setFailedPhotoUrl(photoUrl)}
                   />
                 ) : (
                   <View
@@ -771,6 +744,11 @@ const ProfileForm = ({ navigation, route }) => {
                 )}
               </View>
             </TouchableOpacity>
+            {photoUrl && failedPhotoUrl === photoUrl && (
+              <Text accessibilityRole="alert" style={{ color: "#a23d20", marginTop: 8, textAlign: "center" }}>
+                {t("research.profile.photoFileUnavailable")}
+              </Text>
+            )}
             <Text
               style={{
                 fontSize: 15,

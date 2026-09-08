@@ -120,7 +120,7 @@ export default function ProfilePrint({ navigation }) {
   });
 
   const fullName = `${profile.prefix ?? ""}${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim();
-  const profileImage = user.photoUrl || profile.photo || profile.image || profile.avatar || "";
+  const profileImage = user.photoUrl;
   const faculty = getLabel(FACULTY_OPTIONS, profile.faculty);
   const department = getLabel(DEPARTMENT_OPTIONS, profile.department);
 

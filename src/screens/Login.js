@@ -28,10 +28,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { onLoginSuccess } from "../services/notificationService";
 import { API_BASE_URL, STORAGE_KEYS } from "../config";
-import { saveAuthSession } from "../services/authStorage";
-import { checkSupport, getBiometricPresentation, isBiometricEnabled, hasBiometricToken, saveBiometricToken, setBiometricEnabled, clearBiometricToken } from "../services/biometricService";
+import { saveAuthSession, captureAuthSession, runWithSession } from "../services/authStorage";
+import { checkSupport, getBiometricPresentation, isBiometricEnabled, hasBiometricToken, biometricTokenMatches, saveBiometricToken, setBiometricEnabled, clearBiometricToken } from "../services/biometricService";
 import { isPinSet } from "../services/pinService";
-import { resolveUserId, setCurrentUserId } from "../services/userSecurityKeys";
+import { resolveUserId } from "../services/userSecurityKeys";
 import { ensureExpertProfile } from "../services/infoApi";
 
 const API_URL = API_BASE_URL;
@@ -279,25 +279,19 @@ const Login = ({ navigation, route }) => {
     });
   };
 
-  const promptEnableBiometric = (userId, token) =>
-    new Promise((resolve) => {
-      Promise.all([checkSupport(), isBiometricEnabled(userId), hasBiometricToken(userId)]).then(
-        ([support, alreadyEnabled, tokenExists]) => {
+  const promptEnableBiometric = async (userId, token) => {
+    const session = await captureAuthSession();
+    if (!session || session.token !== token || session.userId !== userId) return;
+    return new Promise((resolve) => {
+      Promise.all([checkSupport(), isBiometricEnabled(userId), hasBiometricToken(userId), biometricTokenMatches(userId, token)]).then(
+        ([support, alreadyEnabled, tokenExists, tokenMatches]) => {
         if (!support.supported) {
           resolve();
           return;
         }
 
-        // เคยเปิด biometric ไว้แล้วสำหรับบัญชีนี้ (logout ไม่ได้ลบ flag/token นี้)
-        // — token เดิมยังใช้ปลดล็อกได้ปกติ ไม่ต้องเขียนทับใหม่ทุกครั้งที่ login
-        // เพราะ SecureStore เขียนด้วย requireAuthentication:true เสมอ ทำให้ Face ID
-        // เด้งขึ้นมาเองโดยผู้ใช้ไม่ได้ขอ — ถือว่า alreadyEnabled=true หมายถึงมี
-        // token อยู่แล้วเสมอ (setBiometricEnabled(true) ถูกเรียกหลัง
-        // saveBiometricToken() สำเร็จเท่านั้น) แม้ tokenExists (flag ใหม่ที่เพิ่ง
-        // เพิ่ม) จะเป็น false ก็ตาม — เพราะบัญชีที่เปิด biometric ไว้ตั้งแต่ก่อน
-        // เพิ่ม flag นี้จะยังไม่มี flag ใหม่นี้เลย (migration gap) แต่ token จริง
-        // ใน SecureStore มีอยู่แล้ว เขียนทับใหม่เฉพาะกรณี alreadyEnabled=false จริงๆ
-        if (alreadyEnabled || tokenExists) {
+        // A preference is not proof that a usable token still exists after logout.
+        if (alreadyEnabled && tokenExists && tokenMatches) {
           resolve();
           return;
         }
@@ -312,15 +306,19 @@ const Login = ({ navigation, route }) => {
               text: t("login.notNow"),
               style: "cancel",
               onPress: async () => {
-                await setBiometricEnabled(userId, false);
-                await clearBiometricToken(userId);
-                resolve();
+                try {
+                  await runWithSession(session, async () => {
+                    await setBiometricEnabled(userId, false);
+                    await clearBiometricToken(userId);
+                  });
+                } finally { resolve(); }
               },
             },
             {
               text: t("login.enable"),
               onPress: async () => {
                 try {
+                  await runWithSession(session, async () => {
                   await saveBiometricToken(
                     userId,
                     String(token),
@@ -329,6 +327,7 @@ const Login = ({ navigation, route }) => {
                     }),
                   );
                   await setBiometricEnabled(userId, true);
+                  });
                 } catch (_) {
                   Alert.alert(
                     t("login.enableFailedTitle"),
@@ -342,8 +341,9 @@ const Login = ({ navigation, route }) => {
           ],
           { cancelable: false },
         );
-      });
+      }).catch(() => resolve());
     });
+  };
 
   const promptEnableBiometricAfterNavigation = (userId, token) =>
     new Promise((resolve) => {
@@ -372,12 +372,7 @@ const Login = ({ navigation, route }) => {
       return;
     }
 
-    await saveAuthSession(data.token);
-    await setCurrentUserId(userId);
-    await AsyncStorage.setItem(
-      STORAGE_KEYS.USER,
-      JSON.stringify(data.user || {}),
-    );
+    await saveAuthSession(data.token, data.user || {}, userId);
 
     // สร้าง/ตรวจ Expert profile ก่อนเปิด session หลัก เพื่อให้หน้า Expert
     // และ profile-search มองเห็นผู้ใช้ได้ตั้งแต่ยังไม่เคยบันทึกผลงาน
@@ -395,6 +390,8 @@ const Login = ({ navigation, route }) => {
         );
       }
     }
+    const activeSession = await captureAuthSession();
+    if (!activeSession || activeSession.token !== data.token || activeSession.userId !== userId) return;
     runPostLoginNotifications();
 
     if (await isPinSet(userId)) {
