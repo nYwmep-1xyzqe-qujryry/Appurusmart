@@ -512,7 +512,14 @@ export async function sendTokenToBackend(token, sanctumToken) {
     const result = await response.text();
     if (__DEV__) console.log("PUSH TOKEN API:", response.status);
 
-    if (!response.ok) throw new Error(result || `HTTP ${response.status}`);
+    if (!response.ok) {
+      // Keep the server's diagnostic available during development without
+      // logging the push token or Sanctum authorization header.
+      if (__DEV__) {
+        console.warn("[Notifications] push-token registration failed:", response.status, result || "<empty response>");
+      }
+      throw new Error(result || `HTTP ${response.status}`);
+    }
     return true;
   } finally {
     clearTimeout(timeout);

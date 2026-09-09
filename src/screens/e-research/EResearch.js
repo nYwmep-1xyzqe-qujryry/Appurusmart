@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Image, ScrollView, StatusBar, Text, TouchableOpacity, View } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import AppHeader from "../../components/AppHeader";
 import useLrdResource from "../../hook/useLrdResource";
@@ -132,6 +131,7 @@ export default function EResearch({ navigation }) {
   const { user } = useCurrentUser();
   const {
     session,
+    researcherId,
     connected,
     loading: sessionLoading,
     connecting,
@@ -143,6 +143,10 @@ export default function EResearch({ navigation }) {
   const canLoadLrd = Boolean(session?.authenticated && connected);
   const autoConnectAttemptsRef = useRef(0);
   const autoConnectRetryTimerRef = useRef(null);
+  // This root screen remains mounted while child e-Research screens are open.
+  // Keep its data in memory instead of replacing the UI with a loading state on
+  // every Back navigation. A different researcher session still gets one load.
+  const loadedResearcherRef = useRef(null);
 
   useEffect(() => () => {
     if (autoConnectRetryTimerRef.current) {
@@ -179,8 +183,8 @@ export default function EResearch({ navigation }) {
   const [profileLoading, setProfileLoading] = useState(false);
   const { items: education, loading: educationLoading, refetch: refetchEducation } = useLrdResource(LRD_ENDPOINTS.educations, { skip: !canLoadLrd, loadOnFocus: false });
   const { items: expertise, loading: expertiseLoading, refetch: refetchExpertise } = useLrdResource(LRD_ENDPOINTS.expertises, { skip: !canLoadLrd, loadOnFocus: false });
-  const { total: projectsTotal, loading: projectsLoading } = useLrdResource(LRD_ENDPOINTS.projects, { params: { scope: "all" }, skip: !canLoadLrd });
-  const { total: articlesTotal, loading: articlesLoading } = useLrdResource(LRD_ENDPOINTS.papers, { params: { scope: "all" }, skip: !canLoadLrd });
+  const { total: projectsTotal, loading: projectsLoading, refetch: refetchProjects } = useLrdResource(LRD_ENDPOINTS.projects, { params: { scope: "all" }, skip: !canLoadLrd, loadOnFocus: false });
+  const { total: articlesTotal, loading: articlesLoading, refetch: refetchArticles } = useLrdResource(LRD_ENDPOINTS.papers, { params: { scope: "all" }, skip: !canLoadLrd, loadOnFocus: false });
 
   const refetchProfile = useCallback(async () => {
     if (!canLoadLrd) return;
@@ -205,14 +209,25 @@ export default function EResearch({ navigation }) {
     finally { setProfileLoading(false); }
   }, [canLoadLrd]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!canLoadLrd) return;
-      refetchProfile();
-      refetchEducation();
-      refetchExpertise();
-    }, [canLoadLrd, refetchProfile, refetchEducation, refetchExpertise])
-  );
+  useEffect(() => {
+    if (!canLoadLrd || !researcherId || loadedResearcherRef.current === String(researcherId)) return;
+    loadedResearcherRef.current = String(researcherId);
+    Promise.all([
+      refetchProfile(),
+      refetchEducation(),
+      refetchExpertise(),
+      refetchProjects(),
+      refetchArticles(),
+    ]).catch(() => {});
+  }, [
+    canLoadLrd,
+    researcherId,
+    refetchProfile,
+    refetchEducation,
+    refetchExpertise,
+    refetchProjects,
+    refetchArticles,
+  ]);
 
   const loading = sessionLoading || (canLoadLrd && (profileLoading || educationLoading || expertiseLoading));
   const hasProfile = Boolean(profile.firstName?.trim() || profile.lastName?.trim());
