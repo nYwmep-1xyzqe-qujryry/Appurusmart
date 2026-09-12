@@ -858,7 +858,12 @@ export async function onLoginSuccess() {
 }
 
 // หน้าที่อนุญาตให้ push notification นำทางได้ — ป้องกัน navigation injection
-const ALLOWED_NOTIFICATION_SCREENS = ["Notifications", "Announcements", "MainTabs"];
+const ALLOWED_NOTIFICATION_SCREENS = [
+  "Notifications",
+  "NotificationDetail",
+  "Announcements",
+  "MainTabs",
+];
 
 const getNotificationResponseKey = (response) => {
   const request = response?.notification?.request;
@@ -916,9 +921,10 @@ export async function handleNotificationResponse(response) {
     return;
   }
 
-  const screen = ALLOWED_NOTIFICATION_SCREENS.includes(data.screen)
-    ? data.screen
-    : "Notifications";
-  const params = data.params ?? {};
+  const hasExplicitScreen = ALLOWED_NOTIFICATION_SCREENS.includes(data.screen);
+  const screen = hasExplicitScreen ? data.screen : "NotificationDetail";
+  const params = hasExplicitScreen
+    ? data.params ?? {}
+    : { notification: verified };
   if (await isAuthSessionCurrent(session)) navigate(screen, params);
 }

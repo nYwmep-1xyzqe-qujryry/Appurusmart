@@ -55,7 +55,9 @@ module.exports = {
       [
         "expo-notifications",
         {
-          icon: "./assets/icon.png",
+          // Android notification small icons must be a monochrome asset with
+          // transparency; the full-color launcher icon renders blank here.
+          icon: "./assets/notification-icon.png",
           color: "#0f7a55",
           defaultChannel: "default",
         },

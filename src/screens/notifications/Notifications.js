@@ -102,7 +102,9 @@ export default function NotificationsScreen({ navigation }) {
       navigation.navigate("Announcements", {
         highlightId: item.data.announcement_id,
       });
+      return;
     }
+    navigation.navigate("NotificationDetail", { notification: item });
   };
 
   const displayItems = useMemo(() => {

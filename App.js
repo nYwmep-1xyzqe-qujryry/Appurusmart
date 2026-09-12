@@ -6,27 +6,21 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import AppNavigator from "./src/navigation/AppNavigator";
 import {
   flushPendingNavigation,
-  navigate,
   navigationRef,
 } from "./src/navigation/navigationRef";
 import {
   handleNotificationResponse,
   handlePushTokenChange,
-  parseNotificationData,
   onLoginSuccess,
   saveNotificationToInbox,
   syncNotificationInboxFromBackend,
 } from "./src/services/notificationService";
 import { initI18n } from "./src/i18n/i18n";
 import { isExpoGo } from "./src/utils/runtime";
-import NotificationToast, {
-  showToast,
-} from "./src/components/NotificationToast";
 import LockOverlay from "./src/components/LockOverlay";
 import {
   getAuthToken,
   captureAuthSession,
-  runWithSession,
   subscribeAuthSession,
 } from "./src/services/authStorage";
 import { startForegroundRefresh } from "./src/utils/foregroundRefresh";
@@ -37,15 +31,6 @@ import {
   shouldShowLock,
 } from "./src/services/lockService";
 import { getCurrentUserId } from "./src/services/userSecurityKeys";
-
-const handleToastPress = (notification) => {
-  const data = notification?.request?.content?.data ?? {};
-  if (data.type === "announcement") {
-    navigate("Announcements", { highlightId: data.announcement_id });
-    return;
-  }
-  navigate("Notifications");
-};
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -201,28 +186,7 @@ export default function App() {
           const session = await captureAuthSession();
           if (!session) return;
           try {
-            const items = await saveNotificationToInbox(notification);
-            const id = parseNotificationData(
-              notification?.request?.content?.data,
-            ).notification_id;
-            const verified = items.find(
-              (item) => id != null && String(item.serverId) === String(id),
-            );
-            if (verified)
-              await runWithSession(session, () =>
-                showToast({
-                  ...notification,
-                  request: {
-                    ...notification.request,
-                    content: {
-                      ...notification.request.content,
-                      title: verified.title,
-                      body: verified.body,
-                      data: verified.data,
-                    },
-                  },
-                }),
-              );
+            await saveNotificationToInbox(notification);
           } catch {
             /* A push payload alone does not prove inbox ownership. */
           }
@@ -273,7 +237,6 @@ export default function App() {
           clearBackgroundTime();
         }}
       />
-      <NotificationToast onPress={handleToastPress} />
     </SafeAreaProvider>
   );
 }

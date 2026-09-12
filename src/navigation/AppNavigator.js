@@ -38,6 +38,7 @@ import TrainingForm from "../screens/expert/forms/TrainingForm";
 import ServiceForm from "../screens/expert/forms/ServiceForm";
 import HumanSubjectsForm from "../screens/expert/forms/HumanSubjectsForm";
 import NotificationsScreen from "../screens/notifications/Notifications";
+import NotificationDetail from "../screens/notifications/NotificationDetail";
 import InAppBrowser from "../screens/shared/InAppBrowser";
 import EResearch from "../screens/e-research/EResearch";
 import ResearcherForm from "../screens/e-research/ResearcherForm";
@@ -232,6 +233,7 @@ export default function AppNavigator() {
       <RootStack.Screen name="MainTabs" component={MainTabs} />
       <RootStack.Screen name="Announcements" component={AnnouncementsScreen} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />
+      <RootStack.Screen name="NotificationDetail" component={NotificationDetail} />
       <RootStack.Screen name="Research" component={ExpertHome} />
       <RootStack.Screen name="ResearchList" component={ResearchList} />
       <RootStack.Screen name="ProfileForm" component={ProfileForm} />

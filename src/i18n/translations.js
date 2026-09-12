@@ -137,6 +137,7 @@ export const th = {
     markAllRead: 'อ่านทั้งหมด',
     today: 'วันนี้',
     earlier: 'ก่อนหน้า',
+    detailTitle: 'รายละเอียดการแจ้งเตือน',
   },
   announce: {
     title: 'ข่าวสารและประกาศ',
@@ -736,6 +737,7 @@ export const en = {
     markAllRead: 'Mark all as read',
     today: 'Today',
     earlier: 'Earlier',
+    detailTitle: 'Notification details',
   },
   announce: {
     title: 'News & Announcements',
