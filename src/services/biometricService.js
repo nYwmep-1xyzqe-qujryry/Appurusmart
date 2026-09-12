@@ -20,21 +20,70 @@ export async function checkSupport() {
     return { supported: false, reasonCode: "developmentBuildRequired" };
   }
 
-  const hasHardware = await LocalAuthentication.hasHardwareAsync();
-  if (!hasHardware) return { supported: false, reasonCode: "noHardware" };
+  try {
+    const [hasHardware, isEnrolled, types, securityLevel] = await Promise.all([
+      LocalAuthentication.hasHardwareAsync(),
+      LocalAuthentication.isEnrolledAsync(),
+      LocalAuthentication.supportedAuthenticationTypesAsync(),
+      LocalAuthentication.getEnrolledLevelAsync(),
+    ]);
+    const hasFaceId = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
+    const hasFingerprint = types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
+    // SecureStore uses Android BIOMETRIC_STRONG for biometric-protected keys.
+    // Keep app unlocking and protected storage on the same security level.
+    const canProtectToken = SecureStore.canUseBiometricAuthentication();
 
-  const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-  if (!isEnrolled) return { supported: false, reasonCode: "notEnrolled" };
+    if (__DEV__) {
+      console.log("[Biometric] Android/iOS capability:", {
+        platform: Platform.OS,
+        hasHardware,
+        isEnrolled,
+        hasFaceId,
+        hasFingerprint,
+        securityLevel,
+        canProtectToken,
+      });
+    }
 
-  const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-  const hasFaceId = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
-  const hasFingerprint = types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
+    if (!hasHardware) return { supported: false, reasonCode: "noHardware" };
+    if (!isEnrolled) {
+      return {
+        supported: false,
+        reasonCode: "notEnrolled",
+        hasFaceId,
+        hasFingerprint,
+        securityLevel,
+        canProtectToken,
+      };
+    }
+    if (
+      Platform.OS === "android" &&
+      (securityLevel !== LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG ||
+        !canProtectToken)
+    ) {
+      return {
+        supported: false,
+        reasonCode: "strongBiometricRequired",
+        hasFaceId,
+        hasFingerprint,
+        securityLevel,
+        canProtectToken,
+      };
+    }
 
-  return {
-    supported: true,
-    hasFaceId,
-    hasFingerprint,
-  };
+    return {
+      supported: true,
+      hasFaceId,
+      hasFingerprint,
+      securityLevel,
+      canProtectToken,
+    };
+  } catch (error) {
+    if (__DEV__) {
+      console.warn("[Biometric] capability check failed:", error?.message);
+    }
+    return { supported: false, reasonCode: "unknown" };
+  }
 }
 
 // เลือกข้อความ/ไอคอนตาม biometric ที่อุปกรณ์รายงานจริง
@@ -48,10 +97,7 @@ export const getBiometricPresentation = (support, platform = Platform.OS) => {
       ? { kind: "face", icon: "faceid" }
       : { kind: "fingerprint", icon: "fingerprint" };
   }
-  if (hasFaceId && hasFingerprint) return { kind: "both", icon: "fingerprint" };
-  if (hasFaceId) return { kind: "face", icon: "faceid" };
-  if (hasFingerprint) return { kind: "fingerprint", icon: "fingerprint" };
-  return { kind: "biometric", icon: "finger-print-outline" };
+  return { kind: "biometric", icon: "scan-outline" };
 };
 
 // Biometric preference เป็น per-account เสมอ — User A เปิด biometric ไว้ไม่ได้
@@ -120,7 +166,15 @@ export const clearBiometricToken = async (userId) => {
 // เพื่อ "พิสูจน์ว่าเป็นเจ้าของเครื่อง" แยกจาก getBiometricToken ที่ดึง token สำหรับ relogin
 export const authenticateLocally = async (promptMessage) => {
   try {
-    const result = await LocalAuthentication.authenticateAsync({ promptMessage });
+    const options = {
+      promptMessage,
+      // The app PIN is the explicit fallback for this lock screen.
+      disableDeviceFallback: true,
+    };
+    if (Platform.OS === "android") {
+      options.biometricsSecurityLevel = "strong";
+    }
+    const result = await LocalAuthentication.authenticateAsync(options);
     return { success: !!result?.success, error: result?.error };
   } catch (error) {
     return { success: false, error: error?.message };

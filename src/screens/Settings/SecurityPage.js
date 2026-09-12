@@ -38,22 +38,27 @@ export default function SecurityPage() {
 
   useEffect(() => {
     (async () => {
-      const uid = await getCurrentUserId();
-      setUserId(uid);
-      if (!uid) {
-        // ไม่มี userId แปลว่า resolve บัญชีปัจจุบันไม่ได้ — ไม่ถือว่ามี PIN/biometric
+      try {
+        const uid = await getCurrentUserId();
+        setUserId(uid);
+        if (!uid) return;
+        const [enabled, support, pin] = await Promise.all([
+          isBiometricEnabled(uid),
+          checkSupport(),
+          isPinSet(uid),
+        ]);
+        setBiometric(enabled && support.supported);
+        setBiometricInfo(support);
+        setPinSet(pin);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn("[Security] failed to load security settings:", error?.message);
+        }
+        setBiometric(false);
+        setBiometricInfo({ supported: false, reasonCode: "unknown" });
+      } finally {
         setChecking(false);
-        return;
       }
-      const [enabled, support, pin] = await Promise.all([
-        isBiometricEnabled(uid),
-        checkSupport(),
-        isPinSet(uid),
-      ]);
-      setBiometric(enabled && support.supported);
-      setBiometricInfo(support);
-      setPinSet(pin);
-      setChecking(false);
     })();
   }, []);
 
@@ -81,7 +86,7 @@ export default function SecurityPage() {
         t("security.notSupportedTitle"),
         t(
           `security.reason.${biometricInfo?.reasonCode ?? "unknown"}`,
-          { defaultValue: t("security.biometricSub") },
+          { defaultValue: biometricSubtitle },
         ),
       );
       return;
@@ -98,11 +103,8 @@ export default function SecurityPage() {
       }
 
       try {
-        await saveBiometricToken(
-          userId,
-          token,
-          t("security.enablePrompt", { label: biometricLabel }),
-        );
+        const prompt = t("security.enablePrompt", { label: biometricLabel });
+        await saveBiometricToken(userId, token, prompt);
       } catch (_) {
         Alert.alert(
           t("security.verifyFailTitle"),
@@ -138,11 +140,22 @@ export default function SecurityPage() {
   };
 
   const biometricPresentation = getBiometricPresentation(biometricInfo);
-  const biometricLabel = biometricPresentation.kind === "face"
-    ? Platform.OS === "ios" ? "Face ID" : t("security.biometricFace")
-    : biometricPresentation.kind === "both"
-      ? t("security.biometricGeneric")
+  const biometricLabel = Platform.OS === "android"
+    ? t("security.biometricGeneric")
+    : biometricPresentation.kind === "face"
+      ? "Face ID"
       : t("security.biometricFinger");
+  const biometricTitle = Platform.OS === "android"
+    ? t("security.biometricAndroid")
+    : t("security.biometric");
+  const biometricSubtitle = Platform.OS === "android"
+    ? t("security.biometricAndroidSub")
+    : t("security.biometricSub");
+  const biometricReason = biometricInfo?.reasonCode
+    ? t(`security.reason.${biometricInfo.reasonCode}`, {
+        defaultValue: biometricSubtitle,
+      })
+    : biometricSubtitle;
   const biometricIcon = biometricPresentation.icon;
 
   return (
@@ -182,19 +195,19 @@ export default function SecurityPage() {
                 adjustsFontSizeToFit
                 minimumFontScale={0.85}
               >
-                {t("security.biometric")}
+                {biometricTitle}
               </Text>
               {checking ? (
                 <Text className="text-[12px] text-[#7c8f86] mt-[2px]">{t("security.checking")}</Text>
               ) : !biometricInfo?.supported ? (
                 <Text className="text-[12px] text-[#7c8f86] mt-[2px]" numberOfLines={2}>
-                  {biometricInfo?.reason ?? t("security.biometricSub")}
+                  {biometricReason}
                 </Text>
               ) : biometric ? (
                 <Text className="text-[12px] text-[#0f7a55] font-semibold mt-[2px]">{t("security.active")}</Text>
               ) : (
                 <Text className="text-[12px] font-medium text-[#7c8f86] mt-[2px]" numberOfLines={2}>
-                  {t("security.biometricSub")}
+                  {biometricSubtitle}
                 </Text>
               )}
             </View>
@@ -214,7 +227,9 @@ export default function SecurityPage() {
           <View className="flex-row items-start gap-2 bg-[#e8f5ee] rounded-[14px] mx-4 mt-4 p-[14px] border border-[#e0ebe4]">
             <Ionicons name="information-circle-outline" size={16} color="#1a6b3c" />
             <Text className="flex-1 text-[12px] text-[#4a5c54] leading-[18px]">
-              {t("security.biometricNote", { label: biometricLabel })}
+              {Platform.OS === "android"
+                ? t("security.biometricAndroidNote")
+                : t("security.biometricNote", { label: biometricLabel })}
             </Text>
           </View>
         )}

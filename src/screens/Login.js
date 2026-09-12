@@ -263,6 +263,7 @@ const Login = ({ navigation, route }) => {
     opacity: cardOpacity.value,
   }));
   const getBiometricLabel = (support) => {
+    if (Platform.OS === "android") return t("login.biometric");
     const { kind } = getBiometricPresentation(support);
     if (kind === "face") return Platform.OS === "ios" ? t("login.faceId") : t("login.faceUnlock");
     if (kind === "both") return t("login.biometric");
@@ -319,14 +320,15 @@ const Login = ({ navigation, route }) => {
               onPress: async () => {
                 try {
                   await runWithSession(session, async () => {
-                  await saveBiometricToken(
-                    userId,
-                    String(token),
-                    t("login.enableBiometricPrompt", {
+                    const prompt = t("login.enableBiometricPrompt", {
                       label: biometricLabelText,
-                    }),
-                  );
-                  await setBiometricEnabled(userId, true);
+                    });
+                    await saveBiometricToken(
+                      userId,
+                      String(token),
+                      prompt,
+                    );
+                    await setBiometricEnabled(userId, true);
                   });
                 } catch (_) {
                   Alert.alert(
@@ -392,8 +394,6 @@ const Login = ({ navigation, route }) => {
     }
     const activeSession = await captureAuthSession();
     if (!activeSession || activeSession.token !== data.token || activeSession.userId !== userId) return;
-    runPostLoginNotifications();
-
     if (await isPinSet(userId)) {
       // บัญชีนี้เคยตั้ง PIN แล้ว (เช่นมาจาก "Sign in with SSO instead" ที่ล้างแค่
       // session ไม่ล้าง PIN, หรือ logout แล้ว login ด้วยบัญชีเดิม) — เข้าแอปทันที
@@ -404,9 +404,12 @@ const Login = ({ navigation, route }) => {
       // หลัง SSO success ทั้งที่เพิ่งยืนยันตัวตนสำเร็จไปหมาดๆ — navigate ก่อนเสมอ
       // แล้วค่อยถาม popup ทีหลัง (เป็นแค่การตั้งค่าสำหรับปลดล็อกครั้งถัดไป)
       navigateToMain();
-      promptEnableBiometricAfterNavigation(userId, data.token).catch((error) => {
+      await promptEnableBiometricAfterNavigation(userId, data.token).catch((error) => {
         console.error("BIOMETRIC PROMPT ERROR:", error);
       });
+      // Native alert ต้องเรียงทีละตัว มิฉะนั้น permission prompt ของ Push อาจชน
+      // กับ biometric prompt ในการ login ครั้งแรกและทำให้ผู้ใช้พลาดหนึ่งในสองอัน
+      runPostLoginNotifications();
     } else {
       // บัญชีนี้ยังไม่เคยตั้ง PIN — ยังไม่มี LockOverlay เกี่ยวข้องเลย (locked
       // เป็น false เสมอตราบใดที่บัญชีนี้ยังไม่มี PIN) จึงไม่มีความเสี่ยง AppState
@@ -414,6 +417,8 @@ const Login = ({ navigation, route }) => {
       // บังคับตั้ง PIN ของบัญชีนี้ต่อ
       await promptEnableBiometricAfterNavigation(userId, data.token);
       navigation.reset({ index: 0, routes: [{ name: "SetPin" }] });
+      // SetPinScreen จะเริ่ม notification setup หลังบันทึก PIN สำเร็จ เพื่อไม่ให้
+      // permission dialog ขึ้นทับระหว่างผู้ใช้กำลังตั้งรหัสครั้งแรก
     }
   };
 
@@ -423,6 +428,8 @@ const Login = ({ navigation, route }) => {
 
     Keyboard.dismiss();
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     try {
       const response = await fetch(`${API_URL}/auth/sso-token`, {
         method: "POST",
@@ -431,6 +438,7 @@ const Login = ({ navigation, route }) => {
           Accept: "application/json",
         },
         body: JSON.stringify({ access_token: token }),
+        signal: controller.signal,
       });
       const data = await response.json();
       if (response.ok) {
@@ -441,6 +449,7 @@ const Login = ({ navigation, route }) => {
     } catch (_) {
       Alert.alert(t("login.errorTitle"), t("login.ssoNetworkError"));
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };

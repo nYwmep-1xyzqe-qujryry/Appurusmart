@@ -12,8 +12,13 @@ import { getAuthToken, captureAuthSession, runWithSession, isAuthSessionCurrent,
 const NOTIFICATION_INBOX_LIMIT = 100;
 const inboxListeners = new Set();
 let inboxWriteQueue = Promise.resolve();
+const inboxMetadata = new Map();
+const pendingReadFlushes = new Map();
+const notificationSettingsSyncQueues = new Map();
+let pushRegistrationInFlight = null;
 const BACKEND_INBOX_RETRY_AFTER_MS = 5 * 60 * 1000;
 let backendInboxUnavailableUntil = 0;
+const pendingPushInboxRetries = new Set();
 const isBackendInboxUnavailable = () => Date.now() < backendInboxUnavailableUntil;
 const markBackendInboxUnavailable = () => {
   backendInboxUnavailableUntil = Date.now() + BACKEND_INBOX_RETRY_AFTER_MS;
@@ -22,7 +27,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS = {
   beforeClass: true,
   holiday: true,
   gradeDeadline: true,
-  announcement: false,
+  announcement: true,
 };
 
 const getNotifications = () => {
@@ -133,11 +138,12 @@ const getInboxIcon = (type) => {
   }
 };
 
-const emitInbox = (items) => {
-  inboxListeners.forEach((listener) => listener(items));
+const getInboxSessionKey = (session) => `${session.generation}:${session.userId}`;
+const emitInbox = (items, metadata = null) => {
+  inboxListeners.forEach((listener) => listener(items, metadata));
 };
 
-const parseNotificationData = (value) => {
+export const parseNotificationData = (value) => {
   if (!value) return {};
   if (typeof value === "object") return value;
   try {
@@ -186,7 +192,22 @@ const extractServerNotifications = (responseData) => {
   return [];
 };
 
+const extractUnreadCount = (responseData) => {
+  const candidates = [
+    responseData?.unread_count,
+    responseData?.meta?.unread_count,
+    responseData?.pagination?.unread_count,
+    responseData?.data?.unread_count,
+    responseData?.data?.meta?.unread_count,
+    responseData?.data?.pagination?.unread_count,
+  ];
+  const value = candidates.find((candidate) => candidate != null && candidate !== "");
+  const count = Number(value);
+  return Number.isFinite(count) && count >= 0 ? Math.floor(count) : null;
+};
+
 const inboxKey = (session) => `${STORAGE_KEYS.NOTIFICATION_INBOX}:user:${encodeURIComponent(session.userId)}`;
+const pendingReadKey = (session) => `${inboxKey(session)}:pending-read`;
 const pushTokenKey = (session) => `${STORAGE_KEYS.PUSH_TOKEN}:user:${encodeURIComponent(session.userId)}`;
 const notificationSettingsKey = (session) => `${STORAGE_KEYS.NOTIF_SETTINGS}:user:${encodeURIComponent(session.userId)}`;
 const readInbox = async (session) => {
@@ -201,14 +222,77 @@ subscribeAuthSession(() => {
   emitInbox([]);
 });
 
-const updateNotificationInbox = async (updater, session = null) => {
+const readPendingIds = async (session) => {
+  try {
+    const raw = await AsyncStorage.getItem(pendingReadKey(session));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch (_) {
+    return new Set();
+  }
+};
+
+const writePendingIds = async (session, ids) => {
+  await AsyncStorage.setItem(pendingReadKey(session), JSON.stringify([...ids]));
+};
+
+const queuePendingRead = async (serverId, session) => {
+  const ids = await readPendingIds(session);
+  ids.add(String(serverId));
+  await writePendingIds(session, ids);
+};
+
+const clearPendingRead = async (serverId, session) => {
+  const ids = await readPendingIds(session);
+  ids.delete(String(serverId));
+  await writePendingIds(session, ids);
+};
+
+const flushPendingReads = async (session) => {
+  const key = getInboxSessionKey(session);
+  if (pendingReadFlushes.has(key)) return pendingReadFlushes.get(key);
+
+  const request = (async () => {
+    if (isBackendInboxUnavailable()) return;
+    const ids = await readPendingIds(session);
+    for (const serverId of ids) {
+      if (!await isAuthSessionCurrent(session)) return;
+      try {
+        await api.patch(`/notifications/${encodeURIComponent(serverId)}/read`, null, {
+          authSession: session,
+          suppressAuthRedirect: true,
+          suppressErrorLog: true,
+        });
+        await clearPendingRead(serverId, session);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "[Notifications] retry mark-read failed:",
+            error.response?.status ?? error.message,
+          );
+        }
+        return;
+      }
+    }
+  })();
+
+  pendingReadFlushes.set(key, request);
+  try {
+    await request;
+  } finally {
+    if (pendingReadFlushes.get(key) === request) pendingReadFlushes.delete(key);
+  }
+};
+
+const updateNotificationInbox = async (updater, session = null, metadata = null) => {
   session ??= await captureAuthSession();
   if (!session?.userId) return [];
   const result = inboxWriteQueue.catch(() => {}).then(() =>
     runWithSession(session, async () => {
       const next = updater(await readInbox(session));
       await AsyncStorage.setItem(inboxKey(session), JSON.stringify(next));
-      emitInbox(next);
+      const nextMetadata = metadata ?? inboxMetadata.get(getInboxSessionKey(session)) ?? null;
+      emitInbox(next, nextMetadata);
       return next;
     }),
   );
@@ -227,12 +311,24 @@ export function subscribeNotificationInbox(listener) {
   return () => inboxListeners.delete(listener);
 }
 
+const inboxRequests = new Map();
 export async function syncNotificationInboxFromBackend() {
   if (isBackendInboxUnavailable()) return loadNotificationInbox();
 
   const session = await captureAuthSession();
   if (!session?.userId) return [];
+  const key = `${session.generation}:${session.userId}`;
+  if (inboxRequests.has(key)) return inboxRequests.get(key);
+  const request = fetchNotificationInbox(session);
+  inboxRequests.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (inboxRequests.get(key) === request) inboxRequests.delete(key);
+  }
+}
 
+async function fetchNotificationInbox(session) {
   try {
     const response = await api.get("/notifications", {
       authSession: session,
@@ -244,18 +340,34 @@ export async function syncNotificationInboxFromBackend() {
     const serverItems = extractServerNotifications(response.data)
       .map(normalizeServerNotification)
       .filter(Boolean);
+    const pendingIds = await readPendingIds(session);
+    const serverUnreadCount = extractUnreadCount(response.data);
+    const pendingUnreadCount = serverItems.filter(
+      (item) => pendingIds.has(String(item.serverId)) && !item.read,
+    ).length;
+    const unreadCount = serverUnreadCount == null
+      ? null
+      : Math.max(0, serverUnreadCount - pendingUnreadCount);
+    const metadata = unreadCount == null ? null : { unreadCount };
+    if (metadata) inboxMetadata.set(getInboxSessionKey(session), metadata);
 
-    return updateNotificationInbox((current) => {
+    const items = await updateNotificationInbox((current) => {
       const serverIds = new Set(serverItems.map((item) => item.id));
+      const normalizedServerItems = serverItems.map((item) =>
+        pendingIds.has(String(item.serverId)) ? { ...item, read: true } : item,
+      );
       const localOnly = current.filter((item) => !serverIds.has(item.id));
-      return [...serverItems, ...localOnly]
+      return [...normalizedServerItems, ...localOnly]
         .sort(
           (a, b) =>
             new Date(b.receivedAt).getTime() -
             new Date(a.receivedAt).getTime(),
         )
         .slice(0, NOTIFICATION_INBOX_LIMIT);
-    }, session);
+    }, session, metadata);
+    await flushPendingReads(session);
+    return items;
+
   } catch (error) {
     if (await isAuthSessionCurrent(session) && (error.response?.status === 404 || error.response?.status === 405)) {
       markBackendInboxUnavailable();
@@ -280,24 +392,58 @@ export async function syncNotificationInboxFromBackend() {
 // inbox response can confirm ownership; never persist unverified push content.
 export async function saveNotificationToInbox(notification) {
   if (!notification?.request?.content) return [];
-  return syncNotificationInboxFromBackend();
+  const items = await syncNotificationInboxFromBackend();
+  const serverId = parseNotificationData(notification.request.content.data).notification_id;
+
+  // Backend may send the push immediately after inserting the inbox row. If the
+  // first GET races that transaction, retry only this notification a few times
+  // so the header badge updates without turning inbox sync into polling.
+  if (serverId != null && !items.some((item) => String(item.serverId) === String(serverId))) {
+    schedulePushInboxRetry(String(serverId));
+  }
+
+  return items;
 }
+
+const schedulePushInboxRetry = (serverId) => {
+  if (pendingPushInboxRetries.has(serverId)) return;
+  pendingPushInboxRetries.add(serverId);
+
+  (async () => {
+    for (const delay of [1000, 3000]) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      const session = await captureAuthSession();
+      if (!session) return;
+      const items = await syncNotificationInboxFromBackend();
+      if (items.some((item) => String(item.serverId) === serverId)) return;
+    }
+  })()
+    .catch((error) => {
+      if (__DEV__) {
+        console.warn("[Notifications] delayed inbox sync failed:", error?.message);
+      }
+    })
+    .finally(() => pendingPushInboxRetries.delete(serverId));
+};
 
 export async function markNotificationRead(id) {
   const session = await captureAuthSession();
   if (!session?.userId) return [];
   let serverId = null;
+  const currentItems = await readInbox(session);
+  const currentItem = currentItems.find((item) => item.id === id);
+  const wasUnread = Boolean(currentItem && !currentItem.read);
+  serverId = currentItem?.serverId ?? null;
+  const knownMetadata = inboxMetadata.get(getInboxSessionKey(session));
   const items = await updateNotificationInbox((current) => current.map((item) => {
     if (item.id !== id) return item;
-    serverId = item.serverId;
     return { ...item, read: true };
-  }), session);
-  if (serverId && !isBackendInboxUnavailable() && await isAuthSessionCurrent(session)) {
-    try {
-      await api.patch(`/notifications/${encodeURIComponent(serverId)}/read`, null, {
-        authSession: session, suppressAuthRedirect: true,
-      });
-    } catch { /* Keep optimistic read state until the next server sync. */ }
+  }), session, knownMetadata && wasUnread
+    ? { unreadCount: Math.max(0, knownMetadata.unreadCount - 1) }
+    : knownMetadata);
+  if (serverId && await isAuthSessionCurrent(session)) {
+    await queuePendingRead(serverId, session);
+    await flushPendingReads(session);
   }
   return items;
 }
@@ -306,12 +452,23 @@ export async function markAllNotificationsRead() {
   const session = await captureAuthSession();
   if (!session?.userId) return [];
   const items = await updateNotificationInbox(
-    (current) => current.map((item) => ({ ...item, read: true })), session,
+    (current) => current.map((item) => ({ ...item, read: true })),
+    session,
+    { unreadCount: 0 },
   );
+  const serverIds = items.map((item) => item.serverId).filter(Boolean);
+  for (const serverId of serverIds) await queuePendingRead(serverId, session);
   if (!isBackendInboxUnavailable() && await isAuthSessionCurrent(session)) {
     try {
-      await api.post("/notifications/read-all", null, { authSession: session, suppressAuthRedirect: true });
-    } catch { /* Retry through a subsequent sync/action. */ }
+      await api.post("/notifications/read-all", null, {
+        authSession: session,
+        suppressAuthRedirect: true,
+        suppressErrorLog: true,
+      });
+      await writePendingIds(session, new Set());
+    } catch {
+      await flushPendingReads(session);
+    }
   }
   return items;
 }
@@ -402,8 +559,8 @@ if (Platform.OS !== "web" && !isExpoGo) {
     const Notifications = getNotifications();
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: false,
-        shouldShowBanner: false,
+        shouldShowAlert: true,
+        shouldShowBanner: true,
         shouldShowList: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
@@ -417,7 +574,7 @@ if (Platform.OS !== "web" && !isExpoGo) {
 }
 
 // ── ขอ permission + ดึง push token ───────────────────────────
-export async function registerForPushNotificationsAsync() {
+export async function registerForPushNotificationsAsync(devicePushToken = null) {
   const session = await captureAuthSession();
   if (!session) return null;
   if (Platform.OS === "web") return null;
@@ -446,7 +603,10 @@ export async function registerForPushNotificationsAsync() {
     }
 
     const projectId = getExpoProjectId();
-    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId,
+      ...(devicePushToken ? { devicePushToken } : {}),
+    });
     const token = tokenData.data;
     if (!isExpoPushToken(token)) throw new Error("Invalid Expo push token");
     return (await runWithSession(session, async () => {
@@ -518,11 +678,60 @@ export async function sendTokenToBackend(token, sanctumToken) {
       if (__DEV__) {
         console.warn("[Notifications] push-token registration failed:", response.status, result || "<empty response>");
       }
-      throw new Error(result || `HTTP ${response.status}`);
+      const error = new Error(result || `HTTP ${response.status}`);
+      error.status = response.status;
+      throw error;
     }
     return true;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+const isRetryablePushError = (error) => {
+  const status = error?.status ?? error?.response?.status;
+  if (status === 408 || status === 425 || status === 429 || status >= 500) return true;
+  return error?.name === "AbortError" || !status;
+};
+
+const wait = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
+
+export async function ensurePushTokenRegistered(session = null, devicePushToken = null) {
+  session ??= await captureAuthSession();
+  if (!session?.userId) return false;
+  const key = getInboxSessionKey(session);
+  if (pushRegistrationInFlight?.key === key) {
+    return pushRegistrationInFlight.promise;
+  }
+
+  const promise = (async () => {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      if (!await isAuthSessionCurrent(session)) return false;
+      try {
+        const token = await registerForPushNotificationsAsync(devicePushToken);
+        if (!token) return false;
+        if (!await isAuthSessionCurrent(session)) return false;
+        await sendTokenToBackend(token, session.token);
+        return true;
+      } catch (error) {
+        if (attempt === 3 || !isRetryablePushError(error)) throw error;
+        if (__DEV__) {
+          console.warn(
+            `[Notifications] token registration retry ${attempt}/2:`,
+            error?.status ?? error?.message,
+          );
+        }
+        await wait(attempt * 1500);
+      }
+    }
+    return false;
+  })();
+
+  pushRegistrationInFlight = { key, promise };
+  try {
+    return await promise;
+  } finally {
+    if (pushRegistrationInFlight?.promise === promise) pushRegistrationInFlight = null;
   }
 }
 
@@ -532,20 +741,7 @@ export async function handlePushTokenChange(devicePushToken) {
   if (!session || !devicePushToken?.data || !["android", "ios"].includes(devicePushToken.type)) return;
   const work = rotationQueue.catch(() => {}).then(async () => {
     if (!await isAuthSessionCurrent(session)) return;
-    const Notifications = getNotifications();
-    if (!Notifications) return;
-    // Supplying the native token avoids calling getDevicePushTokenAsync from
-    // its own listener, which would trigger another token event.
-    const { data: token } = await Notifications.getExpoPushTokenAsync({
-      projectId: getExpoProjectId(), devicePushToken,
-    });
-    if (!isExpoPushToken(token)) throw new Error("Invalid Expo push token");
-    const active = await runWithSession(session, async () => {
-      if (!session.userId) return false;
-      await AsyncStorage.setItem(pushTokenKey(session), token);
-      return true;
-    });
-    if (active) await sendTokenToBackend(token, session.token);
+    await ensurePushTokenRegistered(session, devicePushToken);
   });
   rotationQueue = work.catch(() => {});
   try { await work; } catch {
@@ -596,23 +792,35 @@ export async function saveNotificationSettings(settings, session = null) {
 export async function syncNotificationSettingsToBackend(settings, session = null) {
   session ??= await captureAuthSession();
   if (!session) return false;
-  try {
-    await api.put(
-      "/notification-settings",
-      getNotificationSettingsPayload(settings),
-      { authSession: session, suppressErrorLog: true, suppressAuthRedirect: true },
-    );
-    if (__DEV__) console.log("[Notifications] บันทึก settings สำเร็จ");
-    return true;
-  } catch (error) {
-    if (__DEV__) {
-      console.warn(
-        "[Notifications] บันทึก settings ไม่สำเร็จ:",
-        error.response?.status ?? error.message,
+  const key = getInboxSessionKey(session);
+  const previous = notificationSettingsSyncQueues.get(key) ?? Promise.resolve();
+  const request = previous.catch(() => {}).then(async () => {
+    if (!await isAuthSessionCurrent(session)) return false;
+    try {
+      await api.put(
+        "/notification-settings",
+        getNotificationSettingsPayload(settings),
+        { authSession: session, suppressErrorLog: true, suppressAuthRedirect: true },
       );
+      if (__DEV__) console.log("[Notifications] บันทึก settings สำเร็จ");
+      return true;
+    } catch (error) {
+      if (__DEV__) {
+        console.warn(
+          "[Notifications] บันทึก settings ไม่สำเร็จ:",
+          error.response?.status ?? error.message,
+        );
+      }
+      return false;
     }
-    return false;
-  }
+  });
+  const tracked = request.finally(() => {
+    if (notificationSettingsSyncQueues.get(key) === tracked) {
+      notificationSettingsSyncQueues.delete(key);
+    }
+  });
+  notificationSettingsSyncQueues.set(key, tracked);
+  return request;
 }
 
 // ── เรียกตอน login สำเร็จ ────────────────────────────────────
@@ -625,10 +833,8 @@ export async function onLoginSuccess() {
   }
 
   const registerPushToken = async () => {
-    const token = await registerForPushNotificationsAsync();
-    if (token) {
-      if (await isAuthSessionCurrent(session)) await sendTokenToBackend(token, session.token);
-    } else if (!isExpoGo && Device.isDevice) {
+    const registered = await ensurePushTokenRegistered(session);
+    if (!registered && !isExpoGo && Device.isDevice) {
       console.warn(
         "PUSH TOKEN SKIPPED: permission, device หรือ build ยังไม่พร้อม",
       );
@@ -682,20 +888,31 @@ const shouldHandleNotificationResponse = async (response, session) => {
 export async function handleNotificationResponse(response) {
   const session = await captureAuthSession();
   if (!session) return;
-  saveNotificationToInbox(response?.notification).catch(() => {});
+  let items = [];
+  try {
+    items = await saveNotificationToInbox(response?.notification);
+  } catch (_) {}
   const shouldNavigate = await shouldHandleNotificationResponse(response, session);
   if (!shouldNavigate) return;
 
-  const data = response?.notification?.request?.content?.data;
-  if (!data) return;
+  const rawData = parseNotificationData(response?.notification?.request?.content?.data);
+  const serverId = rawData.notification_id;
+  const verified = serverId == null
+    ? null
+    : items.find((item) => String(item.serverId) === String(serverId));
+  // Do not trust routing fields from a push until the matching authenticated
+  // inbox row has been loaded. Missing IDs and delayed inbox writes both fall
+  // back to the inbox screen; the retry scheduled above updates the badge.
+  if (serverId == null || !verified) {
+    if (await isAuthSessionCurrent(session)) navigate("Notifications");
+    return;
+  }
+  const data = verified.data;
 
   if (data.type === "announcement") {
-    setTimeout(
-      async () => {
-        if (await isAuthSessionCurrent(session)) navigate("Announcements", { highlightId: data.announcement_id });
-      },
-      500,
-    );
+    if (await isAuthSessionCurrent(session)) {
+      navigate("Announcements", { highlightId: data.announcement_id });
+    }
     return;
   }
 
@@ -703,7 +920,5 @@ export async function handleNotificationResponse(response) {
     ? data.screen
     : "Notifications";
   const params = data.params ?? {};
-  setTimeout(async () => {
-    if (await isAuthSessionCurrent(session)) navigate(screen, params);
-  }, 500);
+  if (await isAuthSessionCurrent(session)) navigate(screen, params);
 }

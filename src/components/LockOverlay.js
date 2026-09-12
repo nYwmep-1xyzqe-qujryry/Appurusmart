@@ -71,38 +71,45 @@ export default function LockOverlay({ locked, onUnlock }) {
     if (!locked) return;
     setValue("");
     setError(null);
+    setCheckingBiometric(true);
+    setBiometricAvailable(false);
     unlockedRef.current = false;
     autoCancelledRef.current = false;
 
     (async () => {
-      const userId = await getCurrentUserId();
-      userIdRef.current = userId;
+      try {
+        const userId = await getCurrentUserId();
+        userIdRef.current = userId;
 
-      if (!userId) {
-        // ไม่มี userId แปลว่า resolve บัญชีปัจจุบันไม่ได้ (ผิดปกติ) — ต้องไม่
-        // ถือว่ามี PIN/biometric ให้ใช้ fallback ไป SSO อย่างปลอดภัยแทนที่จะ
-        // ค้างหน้า PIN ที่ verify กับใครไม่ได้เลย
-        if (__DEV__) console.error("[LockOverlay] missing current userId — falling back to Login");
-        resetToLogin();
-        onUnlock();
-        return;
-      }
+        if (!userId) {
+          // ไม่มี userId แปลว่า resolve บัญชีปัจจุบันไม่ได้ (ผิดปกติ) — ต้องไม่
+          // ถือว่ามี PIN/biometric ให้ใช้ fallback ไป SSO อย่างปลอดภัยแทนที่จะ
+          // ค้างหน้า PIN ที่ verify กับใครไม่ได้เลย
+          if (__DEV__) console.error("[LockOverlay] missing current userId — falling back to Login");
+          resetToLogin();
+          onUnlock();
+          return;
+        }
 
-      const [enabled, support] = await Promise.all([isBiometricEnabled(userId), checkSupport()]);
-      const available = enabled && support.supported;
-      setBiometricAvailable(available);
-      setBiometricIcon(getBiometricPresentation(support).icon);
-      setCheckingBiometric(false);
+        const [enabled, support] = await Promise.all([isBiometricEnabled(userId), checkSupport()]);
+        const available = enabled && support.supported;
+        setBiometricAvailable(available);
+        setBiometricIcon(getBiometricPresentation(support).icon);
 
-      if (available) {
-        // ดีเลย์ยาวพอให้ iOS app window/scene activate เต็มที่ก่อนเรียก Face ID —
-        // ถ้าเรียกเร็วเกินไปหลัง cold start (โดยเฉพาะตอนที่ overlay นี้ขึ้นทันที
-        // ตั้งแต่ ready=true ครั้งแรก) iOS อาจคืน system_cancel/app_cancel มาเงียบๆ
-        // ซึ่งโค้ดตีความเป็น cancel ธรรมดาแล้ว silent return ไม่มีอะไรเกิดขึ้นให้เห็น
-        autoTriggerTimerRef.current = setTimeout(() => {
-          autoTriggerTimerRef.current = null;
-          tryBiometric({ auto: true });
-        }, 1200);
+        if (available) {
+          // ดีเลย์ยาวพอให้ iOS app window/scene activate เต็มที่ก่อนเรียก Face ID
+          autoTriggerTimerRef.current = setTimeout(() => {
+            autoTriggerTimerRef.current = null;
+            tryBiometric({ auto: true });
+          }, 1200);
+        }
+      } catch (supportError) {
+        if (__DEV__) {
+          console.warn("[LockOverlay] biometric setup failed; PIN remains available:", supportError?.message);
+        }
+        setBiometricAvailable(false);
+      } finally {
+        setCheckingBiometric(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

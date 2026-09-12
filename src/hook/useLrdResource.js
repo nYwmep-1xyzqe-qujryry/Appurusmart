@@ -28,7 +28,9 @@ export default function useLrdResource(endpoint, options = {}) {
     try {
       const response = await getLrd(endpoint, { params });
       const rows = getLrdRows(response.data);
-      if (endpoint.includes("expertise")) console.log("[expertise GET]", JSON.stringify(response.data).slice(0, 400));
+      if (__DEV__ && endpoint.includes("expertise")) {
+        console.log("[expertise GET]", JSON.stringify(response.data).slice(0, 400));
+      }
       if (mounted.current) {
         setItems(rows);
         setTotal(getLrdTotal(response.data, rows));

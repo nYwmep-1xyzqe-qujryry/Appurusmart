@@ -516,7 +516,9 @@ export default function ProfileDetail({ navigation, route }) {
       }
       setProfile(data);
     } catch (e) {
-      console.warn("[ProfileDetail]", e?.response?.status, e?.message);
+      if (__DEV__) {
+        console.warn("[ProfileDetail]", e?.response?.status, e?.message);
+      }
       const s = e?.response?.status;
       if (s === 404) setError(t("research.profileDetail.notFound"));
       else if (s === 401 || s === 403) setError(t("research.profileDetail.noAccess"));

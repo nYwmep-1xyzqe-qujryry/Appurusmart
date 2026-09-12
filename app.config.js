@@ -23,7 +23,7 @@ module.exports = {
         NSUserNotificationsUsageDescription:
           "URU Smart ต้องการส่งการแจ้งเตือนข่าวสารและประกาศจากมหาวิทยาลัย",
         NSFaceIDUsageDescription:
-          "ใช้ Face ID เพื่อเข้าสู่ระบบ URUSmart อย่างรวดเร็วและปลอดภัย",
+          "ใช้ Face ID เพื่อปลดล็อก URU Smart อย่างรวดเร็วและปลอดภัย",
         NSLocalNetworkUsageDescription:
           "URU Smart ต้องการเชื่อมต่อกับเซิร์ฟเวอร์สำหรับพัฒนาในเครือข่ายภายใน",
         ITSAppUsesNonExemptEncryption: false,

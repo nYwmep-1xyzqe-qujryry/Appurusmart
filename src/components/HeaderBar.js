@@ -18,11 +18,25 @@ const HeaderBar = ({ name, photoUrl, onNotification, onLogout }) => {
   useEffect(() => setPhotoFailed(false), [photoUrl]);
 
   useEffect(() => {
-    const updateCount = (items) => {
-      setUnreadCount(items.filter((item) => !item.read).length);
+    let active = true;
+    let receivedUpdate = false;
+    const updateCount = (items, metadata) => {
+      const serverCount = Number.isInteger(metadata?.unreadCount)
+        ? metadata.unreadCount
+        : null;
+      if (active) setUnreadCount(serverCount ?? items.filter((item) => !item.read).length);
     };
-    loadNotificationInbox().then(updateCount);
-    return subscribeNotificationInbox(updateCount);
+    const unsubscribe = subscribeNotificationInbox((items, metadata) => {
+      receivedUpdate = true;
+      updateCount(items, metadata);
+    });
+    loadNotificationInbox().then((items) => {
+      if (!receivedUpdate) updateCount(items);
+    }).catch(() => {});
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const initials = name

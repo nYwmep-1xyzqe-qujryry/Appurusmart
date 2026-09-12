@@ -103,4 +103,70 @@ const emptyUrl = url.normalizeOptionalUrl("");
 assert.equal(emptyUrl.ok, true);
 assert.equal(emptyUrl.url, null);
 
-console.log("Tests OK");
+async function testForegroundRefresh() {
+  const { startForegroundRefresh } = loadModule("src/utils/foregroundRefresh.js");
+  let active = true;
+  let notify;
+  let finish;
+  let calls = 0;
+  let unsubscribed = false;
+  const timers = new Map();
+  let timerId = 0;
+  const stop = startForegroundRefresh({
+    refresh: () => {
+      calls += 1;
+      return new Promise((resolve) => { finish = resolve; });
+    },
+    isActive: () => active,
+    subscribe: (listener) => {
+      notify = listener;
+      return () => { unsubscribed = true; };
+    },
+    schedule: (callback, delay) => {
+      timers.set(++timerId, { callback, delay });
+      return timerId;
+    },
+    cancel: (id) => timers.delete(id),
+  });
+  assert.equal(calls, 1, "refresh immediately without opening inbox");
+  await notify();
+  assert.equal(calls, 1, "do not overlap requests");
+  finish();
+  await Promise.resolve();
+  let next = [...timers.values()][0];
+  assert.equal(next.delay, 0, "refresh again after session/activity change");
+  const running = next.callback();
+  finish();
+  await running;
+  next = [...timers.values()][0];
+  assert.equal(next.delay, 10000);
+  active = false;
+  await notify();
+  assert.equal(timers.size, 0, "stop timers in background");
+  const previousCalls = calls;
+  active = true;
+  const resumed = notify();
+  assert.equal(calls, previousCalls + 1, "refresh immediately on foreground");
+  stop();
+  finish();
+  await resumed;
+  assert.equal(timers.size, 0, "in-flight completion cannot restart disposed timer");
+  assert.equal(unsubscribed, true);
+
+  let retry;
+  const stopFailure = startForegroundRefresh({
+    refresh: async () => { throw new Error("offline"); },
+    isActive: () => true,
+    subscribe: () => () => {},
+    schedule: (callback, delay) => { retry = { callback, delay }; return 1; },
+    cancel: () => {},
+  });
+  await Promise.resolve();
+  assert.equal(retry.delay, 10000, "network failure keeps bounded refresh cadence");
+  stopFailure();
+}
+
+testForegroundRefresh().then(() => console.log("Tests OK")).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -6,6 +6,7 @@ import PinKeypad from "../../components/PinKeypad";
 import { colors } from "../../theme/tokens";
 import { setPin } from "../../services/pinService";
 import { getCurrentUserId } from "../../services/userSecurityKeys";
+import { onLoginSuccess } from "../../services/notificationService";
 
 const PIN_LENGTH = 6;
 
@@ -55,6 +56,11 @@ export default function SetPinScreen({ navigation }) {
       if (!userId) throw new Error("Missing current userId");
       await setPin(userId, next);
       navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
+      onLoginSuccess().catch((notificationError) => {
+        if (__DEV__) {
+          console.warn("[SetPin] notification setup failed:", notificationError?.message);
+        }
+      });
     } catch (_) {
       setError(true);
       setValue("");

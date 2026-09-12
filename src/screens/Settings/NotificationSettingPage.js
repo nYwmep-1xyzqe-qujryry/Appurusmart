@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { AppState, ScrollView, StatusBar, Switch, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, AppState, ScrollView, StatusBar, Switch, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
@@ -9,6 +9,7 @@ import {
   getNotificationPermissionStatus,
   loadNotificationSettings,
   openNotificationSystemSettings,
+  ensurePushTokenRegistered,
   saveNotificationSettings,
   syncNotificationSettingsToBackend,
 } from "../../services/notificationService";
@@ -27,9 +28,20 @@ export default function NotificationSettingPage() {
   const { top } = useSafeAreaInsets();
   const [settings, setSettings] = useState(DEFAULT_NOTIFICATION_SETTINGS);
   const [permissionStatus, setPermissionStatus] = useState("unavailable");
+  const [saving, setSaving] = useState(false);
+  const previousPermissionStatus = useRef(null);
 
-  const refreshPermission = useCallback(() => {
-    getNotificationPermissionStatus().then(setPermissionStatus).catch(() => {});
+  const refreshPermission = useCallback(async () => {
+    try {
+      const status = await getNotificationPermissionStatus();
+      setPermissionStatus(status);
+      const wasGranted = previousPermissionStatus.current === "granted";
+      previousPermissionStatus.current = status;
+      if (status === "granted" && !wasGranted) {
+        const session = await captureAuthSession();
+        if (session) await ensurePushTokenRegistered(session);
+      }
+    } catch (_) {}
   }, []);
 
   useEffect(() => {
@@ -42,12 +54,25 @@ export default function NotificationSettingPage() {
   }, [refreshPermission]);
 
   const toggle = async (key) => {
+    if (saving) return;
+    const previous = settings;
     const next = { ...settings, [key]: !settings[key] };
     setSettings(next);
-    const session = await captureAuthSession();
-    if (!session) return;
-    await saveNotificationSettings(next, session);
-    syncNotificationSettingsToBackend(next, session);
+    setSaving(true);
+    let session = null;
+    try {
+      session = await captureAuthSession();
+      if (!session) throw new Error("Missing authentication session");
+      await saveNotificationSettings(next, session);
+      const synced = await syncNotificationSettingsToBackend(next, session);
+      if (!synced) throw new Error("Notification settings sync failed");
+    } catch (_) {
+      setSettings(previous);
+      if (session) await saveNotificationSettings(previous, session).catch(() => {});
+      Alert.alert(t("notif.saveFailedTitle"), t("notif.saveFailedMessage"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const ITEMS = useMemo(() => [
@@ -82,7 +107,7 @@ export default function NotificationSettingPage() {
                 <Text className="text-[15px] font-bold text-[#101b17]">{item.title}</Text>
                 {!!item.sub && <Text className="text-[12px] font-medium text-[#4a5c54] mt-[2px]">{item.sub}</Text>}
               </View>
-              <Switch value={settings[item.key]} onValueChange={() => toggle(item.key)} trackColor={{ false: "#dfe8e3", true: "#1a6b3c" }} thumbColor="#fff" ios_backgroundColor="#dfe8e3" />
+              <Switch value={settings[item.key]} onValueChange={() => toggle(item.key)} disabled={saving} trackColor={{ false: "#dfe8e3", true: "#1a6b3c" }} thumbColor="#fff" ios_backgroundColor="#dfe8e3" />
             </View>
           ))}
         </View>
