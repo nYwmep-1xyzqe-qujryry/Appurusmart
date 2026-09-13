@@ -207,7 +207,7 @@ export default function App() {
       receivedSubscription?.remove?.();
       tokenSubscription?.remove?.();
     };
-  }, [parseNotificationData, processPendingNotification]);
+  }, [processPendingNotification]);
 
   const handleNavigationReady = useCallback(() => {
     flushPendingNavigation();
