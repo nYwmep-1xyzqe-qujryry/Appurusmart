@@ -11,7 +11,7 @@ import useCurrentUser from "../hook/useCurrentUser";
 import api from "../services/api";
 import { stripNamePrefix } from "../utils/name";
 import { fixPhotoUrl } from "../utils/image";
-import { colors, radius, shadows } from "../theme/tokens";
+import { colors, radius, shadows, typography } from "../theme/tokens";
 
 const logo = require("../assets/urusmartlogo.png");
 
@@ -69,8 +69,8 @@ const InfoRow = ({ icon, label, value }) => (
       <Ionicons name={icon} size={16} color={colors.primary} />
     </View>
     <View className="flex-1">
-      <Text className="text-[10px] font-extrabold uppercase tracking-[0.6px] mb-[3px]" style={{ color: colors.textSoft }}>{label}</Text>
-      <Text className="text-[14px] font-bold leading-5" style={{ color: colors.text }}>{value || "—"}</Text>
+      <Text style={{ ...typography.label, color: colors.textMuted, fontSize: 13, lineHeight: 19, textTransform: "uppercase", marginBottom: 3 }}>{label}</Text>
+      <Text style={{ ...typography.body, fontSize: 16, lineHeight: 24, fontWeight: "600" }}>{value || "—"}</Text>
     </View>
   </View>
 );
@@ -79,7 +79,7 @@ const Divider = () => <View className="h-px mx-1" style={{ backgroundColor: colo
 
 const cardShadow = shadows.floating;
 const photoShadow = {
-  shadowColor: "#064e35", shadowOffset: { width: 0, height: 8 },
+  shadowColor: colors.primaryDark, shadowOffset: { width: 0, height: 8 },
   shadowOpacity: 0.18, shadowRadius: 16, elevation: 6,
 };
 export default function Cardpage({ navigation }) {
@@ -179,9 +179,9 @@ export default function Cardpage({ navigation }) {
       />
 
       {error && (
-        <View className="flex-row items-center gap-[6px] px-4 py-[7px]" style={{ backgroundColor: "#fffbea", borderBottomWidth: 1, borderBottomColor: "#f5e09a" }}>
+        <View className="flex-row items-center gap-[6px] px-4 py-[7px]" style={{ backgroundColor: colors.surfaceWarning, borderBottomWidth: 1, borderBottomColor: colors.borderWarning }}>
           <Ionicons name="cloud-offline-outline" size={14} color={colors.warning} />
-          <Text className="text-[12px] font-bold" style={{ color: "#7a5e00" }}>{t("card.offline")}</Text>
+          <Text className="text-[13px] font-bold" style={{ color: colors.accentText }}>{t("card.offline")}</Text>
         </View>
       )}
 
@@ -199,27 +199,22 @@ export default function Cardpage({ navigation }) {
 
               {/* ── Header band with gradient ── */}
               <LinearGradient
-                colors={[colors.primaryDark, "#0a6644", colors.primary]}
+                colors={[colors.primaryDark, colors.primaryLight, colors.primary]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 64, overflow: "hidden" }}
               >
-                {/* blobs */}
-                <View className="absolute w-[180px] h-[180px] rounded-full" style={{ right: -55, top: -60, backgroundColor: "rgba(255,255,255,0.07)" }} />
-                <View className="absolute w-[120px] h-[120px] rounded-full" style={{ left: -35, bottom: -50, backgroundColor: "rgba(255,255,255,0.05)" }} />
-                <View className="absolute w-[80px] h-[80px] rounded-full" style={{ right: 60, bottom: -20, backgroundColor: "rgba(255,255,255,0.04)" }} />
-
                 {/* Top row */}
                 <View className="flex-row items-center justify-between">
                   <Image source={logo} style={{ width: 110, height: 48 }} tintColor="#fff" resizeMode="contain" />
                   <View className="flex-row items-center gap-[5px] bg-white/20 border border-white/30 rounded-full px-3 py-[5px]">
-                    <View className="w-[7px] h-[7px] rounded-full bg-[#4ade80]" />
-                    <Text className="text-white text-[10px] font-extrabold tracking-[0.6px]">{t("card.activeBadge")}</Text>
+                    <View className="w-[7px] h-[7px] rounded-full" style={{ backgroundColor: colors.brandYellow }} />
+                    <Text className="text-white text-[11px] font-semibold" style={{ lineHeight: 17, letterSpacing: 0 }}>{t("card.activeBadge")}</Text>
                   </View>
                 </View>
 
-                <Text className="text-white text-[20px] font-black mt-5 tracking-[0.2px]">{t("card.title")}</Text>
-                <Text className="text-white/60 text-[11px] font-semibold mt-[4px]">Uttaradit Rajabhat University</Text>
+                <Text className="text-white text-[21px] font-bold mt-5" style={{ lineHeight: 29, letterSpacing: 0 }}>{t("card.title")}</Text>
+                <Text className="text-white/70 text-[12px] mt-[4px]" style={{ lineHeight: 18, fontWeight: "400", letterSpacing: 0 }}>Uttaradit Rajabhat University</Text>
 
               </LinearGradient>
 
@@ -235,8 +230,8 @@ export default function Cardpage({ navigation }) {
                     onError={() => setPhotoFailed(true)}
                   />
                 ) : (
-                  <LinearGradient colors={["#d4efe5", "#b8dfd0"]} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ color: "#0f7a55", fontSize: 52, fontWeight: "900" }}>{ini}</Text>
+                  <LinearGradient colors={["#d4efe5", colors.borderStrong]} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: colors.primary, fontSize: 52, fontWeight: "900" }}>{ini}</Text>
                   </LinearGradient>
                 )}
               </View>
@@ -246,7 +241,7 @@ export default function Cardpage({ navigation }) {
                 {apiLoading && !tc.name ? (
                   <Animated.View className="h-[22px] w-[180px] rounded-full bg-[#d4e8de]" style={{ opacity: pulseAnim }} />
                 ) : (
-                  <Text className="text-[#111c18] text-[20px] font-black text-center leading-7 tracking-[-0.3px]">
+                  <Text style={{ ...typography.pageTitle, fontSize: 21, lineHeight: 29, textAlign: "center" }}>
                     {displayName || "—"}
                   </Text>
                 )}
@@ -254,12 +249,12 @@ export default function Cardpage({ navigation }) {
                   <Animated.View className="h-[28px] w-[140px] rounded-full bg-[#e0ebe6] mt-[8px]" style={{ opacity: pulseAnim }} />
                 ) : !!tc.position && (
                   <View className="flex-row items-center gap-[5px] mt-[8px] bg-[#eef8f3] border border-[#d4efe5] rounded-full px-4 py-[6px]">
-                    <Ionicons name="ribbon-outline" size={13} color="#0f7a55" />
-                    <Text className="text-[#0a6644] text-[12px] font-bold">{tc.position}</Text>
+                    <Ionicons name="ribbon-outline" size={13} color={colors.primary} />
+                    <Text style={{ ...typography.caption, color: colors.primary, fontWeight: "500" }}>{tc.position}</Text>
                   </View>
                 )}
                 {!!affiliation && (
-                  <Text className="text-[#8fa89f] text-[12px] font-semibold mt-[6px] text-center">{affiliation}</Text>
+                  <Text style={{ ...typography.secondary, marginTop: 6, textAlign: "center" }}>{affiliation}</Text>
                 )}
               </View>
 
@@ -302,13 +297,13 @@ export default function Cardpage({ navigation }) {
             <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: colors.primarySoft }}>
               <Ionicons name="share-social-outline" size={17} color={colors.primaryDark} />
             </View>
-            <Text className="text-[15px] font-extrabold" style={{ color: colors.primaryDark }}>{t("card.share")}</Text>
+            <Text style={{ ...typography.button, color: colors.primaryDark }}>{t("card.share")}</Text>
           </TouchableOpacity>
 
           {/* ── Footer note ── */}
           <View className="flex-row items-center gap-[5px] mt-4 opacity-40">
-            <Ionicons name="shield-checkmark-outline" size={12} color="#0a6644" />
-            <Text className="text-[#0a6644] text-[10px] font-bold">URUSmart Official Digital Card</Text>
+            <Ionicons name="shield-checkmark-outline" size={12} color={colors.primaryLight} />
+            <Text className="text-[11px] font-bold" style={{ color: colors.primaryLight }}>URUSmart Official Digital Card</Text>
           </View>
         </Animated.View>
       </ScrollView>

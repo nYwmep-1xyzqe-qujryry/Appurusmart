@@ -5,13 +5,13 @@ import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import useCurrentUser from "../../hook/useCurrentUser";
 import HeaderBar from "../../components/HeaderBar";
-import { colors, radius, shadows } from "../../theme/tokens";
+import { colors, radius, serviceColors, shadows, typography } from "../../theme/tokens";
 
 const getMenu = (t) => [
-  { label: t("settings.notification"), sub: t("settings.notificationSub"), icon: "notifications-outline", route: "NotificationSetting", color: "#f59e0b", colorBg: "#fffbea" },
-  { label: t("settings.language"),     sub: t("settings.languageSub"),     icon: "globe-outline",            route: "Language",            color: "#0891b2", colorBg: "#e0f7fa" },
-  { label: t("settings.security"),     sub: t("settings.securitySub"),     icon: "shield-checkmark-outline", route: "Security",            color: "#7c3aed", colorBg: "#f3e8ff" },
-  { label: t("settings.contact"),      sub: t("settings.contactSub"),      icon: "call-outline",             route: "ContactUs",           color: "#0f7a55", colorBg: "#eef8f3" },
+  { label: t("settings.notification"), sub: t("settings.notificationSub"), icon: "notifications-outline", route: "NotificationSetting", color: colors.brandYellowDark, colorBg: colors.brandYellowSoft },
+  { label: t("settings.language"),     sub: t("settings.languageSub"),     icon: "globe-outline",            route: "Language",            color: serviceColors.lms.iconColor, colorBg: serviceColors.lms.backgroundColor },
+  { label: t("settings.security"),     sub: t("settings.securitySub"),     icon: "shield-checkmark-outline", route: "Security",            color: serviceColors.advisor.iconColor, colorBg: serviceColors.advisor.backgroundColor },
+  { label: t("settings.contact"),      sub: t("settings.contactSub"),      icon: "call-outline",             route: "ContactUs",           color: colors.primary, colorBg: colors.primaryMuted },
 ];
 
 const MenuRow = ({ item, isLast, onPress }) => {
@@ -44,8 +44,8 @@ const MenuRow = ({ item, isLast, onPress }) => {
             <Ionicons name={item.icon} size={22} color={item.color} />
           </View>
           <View className="flex-1 gap-[3px]">
-            <Text className="text-[15px] font-bold" style={{ color: colors.text }}>{item.label}</Text>
-            {!!item.sub && <Text className="text-[12px]" style={{ color: colors.secondaryText }}>{item.sub}</Text>}
+            <Text style={{ ...typography.body, fontSize: 16, lineHeight: 24, fontWeight: "600" }}>{item.label}</Text>
+            {!!item.sub && <Text style={{ ...typography.secondary, marginTop: 1 }}>{item.sub}</Text>}
           </View>
           <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: colors.fieldBg }}>
             <Ionicons name="chevron-forward" size={14} color={colors.textSoft} />
@@ -94,17 +94,17 @@ export default function SettingPage() {
           onPress={logout}
           activeOpacity={0.8}
           className="flex-row items-center justify-center gap-3 py-[16px]"
-          style={[{ backgroundColor: colors.surface, borderRadius: radius.xl, borderWidth: 1, borderColor: "#fecaca" }, shadows.card]}
+          style={[{ backgroundColor: colors.surface, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.borderDanger }, shadows.card]}
         >
-          <View className="w-9 h-9 rounded-full bg-[#fef2f2] items-center justify-center">
-            <Ionicons name="log-out-outline" size={20} color="#dc2626" />
+          <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: colors.surfaceDanger }}>
+            <Ionicons name="log-out-outline" size={20} color={colors.danger} />
           </View>
-          <Text className="text-[15px] font-bold text-[#dc2626]">{t("settings.logout")}</Text>
+          <Text style={{ ...typography.button, color: colors.danger }}>{t("settings.logout")}</Text>
         </TouchableOpacity>
 
         {/* App version */}
         <View className="items-center py-2">
-          <Text className="text-[11px] text-[#7c8f86] font-semibold">URUSmart v1.0.0</Text>
+          <Text style={typography.caption}>URUSmart v1.0.0</Text>
         </View>
       </ScrollView>
     </View>

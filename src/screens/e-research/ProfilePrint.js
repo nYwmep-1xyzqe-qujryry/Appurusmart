@@ -22,23 +22,23 @@ import { useEResearchText } from "./i18n";
 
 const InfoRow = ({ icon, label, value }) => (
   <View className="flex-row items-start gap-2 py-[6px]">
-    <Ionicons name={icon} size={14} color="#8fa89f" style={{ marginTop: 2 }} />
-    <Text className="text-[11px] text-[#8fa89f] font-semibold" style={{ width: 92 }}>{label}</Text>
-    <Text className="flex-1 text-[13px] text-[#1f2a2e]" numberOfLines={2}>{value || "-"}</Text>
+    <Ionicons name={icon} size={14} color="#5F7069" style={{ marginTop: 2 }} />
+    <Text className="text-[12px] text-[#5F7069] font-semibold" style={{ width: 92 }}>{label}</Text>
+    <Text className="flex-1 text-[14px] text-[#1f2a2e]" numberOfLines={2}>{value || "-"}</Text>
   </View>
 );
 
 const CardHeader = ({ icon, title }) => (
   <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-    <Ionicons name={icon} size={16} color="#00614a" />
-    <Text className="text-[13px] font-extrabold text-[#00614a]">{title}</Text>
+    <Ionicons name={icon} size={16} color="#174D42" />
+    <Text className="text-[14px] font-extrabold text-[#174D42]">{title}</Text>
   </View>
 );
 
 const ToggleRow = ({ label, checked, onToggle }) => (
   <TouchableOpacity className="flex-row items-center gap-[10px] py-[10px]" activeOpacity={0.7} onPress={onToggle}>
-    <Ionicons name={checked ? "checkbox" : "square-outline"} size={20} color={checked ? "#007a5a" : "#c4d4cc"} />
-    <Text className="text-[13px] text-[#1f2a2e] flex-1">{label}</Text>
+    <Ionicons name={checked ? "checkbox" : "square-outline"} size={20} color={checked ? "#07865F" : "#c4d4cc"} />
+    <Text className="text-[14px] text-[#1f2a2e] flex-1">{label}</Text>
   </TouchableOpacity>
 );
 
@@ -149,8 +149,8 @@ export default function ProfilePrint({ navigation }) {
           <style>
             @page { size: A4; margin: 18mm 20mm 20mm; }
             * { box-sizing: border-box; }
-            body { margin: 0; color: #171717; font-family: sans-serif; font-size: 12px; line-height: 1.55; }
-            h1 { margin: 0 0 18px; color: #8a3f16; font-size: 20px; font-weight: 500; text-align: center; }
+            body { margin: 0; color: #171717; font-family: sans-serif; font-size: 13px; line-height: 1.55; }
+            h1 { margin: 0 0 18px; color: #8a3f16; font-size: 21px; font-weight: 500; text-align: center; }
             .identity { display: flex; align-items: flex-start; gap: 24px; }
             .details { flex: 1; }
             .row { display: grid; grid-template-columns: 128px 1fr; gap: 12px; margin-bottom: 6px; }
@@ -158,9 +158,9 @@ export default function ProfilePrint({ navigation }) {
             .value { white-space: pre-wrap; overflow-wrap: anywhere; }
             .photo { width: 82px; height: 104px; border: 1px solid #b8b8b8; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
             .photo img { width: 100%; height: 100%; object-fit: cover; }
-            .no-photo { color: #686868; font-size: 9px; line-height: 1.2; text-align: center; }
+            .no-photo { color: #686868; font-size: 10px; line-height: 1.2; text-align: center; }
             .section { margin-top: 20px; break-inside: avoid; }
-            .section-title { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+            .section-title { margin: 0 0 8px; font-size: 14px; font-weight: 700; }
             ul { margin: 0; padding-left: 18px; }
             li { margin-bottom: 4px; break-inside: avoid; }
             .empty { color: #777; padding-left: 2px; }
@@ -224,16 +224,16 @@ export default function ProfilePrint({ navigation }) {
         {/* Header card */}
         <View className="bg-white border border-[#eef1f4] rounded-2xl overflow-hidden" style={{ elevation: 1 }}>
           <View className="items-center py-6 px-4">
-            <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: "#e6f4ef", borderWidth: 2, borderColor: "#007a5a", overflow: "hidden", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+            <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: "#e6f4ef", borderWidth: 2, borderColor: "#07865F", overflow: "hidden", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
               {profileImage ? (
                 <Image source={{ uri: profileImage }} style={{ width: 96, height: 96 }} resizeMode="cover" />
               ) : (
                 <Ionicons name="person" size={44} color="#7ab8a1" />
               )}
             </View>
-            <Text className="text-[17px] font-black text-[#0a1a12] text-center">{fullName || "-"}</Text>
-            {!!faculty && <Text className="text-[12px] text-[#5a7a6e] mt-1 text-center">{department ? `${department} · ${faculty}` : faculty}</Text>}
-            <Text className="text-[11px] text-[#8fa89f] mt-[2px]">{te("print.university")}</Text>
+            <Text className="text-[18px] font-black text-[#0a1a12] text-center">{fullName || "-"}</Text>
+            {!!faculty && <Text className="text-[13px] text-[#5a7a6e] mt-1 text-center">{department ? `${department} · ${faculty}` : faculty}</Text>}
+            <Text className="text-[12px] text-[#5F7069] mt-[2px]">{te("print.university")}</Text>
           </View>
           <View className="h-px bg-[#eef1f4]" />
           <View className="px-[14px] py-[10px]">
@@ -253,10 +253,10 @@ export default function ProfilePrint({ navigation }) {
           </TouchableOpacity>
           <View className="px-[14px] py-[10px]">
             {education.length === 0 ? (
-              <Text className="text-[12px] text-[#9aa6b1]">{te("print.noData")}</Text>
+              <Text className="text-[13px] text-[#5F7069]">{te("print.noData")}</Text>
             ) : (
               education.map((e) => (
-                <Text key={e.id} className="text-[12px] text-[#3f4d50] py-[3px]" numberOfLines={1}>
+                <Text key={e.id} className="text-[13px] text-[#33483f] py-[3px]" numberOfLines={1}>
                   • {e.year} — {getLabel(DEGREE_OPTIONS, e.degree)} {[e.qualification, e.major ?? e.course].filter(Boolean).join(" · ")} ({e.university})
                 </Text>
               ))
@@ -271,11 +271,11 @@ export default function ProfilePrint({ navigation }) {
           </TouchableOpacity>
           <View className="px-[14px] py-[10px] flex-row flex-wrap gap-[6px]">
             {expertise.length === 0 ? (
-              <Text className="text-[12px] text-[#9aa6b1]">{te("print.noData")}</Text>
+              <Text className="text-[13px] text-[#5F7069]">{te("print.noData")}</Text>
             ) : (
               expertise.map((e) => (
                 <View key={e.id} className="bg-[#e6f4ef] border border-[#9fd4bc] rounded-full px-[10px] py-[4px]">
-                  <Text className="text-[11px] font-bold text-[#007a5a]">{e.nameTh}</Text>
+                  <Text className="text-[12px] font-bold text-[#07865F]">{e.nameTh}</Text>
                 </View>
               ))
             )}
@@ -289,10 +289,10 @@ export default function ProfilePrint({ navigation }) {
           </TouchableOpacity>
           <View className="px-[14px] py-[10px]">
             {projects.length === 0 ? (
-              <Text className="text-[12px] text-[#9aa6b1]">{te("print.noData")}</Text>
+              <Text className="text-[13px] text-[#5F7069]">{te("print.noData")}</Text>
             ) : (
               projects.map((p) => (
-                <Text key={p.id} className="text-[12px] text-[#3f4d50] py-[3px]" numberOfLines={1}>
+                <Text key={p.id} className="text-[13px] text-[#33483f] py-[3px]" numberOfLines={1}>
                   • {p.year_id} — {p.projectname}
                 </Text>
               ))
@@ -307,10 +307,10 @@ export default function ProfilePrint({ navigation }) {
           </TouchableOpacity>
           <View className="px-[14px] py-[10px]">
             {articles.length === 0 ? (
-              <Text className="text-[12px] text-[#9aa6b1]">{te("print.noData")}</Text>
+              <Text className="text-[13px] text-[#5F7069]">{te("print.noData")}</Text>
             ) : (
               articles.map((a) => (
-                <Text key={a.id} className="text-[12px] text-[#3f4d50] py-[3px]" numberOfLines={1}>
+                <Text key={a.id} className="text-[13px] text-[#33483f] py-[3px]" numberOfLines={1}>
                   • {a.publicyear} — {a.title_th}
                 </Text>
               ))
@@ -321,7 +321,7 @@ export default function ProfilePrint({ navigation }) {
         {/* จัดการข้อมูลการเผยแพร่ */}
         <View className="bg-white border border-[#eef1f4] rounded-2xl overflow-hidden px-[14px]" style={{ elevation: 1 }}>
           <View className="py-[11px] border-b border-[#eef1f4]">
-            <Text className="text-[13px] font-extrabold text-[#00614a]">{te("print.publishSection")}</Text>
+            <Text className="text-[14px] font-extrabold text-[#174D42]">{te("print.publishSection")}</Text>
           </View>
           <ToggleRow
             label={te("print.publishVisible")}

@@ -9,7 +9,7 @@ const AppHeader = ({ title, onBack, rightIcon, onRightPress }) => {
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#0f7a55" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <View
         className="flex-row items-center justify-between px-4 pb-4"
         style={{ paddingTop: top + 8, backgroundColor: colors.primary }}
@@ -24,7 +24,7 @@ const AppHeader = ({ title, onBack, rightIcon, onRightPress }) => {
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
 
-        <Text className="text-white text-[17px] font-extrabold flex-1 text-center mx-2" numberOfLines={1}>
+        <Text className="text-white text-[17px] font-bold flex-1 text-center mx-2" style={{ lineHeight: 24, letterSpacing: 0 }} numberOfLines={1}>
           {title}
         </Text>
 

@@ -242,10 +242,10 @@ const InlineDropdown = ({
         {hasValue ? (
           <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 7 }}>
             {!compact && <View style={styles.selectedDot} />}
-            <Text style={[styles.selectedText, selectedTextStyle]} numberOfLines={1}>{selected.label}</Text>
+            <Text style={[styles.selectedText, selectedTextStyle]} numberOfLines={2}>{selected.label}</Text>
           </View>
         ) : (
-          <Text style={[styles.placeholderText, placeholderTextStyle]} numberOfLines={1}>
+          <Text style={[styles.placeholderText, placeholderTextStyle]} numberOfLines={2}>
             {displayPlaceholder}
           </Text>
         )}
@@ -292,9 +292,10 @@ const InlineDropdown = ({
                       <TextInput
                         style={styles.searchInput}
                         placeholder={t("research.common.search") ?? "ค้นหา..."}
-                        placeholderTextColor="#aab8b2"
+                        placeholderTextColor="#5F7069"
                         value={search}
                         onChangeText={(text) => setSearch(sanitizeAcademicText(text))}
+                        allowFontScaling
                         autoCorrect={false}
                         clearButtonMode="while-editing"
                       />
@@ -413,14 +414,14 @@ const styles = {
     flex: 1,
     ...typography.input,
     color: colors.placeholder,
-    fontWeight: "500",
+    fontWeight: "400",
   },
   panel: {
     position: "absolute",
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: "#cfe6db",
+    borderColor: colors.border,
     overflow: "hidden",
     elevation: 14,
     ...shadows.floating,
@@ -448,8 +449,8 @@ const styles = {
   searchInput: {
     flex: 1,
     ...typography.input,
-    fontWeight: "500",
-    fontSize: 15,
+    fontWeight: "400",
+    fontSize: 16,
     paddingVertical: 0,
   },
   optionRow: {
@@ -459,7 +460,7 @@ const styles = {
     minHeight: 56,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#edf3f0",
+    borderBottomColor: colors.border,
     gap: 10,
   },
   optionRowCompact: {
@@ -476,7 +477,7 @@ const styles = {
     height: 20,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: "#c4d4cc",
+    borderColor: colors.borderStrong,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
@@ -491,14 +492,15 @@ const styles = {
   },
   optionText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 16,
     color: colors.textMuted,
     fontWeight: "400",
-    lineHeight: 20,
+    lineHeight: 24,
+    letterSpacing: 0,
   },
   optionTextSelected: {
     color: colors.primary,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   optionTextPlaceholder: {
     color: colors.placeholder,
@@ -510,9 +512,11 @@ const styles = {
     gap: 8,
   },
   emptyText: {
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0,
     color: colors.placeholder,
-    fontWeight: "500",
+    fontWeight: "400",
   },
 };
 

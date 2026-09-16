@@ -11,11 +11,18 @@ import useCurrentUser from "../hook/useCurrentUser";
 import useFetch from "../hook/useFetch";
 import useExpertStats from "../hook/useExpertStats";
 import { colors, shadows } from "../theme/tokens";
+import { normalizeAnnouncements } from "../utils/announcement";
 
 const cardShadow = shadows.card;
 
-const StatItem = ({ item, value, loading }) => (
-  <TouchableOpacity activeOpacity={0.85} className="flex-1 items-center">
+const StatItem = ({ item, value, loading, onPress }) => (
+  <TouchableOpacity
+    activeOpacity={0.85}
+    className="flex-1 items-center"
+    onPress={onPress}
+    accessibilityRole="button"
+    accessibilityLabel={item.label}
+  >
     <LinearGradient
       colors={item.grad}
       start={{ x: 0, y: 0 }}
@@ -24,10 +31,15 @@ const StatItem = ({ item, value, loading }) => (
     >
       <Ionicons name={item.icon} size={22} color="rgba(255,255,255,0.95)" />
     </LinearGradient>
-    <Text className="text-[22px] font-black" style={{ color: item.color }}>
+    <Text className="text-[22px] font-black" style={{ color: item.color, fontVariant: ["tabular-nums"], letterSpacing: 0 }}>
       {loading ? "—" : (value ?? 0)}
     </Text>
-    <Text className="text-[10px] text-gray-400 font-semibold text-center mt-[2px]">{item.label}</Text>
+    <Text
+      className="text-[10px] font-semibold text-center mt-[2px]"
+      style={{ color: item.labelColor ?? item.color }}
+    >
+      {item.label}
+    </Text>
   </TouchableOpacity>
 );
 
@@ -43,19 +55,28 @@ const Homepage = ({ navigation }) => {
   );
 
   const STAT_CONFIG = useMemo(() => [
-    { key: "researches", icon: "bar-chart-outline", label: t("home.statResearch"), color: "#0f7a55", bg: "#d6f0e3", grad: ["#0f7a55","#1a9068"] },
-    { key: "journals",   icon: "newspaper-outline", label: t("home.statJournal"),  color: "#185fa5", bg: "#e8f0fb", grad: ["#185fa5","#2979c8"] },
-    { key: "patents",    icon: "ribbon-outline",    label: t("home.statPatent"),   color: "#7b1fa2", bg: "#f3e5f5", grad: ["#7b1fa2","#9c27b0"] },
-    { key: "awards",     icon: "trophy-outline",    label: t("home.statAward"),    color: "#e65100", bg: "#fff3e0", grad: ["#e65100","#f57c00"] },
+    { key: "researches", icon: "bar-chart-outline", label: t("home.statResearch"), color: "#0f7a55", bg: "#d6f0e3", grad: ["#0f7a55", "#1a9068"], route: "ResearchForm" },
+    { key: "journals",   icon: "newspaper-outline", label: t("home.statJournal"),  color: "#185fa5", bg: "#e8f0fb", grad: ["#185fa5", "#2979c8"], route: "JournalForm" },
+    { key: "patents",    icon: "ribbon-outline",    label: t("home.statPatent"),   color: "#7b1fa2", bg: "#f3e5f5", grad: ["#7b1fa2", "#9c27b0"], route: "PatentForm" },
+    { key: "awards",     icon: "trophy-outline",    label: t("home.statAward"),    color: "#e65100", labelColor: "#B54708", bg: "#fff3e0", grad: ["#e65100", "#f57c00"], route: "AwardForm" },
   ], [t]);
+
+  const openWorkManager = (item) => {
+    navigation.navigate(item.route, { item: null });
+  };
 
   const { data: announcements } = useFetch("/announcements", {
     initialData: [],
     params: { limit: 5 },
   });
+  const announcementItems = useMemo(
+    () => normalizeAnnouncements(announcements, t("announce.defaultTitle")),
+    [announcements, t],
+  );
+  const hasAnnouncements = announcementItems.length > 0;
 
   return (
-    <View className="flex-1" style={{ backgroundColor: colors.appBg }}>
+    <View className="flex-1" style={{ backgroundColor: "#eaf5ef" }}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primaryDark} />
 
       <HeaderBar
@@ -72,13 +93,13 @@ const Homepage = ({ navigation }) => {
       >
         {/* Announcement Carousel */}
         <AnnouncementCarousel
-          items={announcements?.length ? announcements : undefined}
+          items={announcementItems}
           onViewAll={() => navigation.navigate("Announcements", {
-            items: announcements?.length ? announcements : undefined,
+            items: hasAnnouncements ? announcementItems : undefined,
           })}
-          onPressItem={(item) => navigation.navigate("Announcements", {
-            items: announcements?.length ? announcements : undefined,
-            selectedItem: item,
+          onPressItem={(item) => navigation.navigate("AnnouncementDetail", {
+            announcementId: item.id,
+            announcement: item,
           })}
           autoPlayMs={3500}
         />
@@ -130,9 +151,14 @@ const Homepage = ({ navigation }) => {
             {STAT_CONFIG.map((item, index) => (
               <React.Fragment key={item.key}>
                 {index > 0 && (
-                  <View style={{ width: 1, backgroundColor: "#e0f2f1", marginVertical: 6 }} />
+              <View style={{ width: 1, backgroundColor: "#e0f2f1", marginVertical: 6 }} />
                 )}
-                <StatItem item={item} value={stats[item.key]} loading={statsLoading} />
+                <StatItem
+                  item={item}
+                  value={stats[item.key]}
+                  loading={statsLoading}
+                  onPress={() => openWorkManager(item)}
+                />
               </React.Fragment>
             ))}
           </View>

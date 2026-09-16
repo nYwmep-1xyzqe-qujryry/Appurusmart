@@ -8,6 +8,7 @@ import { isExpoGo } from "../utils/runtime";
 import i18n from "../i18n/i18n";
 import api from "./api";
 import { getAuthToken, captureAuthSession, runWithSession, isAuthSessionCurrent, subscribeAuthSession } from "./authStorage";
+import { colors } from "../theme/tokens";
 
 const NOTIFICATION_INBOX_LIMIT = 100;
 const inboxListeners = new Set();
@@ -83,7 +84,7 @@ const configureAndroidNotificationChannels = async (Notifications) => {
   const common = {
     sound: "default",
     vibrationPattern: [0, 250, 200, 250],
-    lightColor: "#0f7a55",
+    lightColor: colors.primary,
   };
 
   await Promise.all([
@@ -124,7 +125,7 @@ const getNotificationSettingsPayload = (settings) => ({
 const getInboxIcon = (type) => {
   switch (type) {
     case "announcement":
-      return { icon: "megaphone-outline", iconColor: "#0f7a55", iconBg: "#e8f5ee" };
+      return { icon: "megaphone-outline", iconColor: colors.primary, iconBg: colors.primaryMuted };
     case "beforeClass":
     case "before_class":
       return { icon: "alarm-outline", iconColor: "#2167b2", iconBg: "#e8f1fb" };
@@ -134,7 +135,7 @@ const getInboxIcon = (type) => {
     case "grade_deadline":
       return { icon: "document-text-outline", iconColor: "#7c3aed", iconBg: "#f1eafe" };
     default:
-      return { icon: "notifications-outline", iconColor: "#0f7a55", iconBg: "#e8f5ee" };
+      return { icon: "notifications-outline", iconColor: colors.primary, iconBg: colors.primaryMuted };
   }
 };
 
@@ -915,8 +916,14 @@ export async function handleNotificationResponse(response) {
   const data = verified.data;
 
   if (data.type === "announcement") {
+    if (data.announcement_id == null) {
+      if (await isAuthSessionCurrent(session)) navigate("Notifications");
+      return;
+    }
     if (await isAuthSessionCurrent(session)) {
-      navigate("Announcements", { highlightId: data.announcement_id });
+      navigate("AnnouncementDetail", {
+        announcementId: data.announcement_id,
+      });
     }
     return;
   }

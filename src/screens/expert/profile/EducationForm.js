@@ -94,33 +94,33 @@ const EducationForm = ({ navigation }) => {
 
         <View className="flex-row items-center bg-white border border-[#eef1f4] rounded-2xl px-[14px] py-[14px] mb-4" style={{ elevation: 1 }}>
           <View className="w-11 h-11 rounded-xl bg-[#e6f4ef] items-center justify-center mr-3">
-            <Ionicons name="school" size={22} color="#007a5a" />
+            <Ionicons name="school" size={22} color="#07865F" />
           </View>
           <View className="flex-1">
-            <Text className="text-[11px] font-bold text-[#6b7a82] uppercase tracking-[0.8px]">{t("research.common.manageData")}</Text>
-            <Text className="text-[19px] font-black text-[#3f4d50] mt-[2px]">{t("research.education.title")}</Text>
+            <Text className="text-[12px] font-bold text-[#5F7069] uppercase" style={{ letterSpacing: 0 }}>{t("research.common.manageData")}</Text>
+            <Text className="text-[20px] font-black text-[#33483f] mt-[2px]">{t("research.education.title")}</Text>
           </View>
-          <View className="bg-[#007a5a] rounded-full min-w-9 px-[10px] py-[5px] items-center">
-            <Text className="text-white text-[13px] font-black">{items.length}</Text>
+          <View className="bg-[#07865F] rounded-full min-w-9 px-[10px] py-[5px] items-center">
+            <Text className="text-white text-[14px] font-black">{items.length}</Text>
           </View>
         </View>
 
         {/* List */}
         <View className="bg-white rounded-2xl border border-[#eef1f4] overflow-hidden mb-4" style={{ elevation: 1 }}>
           <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-            <Ionicons name="list-outline" size={16} color="#00614a" />
-            <Text className="text-[13px] font-extrabold text-[#00614a]">{t("research.education.listTitle")}</Text>
+            <Ionicons name="list-outline" size={16} color="#174D42" />
+            <Text className="text-[17px] font-extrabold text-[#174D42]" style={{ lineHeight: 24, letterSpacing: 0 }}>{t("research.education.listTitle")}</Text>
           </View>
           {loading ? (
             <View className="flex-row items-center justify-center py-9 gap-[10px]">
-              <ActivityIndicator size="small" color="#007a5a" />
-              <Text className="text-[13px] text-[#6b7a82]">{t("research.common.loading")}</Text>
+              <ActivityIndicator size="small" color="#07865F" />
+              <Text className="text-[14px] text-[#5F7069]">{t("research.common.loading")}</Text>
             </View>
           ) : sortedItems.length === 0 ? (
             <View className="items-center py-9">
-              <Ionicons name="folder-open-outline" size={42} color="#9aa6b1" />
-              <Text className="text-[14px] font-bold text-[#1f2a2e] mt-[10px]">{t("research.education.noData")}</Text>
-              <Text className="text-[12px] text-[#6b7a82] mt-1">{t("research.common.addBelow")}</Text>
+              <Ionicons name="folder-open-outline" size={42} color="#5F7069" />
+              <Text className="text-[15px] font-bold text-[#1f2a2e] mt-[10px]">{t("research.education.noData")}</Text>
+              <Text className="text-[13px] text-[#5F7069] mt-1">{t("research.common.addBelow")}</Text>
             </View>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -136,7 +136,7 @@ const EducationForm = ({ navigation }) => {
                   ].map((c, i, columns) => (
                     <Text
                       key={i}
-                      className="text-[11px] font-extrabold text-[#6b7a82] uppercase tracking-[0.5px] px-1"
+                      className="text-[12px] font-extrabold text-[#5F7069] uppercase px-1"
                       style={{ width: c.w, textAlign: i === columns.length - 1 ? "center" : "left" }}
                     >
                       {c.l}
@@ -151,30 +151,30 @@ const EducationForm = ({ navigation }) => {
                       editingItem?.id === item.id ? { backgroundColor: "#ccf0e2" } : {},
                     ]}
                   >
-                    <Text className="text-[14px] font-bold text-[#1f2a2e] text-left px-1" style={{ width: 40 }}>
+                    <Text className="text-[15px] font-bold text-[#1f2a2e] text-left px-1" style={{ width: 40 }}>
                       {index + 1}
                     </Text>
                     <View className="px-1" style={{ width: 86 }}>
                       <View className="self-start bg-[#e6f4ef] rounded-full px-[10px] py-[3px]">
-                        <Text className="text-[#00614a] text-[12px] font-extrabold">{item.year || "-"}</Text>
+                        <Text className="text-[#174D42] text-[13px] font-extrabold">{item.year || "-"}</Text>
                       </View>
                     </View>
                     <Text
-                      className="text-[12px] text-[#3f4d50] px-3"
+                      className="text-[13px] text-[#33483f] px-3"
                       style={{ width: 160, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }}
                       numberOfLines={2}
                     >
                       {getDegreeLabel(item) || "-"}
                     </Text>
                     <Text
-                      className="text-[13px] font-semibold text-[#1f2a2e] leading-5 px-3"
+                      className="text-[14px] font-semibold text-[#1f2a2e] leading-5 px-3"
                       style={{ width: 220, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }}
                       numberOfLines={3}
                     >
                       {item.course || "-"}
                     </Text>
                     <Text
-                      className="text-[12px] text-[#3f4d50] leading-5 px-3"
+                      className="text-[13px] text-[#33483f] leading-5 px-3"
                       style={{ width: 220, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }}
                       numberOfLines={3}
                     >
@@ -199,8 +199,8 @@ const EducationForm = ({ navigation }) => {
         <View className="bg-white border border-[#eef1f4] rounded-2xl pb-[18px]" style={{ elevation: 1 }}>
           <View className="flex-row items-center justify-between border-b border-[#eef1f4] px-4 py-3 mb-2">
             <View className="flex-row items-center">
-              <Ionicons name={editingItem ? "create" : "add-circle"} size={18} color="#007a5a" />
-              <Text className="text-[16px] font-black text-[#3f4d50] ml-2">{editingItem ? t("research.education.editForm") : t("research.education.addForm")}</Text>
+              <Ionicons name={editingItem ? "create" : "add-circle"} size={18} color="#07865F" />
+              <Text className="text-[17px] font-black text-[#33483f] ml-2">{editingItem ? t("research.education.editForm") : t("research.education.addForm")}</Text>
             </View>
           </View>
           <InlineDropdown label={t("research.education.yearGraduated")} value={form.year} options={YEAR_OPTIONS} onSelect={(v) => setField("year", v)} searchable />
@@ -224,10 +224,10 @@ const EducationForm = ({ navigation }) => {
           />
 
           <View className="flex-row gap-[10px] px-4 pt-[14px]">
-            <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-2 bg-[#007a5a] rounded-xl py-[13px]" style={{ elevation: 2, opacity: saving ? 0.6 : 1 }} onPress={handleSave} disabled={saving}>
+            <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-[13px]" style={{ elevation: 2, opacity: saving ? 0.6 : 1 }} onPress={handleSave} disabled={saving}>
               {saving ? <ActivityIndicator size="small" color="#fff" /> : <>
                 <Ionicons name={editingItem ? "checkmark-circle" : "add-circle"} size={18} color="#fff" />
-                <Text className="text-white text-[14px] font-black">{editingItem ? t("research.common.saveEdit") : t("research.education.addForm", { defaultValue: t("research.common.addData") })}</Text>
+                <Text className="text-white text-[15px] font-black">{editingItem ? t("research.common.saveEdit") : t("research.education.addForm", { defaultValue: t("research.common.addData") })}</Text>
               </>}
             </TouchableOpacity>
             <TouchableOpacity
@@ -235,7 +235,7 @@ const EducationForm = ({ navigation }) => {
               onPress={() => confirm({ title: t("research.common.resetFormTitle"), message: t("research.common.resetFormMessage"), icon: "refresh", onConfirm: openNewForm })}
             >
               <Ionicons name="refresh" size={16} color="#dc2626" />
-              <Text className="text-[#dc2626] text-[14px] font-black">{t("research.common.reset")}</Text>
+              <Text className="text-[#dc2626] text-[15px] font-black">{t("research.common.reset")}</Text>
             </TouchableOpacity>
           </View>
         </View>

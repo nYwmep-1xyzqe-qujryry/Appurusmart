@@ -20,33 +20,33 @@ const Avatar = ({ name, photoUrl, index }) => {
         width: 76, height: 76, borderRadius: 38,
         overflow: "hidden",
         backgroundColor: "#c8e6d6",
-        borderWidth: 2.5, borderColor: "#007a5a",
+        borderWidth: 2.5, borderColor: "#07865F",
         alignItems: "center", justifyContent: "center",
       }}>
         {photoUrl
           ? <Image source={{ uri: photoUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-          : <Text style={{ fontSize: 28, fontWeight: "900", color: "#007a5a" }}>{initial}</Text>
+          : <Text style={{ fontSize: 28, fontWeight: "900", color: "#07865F" }}>{initial}</Text>
         }
       </View>
       {/* ลำดับ */}
       <View style={{
         position: "absolute", bottom: -2, right: -2,
-        backgroundColor: "#007a5a", borderRadius: 10,
+        backgroundColor: "#07865F", borderRadius: 10,
         minWidth: 20, height: 20,
         paddingHorizontal: 5,
         alignItems: "center", justifyContent: "center",
         borderWidth: 2, borderColor: "#fff",
       }}>
-        <Text style={{ fontSize: 10, fontWeight: "900", color: "#fff" }}>{index + 1}</Text>
+        <Text style={{ fontSize: 11, fontWeight: "900", color: "#fff" }}>{index + 1}</Text>
       </View>
     </View>
   );
 };
 
 // ── Chip ───────────────────────────────────────────────────
-const Chip = ({ label, color = "#007a5a", bg = "#e6f4ef", border = "#9fd4bc" }) => (
+const Chip = ({ label, color = "#07865F", bg = "#e6f4ef", border = "#9fd4bc" }) => (
   <View style={{ backgroundColor: bg, borderWidth: 1, borderColor: border, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginRight: 5, marginBottom: 4 }}>
-    <Text style={{ fontSize: 11, fontWeight: "700", color }} numberOfLines={1}>{label}</Text>
+    <Text style={{ fontSize: 12, fontWeight: "700", color }} numberOfLines={1}>{label}</Text>
   </View>
 );
 
@@ -278,7 +278,7 @@ const ExpertCard = ({ item, index, onPress }) => {
       }}
     >
       {/* Green top border */}
-      <View style={{ height: 3, backgroundColor: "#007a5a" }} />
+      <View style={{ height: 3, backgroundColor: "#07865F" }} />
 
       <View style={{ padding: 14, gap: 12 }}>
         {/* Row 1: Avatar + Info */}
@@ -286,21 +286,21 @@ const ExpertCard = ({ item, index, onPress }) => {
           <Avatar name={name} photoUrl={photoUrl} index={index} />
 
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 16, fontWeight: "800", color: "#0a1a12", lineHeight: 22, letterSpacing: -0.2 }} numberOfLines={2}>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: "#0a1a12", lineHeight: 24, letterSpacing: 0 }} numberOfLines={2}>
               {name || "—"}
             </Text>
 
             {!!position && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", backgroundColor: "#e6f4ef", borderWidth: 1, borderColor: "#9fd4bc", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, marginTop: 5 }}>
-                <Ionicons name="ribbon-outline" size={11} color="#007a5a" />
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#007a5a" }} numberOfLines={1}>{position}</Text>
+                <Ionicons name="ribbon-outline" size={11} color="#07865F" />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#07865F" }} numberOfLines={1}>{position}</Text>
               </View>
             )}
 
             {!!(faculty || dept) && (
               <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 4, marginTop: 5 }}>
                 <Ionicons name="business-outline" size={12} color="#a0b8b0" style={{ marginTop: 1 }} />
-                <Text style={{ fontSize: 11, color: "#5a7a6e", flex: 1, lineHeight: 16 }} numberOfLines={2}>
+                <Text style={{ fontSize: 12, color: "#5a7a6e", flex: 1, lineHeight: 18 }} numberOfLines={2}>
                   {[faculty, dept !== faculty ? dept : ""].filter(Boolean).join("  ·  ")}
                 </Text>
               </View>
@@ -316,17 +316,17 @@ const ExpertCard = ({ item, index, onPress }) => {
           {/* ความเชี่ยวชาญ */}
           <View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 5 }}>
-              <View style={{ width: 18, height: 18, borderRadius: 5, backgroundColor: "#007a5a", alignItems: "center", justifyContent: "center" }}>
+              <View style={{ width: 18, height: 18, borderRadius: 5, backgroundColor: "#07865F", alignItems: "center", justifyContent: "center" }}>
                 <Ionicons name="settings-sharp" size={11} color="#fff" />
               </View>
-              <Text style={{ fontSize: 11, fontWeight: "800", color: "#005c42", letterSpacing: 0.3 }}>{t("research.screen.expertiseLabel")}</Text>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#174D42", letterSpacing: 0 }}>{t("research.screen.expertiseLabel")}</Text>
             </View>
             {expertises.length > 0
               ? <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                   {expertises.slice(0, 4).map((tag, i) => <Chip key={i} label={tag} />)}
                   {expertises.length > 4 && <Chip label={`+${expertises.length - 4}`} color="#6b8f80" bg="#f0f8f4" border="#c4ddd5" />}
                 </View>
-              : <Text style={{ fontSize: 12, color: colors.textSoft, fontStyle: "italic", marginLeft: 2 }}>—</Text>
+              : <Text style={{ fontSize: 13, color: colors.textSoft, fontStyle: "italic", marginLeft: 2 }}>—</Text>
             }
           </View>
 
@@ -336,14 +336,14 @@ const ExpertCard = ({ item, index, onPress }) => {
               <View style={{ width: 18, height: 18, borderRadius: 5, backgroundColor: "#f59e0b", alignItems: "center", justifyContent: "center" }}>
                 <Ionicons name="star" size={11} color="#fff" />
               </View>
-              <Text style={{ fontSize: 11, fontWeight: "800", color: "#92600a", letterSpacing: 0.3 }}>{t("research.screen.interestLabel")}</Text>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#92600a", letterSpacing: 0 }}>{t("research.screen.interestLabel")}</Text>
             </View>
             {interests.length > 0
               ? <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                   {interests.slice(0, 4).map((tag, i) => <Chip key={i} label={tag} color="#92600a" bg="#fff8e7" border="#f5c842" />)}
                   {interests.length > 4 && <Chip label={`+${interests.length - 4}`} color="#b08050" bg="#fffaf0" border="#e8d0a0" />}
                 </View>
-              : <Text style={{ fontSize: 12, color: colors.textSoft, fontStyle: "italic", marginLeft: 2 }}>—</Text>
+              : <Text style={{ fontSize: 13, color: colors.textSoft, fontStyle: "italic", marginLeft: 2 }}>—</Text>
             }
           </View>
         </View>
@@ -352,10 +352,10 @@ const ExpertCard = ({ item, index, onPress }) => {
         <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
           <View style={{
             flexDirection: "row", alignItems: "center", gap: 6,
-            backgroundColor: "#007a5a", borderRadius: 10,
+            backgroundColor: "#07865F", borderRadius: 10,
             paddingHorizontal: 14, paddingVertical: 8,
           }}>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>{t("research.screen.viewExpert")}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>{t("research.screen.viewExpert")}</Text>
             <Ionicons name="arrow-forward" size={14} color="#fff" />
           </View>
         </View>
@@ -425,7 +425,7 @@ export default function ResearchList({ navigation, route }) {
           data={results}
           keyExtractor={(item, i) => `${item.id ?? i}`}
           ListHeaderComponent={
-            <Text style={{ fontSize: 12, color: "#8fa89f", fontWeight: "600", paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 }}>
+            <Text style={{ fontSize: 13, color: "#5F7069", fontWeight: "600", paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 }}>
               {t("research.screen.foundCount", { count: results.length })}
             </Text>
           }

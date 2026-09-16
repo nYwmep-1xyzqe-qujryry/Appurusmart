@@ -16,6 +16,7 @@ import {
 import { isPinSet } from "../../services/pinService";
 import { wipeForPinFailure } from "../../services/lockService";
 import { getCurrentUserId } from "../../services/userSecurityKeys";
+import { colors, radius, typography } from "../../theme/tokens";
 
 const FACE_ID_ICON = require("../../assets/Face_ID.png");
 
@@ -159,8 +160,8 @@ export default function SecurityPage() {
   const biometricIcon = biometricPresentation.icon;
 
   return (
-    <View className="flex-1 bg-[#eaf5ef]">
-      <StatusBar barStyle="light-content" backgroundColor="#0f7a55" />
+    <View className="flex-1" style={{ backgroundColor: colors.appBg }}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View className="bg-primary flex-row items-center justify-between px-4 pb-[14px]" style={{ paddingTop: top + 10 }}>
         <TouchableOpacity
@@ -170,16 +171,16 @@ export default function SecurityPage() {
         >
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
-        <Text className="text-[17px] font-extrabold text-white">{t("security.title")}</Text>
+        <Text style={{ ...typography.sectionTitle, color: colors.surface }}>{t("security.title")}</Text>
         <View className="w-9" />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text className="text-[12px] font-bold text-[#4a5c54] px-5 pt-5 pb-2 uppercase tracking-[0.8px]">
+        <Text style={{ ...typography.label, color: colors.textMuted, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8, textTransform: "uppercase" }}>
           {t("security.section")}
         </Text>
 
-        <View className="bg-white rounded-2xl mx-4 overflow-hidden border border-[#e0ebe4]">
+        <View className="bg-white mx-4 overflow-hidden" style={{ borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border }}>
           <View className="flex-row items-center gap-[14px] px-4 py-[16px]">
             <View className="w-10 h-10 rounded-xl bg-brand items-center justify-center shrink-0">
               {biometricIcon === "faceid" ? (
@@ -190,7 +191,8 @@ export default function SecurityPage() {
             </View>
             <View className="flex-1 min-w-0">
               <Text
-                className="text-[15px] font-bold text-[#101b17]"
+                className="text-[16px]"
+                style={{ ...typography.body, fontSize: 16, lineHeight: 24, fontWeight: "600" }}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.85}
@@ -198,15 +200,15 @@ export default function SecurityPage() {
                 {biometricTitle}
               </Text>
               {checking ? (
-                <Text className="text-[12px] text-[#7c8f86] mt-[2px]">{t("security.checking")}</Text>
+                <Text style={{ ...typography.secondary, marginTop: 2 }}>{t("security.checking")}</Text>
               ) : !biometricInfo?.supported ? (
-                <Text className="text-[12px] text-[#7c8f86] mt-[2px]" numberOfLines={2}>
+                <Text style={{ ...typography.secondary, marginTop: 2 }} numberOfLines={2}>
                   {biometricReason}
                 </Text>
               ) : biometric ? (
-                <Text className="text-[12px] text-[#0f7a55] font-semibold mt-[2px]">{t("security.active")}</Text>
+                <Text style={{ ...typography.secondary, color: colors.primary, fontWeight: "500", marginTop: 2 }}>{t("security.active")}</Text>
               ) : (
-                <Text className="text-[12px] font-medium text-[#7c8f86] mt-[2px]" numberOfLines={2}>
+                <Text style={{ ...typography.secondary, marginTop: 2 }} numberOfLines={2}>
                   {biometricSubtitle}
                 </Text>
               )}
@@ -215,18 +217,18 @@ export default function SecurityPage() {
               value={biometric}
               onValueChange={toggleBiometric}
               disabled={checking || !biometricInfo?.supported}
-              trackColor={{ false: "#dfe8e3", true: "#1a6b3c" }}
+              trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor="#fff"
-              ios_backgroundColor="#dfe8e3"
+              ios_backgroundColor={colors.border}
               style={{ marginLeft: 8 }}
             />
           </View>
         </View>
 
         {biometricInfo?.supported && (
-          <View className="flex-row items-start gap-2 bg-[#e8f5ee] rounded-[14px] mx-4 mt-4 p-[14px] border border-[#e0ebe4]">
-            <Ionicons name="information-circle-outline" size={16} color="#1a6b3c" />
-            <Text className="flex-1 text-[12px] text-[#4a5c54] leading-[18px]">
+          <View className="flex-row items-start gap-2 mx-4 mt-4 p-[14px]" style={{ backgroundColor: colors.primaryMuted, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }}>
+            <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+            <Text className="flex-1" style={typography.caption}>
               {Platform.OS === "android"
                 ? t("security.biometricAndroidNote")
                 : t("security.biometricNote", { label: biometricLabel })}
@@ -234,34 +236,33 @@ export default function SecurityPage() {
           </View>
         )}
 
-        <View className="bg-white rounded-2xl mx-4 mt-4 overflow-hidden border border-[#e0ebe4]">
-          <View className="flex-row items-center gap-[14px] px-4 py-[16px] border-b border-[#f0f4f2]">
+        <View className="bg-white mx-4 mt-4 overflow-hidden" style={{ borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border }}>
+          <View className="flex-row items-center gap-[14px] px-4 py-[16px]" style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
             <View className="w-10 h-10 rounded-xl bg-brand items-center justify-center">
               <Ionicons name="keypad-outline" size={20} color="#fff" />
             </View>
             <View className="flex-1">
-              <Text className="text-[15px] font-bold text-[#101b17]">{t("security.pinStatus")}</Text>
-              <Text
-                className={`text-[12px] mt-[2px] font-semibold ${pinSet ? "text-[#0f7a55]" : "text-[#4a5c54]"}`}
-              >
+              <Text style={{ ...typography.body, fontSize: 16, lineHeight: 24, fontWeight: "600" }}>{t("security.pinStatus")}</Text>
+              <Text style={{ ...typography.secondary, color: pinSet ? colors.primary : colors.textMuted, fontWeight: "500", marginTop: 2 }}>
                 {pinSet ? t("security.pinStatusSet") : t("security.pinStatusNotSet")}
               </Text>
             </View>
           </View>
 
           <TouchableOpacity
-            className="flex-row items-center gap-[14px] px-4 py-[16px] border-b border-[#f0f4f2]"
+            className="flex-row items-center gap-[14px] px-4 py-[16px]"
+            style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
             onPress={() => navigation.navigate("ChangePin")}
             activeOpacity={0.7}
             disabled={!pinSet}
           >
-            <View className="w-10 h-10 rounded-xl bg-[#e8f5ee] items-center justify-center">
-              <Ionicons name="create-outline" size={20} color="#0f7a55" />
+            <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: colors.primaryMuted }}>
+              <Ionicons name="create-outline" size={20} color={colors.primary} />
             </View>
-            <Text className={`flex-1 text-[15px] font-bold ${pinSet ? "text-[#101b17]" : "text-[#7c8f86]"}`}>
+            <Text style={{ ...typography.body, flex: 1, fontSize: 16, lineHeight: 24, fontWeight: "600", color: pinSet ? colors.text : colors.textMuted }}>
               {t("security.changePin")}
             </Text>
-            <Ionicons name="chevron-forward" size={18} color="#c4d4cc" />
+            <Ionicons name="chevron-forward" size={18} color={colors.borderStrong} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -274,10 +275,10 @@ export default function SecurityPage() {
               <Ionicons name="refresh-outline" size={20} color="#df4c4b" />
             </View>
             <View className="flex-1">
-              <Text className={`text-[15px] font-bold ${pinSet ? "text-[#df4c4b]" : "text-[#7c8f86]"}`}>
+              <Text style={{ ...typography.body, fontSize: 16, lineHeight: 24, fontWeight: "600", color: pinSet ? colors.danger : colors.textMuted }}>
                 {t("security.resetPin")}
               </Text>
-              <Text className="text-[12px] text-[#4a5c54] mt-[2px]">{t("security.resetPinSub")}</Text>
+              <Text style={{ ...typography.secondary, marginTop: 2 }}>{t("security.resetPinSub")}</Text>
             </View>
           </TouchableOpacity>
         </View>

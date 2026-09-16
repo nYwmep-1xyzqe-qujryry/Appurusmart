@@ -108,18 +108,18 @@ const InterestForm = ({ navigation }) => {
           style={{ elevation: 1 }}
         >
           <View className="w-11 h-11 rounded-xl bg-[#e6f4ef] items-center justify-center mr-3">
-            <Ionicons name="star" size={22} color="#007a5a" />
+            <Ionicons name="star" size={22} color="#07865F" />
           </View>
           <View className="flex-1">
-            <Text className="text-[11px] font-bold text-[#6b7a82] uppercase tracking-[0.8px]">
+            <Text className="text-[12px] font-bold text-[#5F7069] uppercase" style={{ letterSpacing: 0 }}>
               {t("research.common.manageData")}
             </Text>
-            <Text className="text-[19px] font-black text-[#3f4d50] mt-[2px]">
+            <Text className="text-[20px] font-black text-[#33483f] mt-[2px]">
               {t("research.interest.title")}
             </Text>
           </View>
-          <View className="bg-[#007a5a] rounded-full min-w-9 px-[10px] py-[5px] items-center">
-            <Text className="text-white text-[13px] font-black">
+          <View className="bg-[#07865F] rounded-full min-w-9 px-[10px] py-[5px] items-center">
+            <Text className="text-white text-[14px] font-black">
               {items.length}
             </Text>
           </View>
@@ -131,23 +131,23 @@ const InterestForm = ({ navigation }) => {
           style={{ elevation: 1 }}
         >
           <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-            <Ionicons name="list-outline" size={16} color="#00614a" />
-            <Text className="text-[13px] font-extrabold text-[#00614a]">
+            <Ionicons name="list-outline" size={16} color="#174D42" />
+            <Text className="text-[14px] font-extrabold text-[#174D42]">
               {t("research.interest.listHeader")}
             </Text>
           </View>
           <View className="flex-row items-center px-4 py-[10px] bg-white border-b border-[#e3e7eb]">
             <Text
-              className="text-[11px] font-extrabold text-[#6b7a82] uppercase tracking-[0.5px]"
+              className="text-[12px] font-extrabold text-[#5F7069] uppercase"
               style={{ width: 50 }}
             >
               {t("research.interest.colNo")}
             </Text>
-            <Text className="text-[11px] font-extrabold text-[#6b7a82] uppercase tracking-[0.5px] flex-1">
+            <Text className="text-[12px] font-extrabold text-[#5F7069] uppercase flex-1">
               {t("research.interest.colTitle")}
             </Text>
             <Text
-              className="text-[11px] font-extrabold text-[#6b7a82] uppercase tracking-[0.5px] text-center"
+              className="text-[12px] font-extrabold text-[#5F7069] uppercase text-center"
               style={{ width: 60 }}
             >
               {t("research.common.deleteBtn")}
@@ -155,11 +155,11 @@ const InterestForm = ({ navigation }) => {
           </View>
           {items.length === 0 ? (
             <View className="items-center py-9">
-              <Ionicons name="folder-open-outline" size={42} color="#9aa6b1" />
-              <Text className="text-[14px] font-bold text-[#1f2a2e] mt-[10px]">
+              <Ionicons name="folder-open-outline" size={42} color="#5F7069" />
+              <Text className="text-[15px] font-bold text-[#1f2a2e] mt-[10px]">
                 {t("research.interest.noData")}
               </Text>
-              <Text className="text-[12px] text-[#6b7a82] mt-1">
+              <Text className="text-[13px] text-[#5F7069] mt-1">
                 {t("research.common.addBelow")}
               </Text>
             </View>
@@ -170,12 +170,12 @@ const InterestForm = ({ navigation }) => {
                 className="flex-row items-center px-4 py-3 border-b border-[#f0f4f7]"
               >
                 <Text
-                  className="text-[14px] font-bold text-[#1f2a2e] text-center leading-5"
+                  className="text-[15px] font-bold text-[#1f2a2e] text-center leading-5"
                   style={{ width: 50 }}
                 >
                   {index + 1}
                 </Text>
-                <Text className="text-[14px] font-semibold text-[#1f2a2e] leading-5 flex-1">
+                <Text className="text-[15px] font-semibold text-[#1f2a2e] leading-5 flex-1">
                   {getExpertTitle(entry)}
                 </Text>
                 <View className="items-center" style={{ width: 60 }}>
@@ -198,8 +198,8 @@ const InterestForm = ({ navigation }) => {
           style={{ elevation: 1 }}
         >
           <View className="flex-row items-center border-b border-[#eef1f4] px-4 py-3 mb-2">
-            <Ionicons name="add-circle" size={18} color="#007a5a" />
-            <Text className="text-[16px] font-black text-[#3f4d50] ml-2">
+            <Ionicons name="add-circle" size={18} color="#07865F" />
+            <Text className="text-[17px] font-black text-[#33483f] ml-2" style={{ lineHeight: 24, letterSpacing: 0 }}>
               {t("research.interest.addHeader")}
             </Text>
           </View>
@@ -217,18 +217,18 @@ const InterestForm = ({ navigation }) => {
           <View className="h-px bg-[#f0f4f7]" />
           <View className="flex-row items-center gap-2 px-4 py-3">
             <View className="flex-1 h-px bg-[#e8ecf0]" />
-            <Text className="text-[12px] text-[#666] font-semibold">
+            <Text className="text-[13px] text-[#666] font-semibold">
               {t("research.interest.orManual")}
             </Text>
             <View className="flex-1 h-px bg-[#e8ecf0]" />
           </View>
           <View className="h-px bg-[#f0f4f7]" />
           <View className="px-4 py-3">
-            <Text className="text-[13px] font-semibold text-brand mb-[6px]">
+            <Text className="text-[14px] font-semibold text-brand mb-[6px]">
               {t("research.interest.fieldLabel")}
             </Text>
             <TextInput
-              className="bg-[#f8fafb] border border-[#e8ecf0] rounded-[10px] px-3 text-[13px] text-[#1a1a2e]"
+              className="bg-[#f8fafb] border border-[#e8ecf0] rounded-[10px] px-3 text-[16px] leading-6 text-[#1a1a2e]"
               style={{
                 minHeight: 110,
                 textAlignVertical: "top",
@@ -241,7 +241,7 @@ const InterestForm = ({ navigation }) => {
                 setSelectedInterest("");
               }}
               placeholder={t("research.interest.placeholder")}
-              placeholderTextColor="#bbb"
+              placeholderTextColor="#5F7069"
               multiline
               numberOfLines={5}
               textAlignVertical="top"
@@ -249,7 +249,7 @@ const InterestForm = ({ navigation }) => {
           </View>
           <View className="flex-row gap-[10px] p-4 pt-[14px]">
             <TouchableOpacity
-              className="flex-1 flex-row items-center justify-center gap-2 bg-[#007a5a] rounded-xl py-[13px]"
+              className="flex-1 flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-[13px]"
               style={{ elevation: 2, opacity: saving ? 0.6 : 1 }}
               onPress={handleAdd}
               disabled={saving}
@@ -260,7 +260,7 @@ const InterestForm = ({ navigation }) => {
               ) : (
                 <>
                   <Ionicons name="add-circle" size={18} color="#fff" />
-                  <Text className="text-white text-[14px] font-black">
+                  <Text className="text-white text-[15px] font-black">
                     {t("research.interest.addForm")}
                   </Text>
                 </>
@@ -282,7 +282,7 @@ const InterestForm = ({ navigation }) => {
               activeOpacity={0.85}
             >
               <Ionicons name="refresh" size={16} color="#dc2626" />
-              <Text className="text-[#dc2626] text-[14px] font-black">
+              <Text className="text-[#dc2626] text-[15px] font-black">
                 {t("research.common.reset")}
               </Text>
             </TouchableOpacity>

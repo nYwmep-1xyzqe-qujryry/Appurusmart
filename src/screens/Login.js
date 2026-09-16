@@ -33,6 +33,7 @@ import { checkSupport, getBiometricPresentation, isBiometricEnabled, hasBiometri
 import { isPinSet } from "../services/pinService";
 import { resolveUserId } from "../services/userSecurityKeys";
 import { ensureExpertProfile } from "../services/infoApi";
+import { colors, typography } from "../theme/tokens";
 
 const API_URL = API_BASE_URL;
 const SSO_BASE_URL =
@@ -535,28 +536,12 @@ const Login = ({ navigation, route }) => {
         Platform.OS === "ios" ? 0 : (StatusBar.currentHeight ?? 0)
       }
     >
-      <StatusBar barStyle="dark-content" backgroundColor="#eaf5ef" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.appBg} />
 
       {/* Background */}
       <LinearGradient
-        colors={["#eaf5ef", "#d6eee3", "#eaf5ef"]}
+        colors={[colors.appBg, colors.primaryMuted, colors.appBg]}
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-      />
-      <View
-        className="absolute w-[300px] h-[300px] rounded-full"
-        style={{
-          top: -130,
-          right: -90,
-          backgroundColor: "rgba(191,227,208,0.6)",
-        }}
-      />
-      <View
-        className="absolute w-[260px] h-[260px] rounded-full"
-        style={{
-          bottom: -100,
-          left: -80,
-          backgroundColor: "rgba(15,122,85,0.08)",
-        }}
       />
 
       <ScrollView
@@ -581,14 +566,14 @@ const Login = ({ navigation, route }) => {
             style={{
               backgroundColor: "rgba(255,255,255,0.7)",
               elevation: 8,
-              shadowColor: "#0f7a55",
+              shadowColor: colors.primaryDark,
               shadowOpacity: 0.15,
               shadowRadius: 20,
               shadowOffset: { width: 0, height: 8 },
             }}
           >
             <LinearGradient
-              colors={["#ffffff", "#f0faf5"]}
+              colors={[colors.surface, colors.primarySoft]}
               style={{
                 width: 128,
                 height: 128,
@@ -609,10 +594,10 @@ const Login = ({ navigation, route }) => {
 
         {/* Title */}
         <Animated.View className="items-center mb-7" style={textStyle}>
-          <Text className="text-[24px] font-black text-[#064e35] text-center tracking-[-0.3px]">
+          <Text style={{ ...typography.pageTitle, fontSize: 25, lineHeight: 32, color: colors.primaryDark, textAlign: "center" }}>
             {t("login.title")}
           </Text>
-          <Text className="text-[13px] text-[#56706a] text-center font-medium mt-[6px]">
+          <Text style={{ ...typography.secondary, textAlign: "center", marginTop: 6 }}>
             {t("login.subtitle")}
           </Text>
         </Animated.View>
@@ -620,10 +605,12 @@ const Login = ({ navigation, route }) => {
         {/* Card */}
         <Animated.View className="w-full" style={cardStyle}>
           <View
-            className="bg-white rounded-[26px] p-6 border border-[rgba(15,122,85,0.08)]"
+            className="bg-white rounded-[26px] p-6"
             style={{
+              borderWidth: 1,
+              borderColor: colors.border,
               elevation: 10,
-              shadowColor: "#0f7a55",
+              shadowColor: colors.primaryDark,
               shadowOpacity: 0.12,
               shadowRadius: 24,
               shadowOffset: { width: 0, height: 10 },
@@ -637,8 +624,8 @@ const Login = ({ navigation, route }) => {
               <LinearGradient
                 colors={
                   ssoLoading
-                    ? ["#7bb8a4", "#7bb8a4"]
-                    : ["#0a6644", "#0f7a55", "#1a9068"]
+                    ? [colors.borderStrong, colors.borderStrong]
+                    : [colors.primaryDark, colors.primary, colors.primaryLight]
                 }
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
@@ -655,7 +642,7 @@ const Login = ({ navigation, route }) => {
                 ) : (
                   <View className="flex-row items-center gap-2">
                     <Ionicons name="school-outline" size={21} color="#fff" />
-                    <Text className="text-white text-[16px] font-extrabold">
+                    <Text className="text-white text-[17px] font-extrabold">
                       {t("login.ssoSignIn")}
                     </Text>
                   </View>
@@ -685,7 +672,7 @@ const Login = ({ navigation, route }) => {
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
             <Text
-              className="flex-1 text-white text-[16px] font-bold text-center"
+              className="flex-1 text-white text-[17px] font-bold text-center"
               numberOfLines={1}
             >
               {t("login.ssoTitle")}
@@ -783,7 +770,7 @@ const Login = ({ navigation, route }) => {
             }}
             renderLoading={() => (
               <View className="absolute inset-0 items-center justify-center bg-white">
-                <ActivityIndicator size="large" color="#0f7a55" />
+                <ActivityIndicator size="large" color={colors.primary} />
               </View>
             )}
             onHttpError={(event) => {
@@ -812,7 +799,7 @@ const Login = ({ navigation, route }) => {
               className="absolute left-0 right-0 bottom-0 items-center justify-center bg-white"
               style={{ top: PT + 52 }}
             >
-              <ActivityIndicator size="large" color="#0f7a55" />
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
           )}
         </View>

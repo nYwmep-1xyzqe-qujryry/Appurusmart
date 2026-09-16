@@ -8,6 +8,7 @@ process.env.EXPO_PUBLIC_API_URL = "https://api.example.test/api";
 
 function loadModule(relativePath) {
   const filename = path.resolve(process.cwd(), relativePath);
+  if (require.cache[filename]) return require.cache[filename].exports;
   const code = fs.readFileSync(filename, "utf8");
   const output = babel.transformSync(code, {
     filename,
@@ -16,7 +17,13 @@ function loadModule(relativePath) {
   const mod = new Module(filename, module);
   mod.filename = filename;
   mod.paths = Module._nodeModulePaths(path.dirname(filename));
-  mod._compile(output.code, filename);
+  require.cache[filename] = mod;
+  try {
+    mod._compile(output.code, filename);
+  } catch (error) {
+    delete require.cache[filename];
+    throw error;
+  }
   return mod.exports;
 }
 
@@ -25,6 +32,7 @@ const image = loadModule("src/utils/image.js");
 const name = loadModule("src/utils/name.js");
 const inputSanitize = loadModule("src/utils/inputSanitize.js");
 const url = loadModule("src/utils/url.js");
+const announcement = loadModule("src/utils/announcement.js");
 
 const parsed = thaiDate.parseISOToDate("2024-10-26");
 assert.equal(parsed.getFullYear(), 2024);
@@ -102,6 +110,35 @@ assert.equal(unsafeProtocol.url, null);
 const emptyUrl = url.normalizeOptionalUrl("");
 assert.equal(emptyUrl.ok, true);
 assert.equal(emptyUrl.url, null);
+
+const normalizedAnnouncement = announcement.normalizeAnnouncement({
+  announcement_id: 42,
+  title: "  ข่าวทดสอบ  ",
+  body: "  รายละเอียดข่าว  ",
+  image_url: "https://cdn.example.test/news.jpg",
+  thumbnail_url: "https://cdn.example.test/news-thumb.jpg",
+  image_alt: "ภาพข่าวทดสอบ",
+  image_width: 1200,
+  image_height: 675,
+});
+assert.equal(normalizedAnnouncement.id, 42);
+assert.equal(normalizedAnnouncement.title, "ข่าวทดสอบ");
+assert.equal(normalizedAnnouncement.body, "รายละเอียดข่าว");
+assert.equal(normalizedAnnouncement.imageUrl, "https://cdn.example.test/news.jpg");
+assert.equal(normalizedAnnouncement.thumbnailUrl, "https://cdn.example.test/news-thumb.jpg");
+assert.equal(normalizedAnnouncement.imageAlt, "ภาพข่าวทดสอบ");
+assert.equal(normalizedAnnouncement.imageWidth, 1200);
+assert.equal(normalizedAnnouncement.imageHeight, 675);
+
+const legacyAnnouncement = announcement.normalizeAnnouncement({
+  name: "ข่าวเก่า",
+  content: "ข่าวเดิมที่ไม่มีรูป",
+});
+assert.equal(legacyAnnouncement.title, "ข่าวเก่า");
+assert.equal(legacyAnnouncement.body, "ข่าวเดิมที่ไม่มีรูป");
+assert.equal(legacyAnnouncement.imageUrl, null);
+assert.equal(legacyAnnouncement.thumbnailUrl, null);
+assert.equal(announcement.getAnnouncementRows({ data: { data: [{ id: 1 }] } }).length, 1);
 
 async function testForegroundRefresh() {
   const { startForegroundRefresh } = loadModule("src/utils/foregroundRefresh.js");

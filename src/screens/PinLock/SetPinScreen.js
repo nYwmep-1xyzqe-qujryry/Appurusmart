@@ -3,7 +3,7 @@ import { StatusBar, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PinKeypad from "../../components/PinKeypad";
-import { colors } from "../../theme/tokens";
+import { colors, typography } from "../../theme/tokens";
 import { setPin } from "../../services/pinService";
 import { getCurrentUserId } from "../../services/userSecurityKeys";
 import { onLoginSuccess } from "../../services/notificationService";
@@ -75,19 +75,19 @@ export default function SetPinScreen({ navigation }) {
   };
 
   return (
-    <View className="flex-1 bg-[#eaf5ef]">
+    <View className="flex-1" style={{ backgroundColor: colors.appBg }}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <View
         className="bg-primary px-5 pb-6"
         style={{ paddingTop: top + 24, backgroundColor: colors.primary }}
       >
-        <Text className="text-white text-[20px] font-extrabold text-center">
+        <Text style={{ ...typography.pageTitle, color: colors.surface, textAlign: "center" }}>
           {t("security.setPinTitle")}
         </Text>
       </View>
 
       <View className="flex-1 items-center justify-center px-6">
-        <Text className="text-[15px] font-semibold text-[#5f746b] mb-6">
+        <Text style={{ ...typography.body, color: colors.textSoft, marginBottom: 24 }}>
           {step === "enter" ? t("security.pinEnterPrompt") : t("security.pinConfirmPrompt")}
         </Text>
 
@@ -99,7 +99,7 @@ export default function SetPinScreen({ navigation }) {
           maxLength={PIN_LENGTH}
           belowDots={
             error && (
-              <Text className="text-[13px] font-semibold text-[#dc2626] text-center">
+              <Text style={{ ...typography.secondary, color: colors.danger, fontWeight: "600", textAlign: "center" }}>
                 {t("security.pinMismatch")}
               </Text>
             )

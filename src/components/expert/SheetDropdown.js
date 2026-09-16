@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { colors } from "../../theme/tokens";
+import { colors, radius, typography } from "../../theme/tokens";
 import { sanitizeAcademicText } from "../../utils/inputSanitize";
 
 // Dropdown แบบ dialog กลางจอ — เปิดทันทีไม่ต้องรอ measure() ตำแหน่ง trigger
@@ -28,6 +28,7 @@ const SheetDropdown = ({
   required = false,
   containerClassName = "px-4 py-2",
   triggerStyle,
+  triggerTextStyle,
 }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -61,9 +62,12 @@ const SheetDropdown = ({
       return (
         <TouchableOpacity
           key={`${opt.id}-${index}`}
-          className={`px-[14px] py-3 border-b border-[#f0f4f7] ${
-            isSelected ? "bg-[#f0faf4]" : ""
-          }`}
+          className="px-[14px] py-3"
+          style={{
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            backgroundColor: isSelected ? colors.primarySoft : colors.surface,
+          }}
           onPress={() => handleSelect(opt.id)}
           activeOpacity={0.75}
         >
@@ -74,13 +78,16 @@ const SheetDropdown = ({
               )}
             </View>
             <Text
-              className={`flex-1 text-[13px] ${
-                isSelected
-                  ? "text-brand font-semibold"
+              className="flex-1"
+              style={{
+                ...typography.input,
+                color: isSelected
+                  ? colors.primary
                   : isPlaceholder
-                    ? "text-[#9aa6b1]"
-                    : "text-[#444]"
-              }`}
+                    ? colors.placeholder
+                    : colors.text,
+                fontWeight: isSelected ? "600" : "400",
+              }}
               numberOfLines={2}
             >
               {opt.label}
@@ -97,18 +104,21 @@ const SheetDropdown = ({
   return (
     <View className={containerClassName}>
       {!!label && (
-        <Text className="text-[13px] font-semibold text-brand mb-[6px]">
+        <Text style={[typography.label, { color: colors.text, marginBottom: 6 }]}>
           {label}
-          {required && <Text className="text-[#d83a36]"> *</Text>}
+          {required && <Text style={{ color: colors.danger }}> *</Text>}
         </Text>
       )}
       <TouchableOpacity
-        className={`flex-row items-center gap-1 ${
-          open
-            ? "bg-[#e8f5ee] border-[1.5px] border-brand"
-            : "bg-[#f4f6f8] border border-[#e8ecf0]"
-        }`}
-        style={[{ minHeight: 48, paddingHorizontal: 14, borderRadius: 12 }, triggerStyle]}
+        className="flex-row items-center gap-1"
+        style={[{
+          minHeight: 48,
+          paddingHorizontal: 14,
+          borderRadius: radius.md,
+          borderWidth: open ? 1.5 : 1,
+          borderColor: open ? colors.primary : colors.border,
+          backgroundColor: open ? colors.primaryMuted : colors.fieldBg,
+        }, triggerStyle]}
         onPress={() => {
           setSearch("");
           setOpen((prev) => !prev);
@@ -116,19 +126,23 @@ const SheetDropdown = ({
         activeOpacity={0.8}
       >
         <Text
-          className="flex-1 text-[13px] text-[#1a1a2e]"
-          style={!selected ? { color: "#aaa" } : {}}
-          numberOfLines={1}
+          className="flex-1"
+          style={[
+            typography.input,
+            { color: selected ? colors.text : colors.placeholder },
+            triggerTextStyle,
+          ]}
+          numberOfLines={2}
         >
           {selected ? selected.label : displayPlaceholder}
         </Text>
         {loading && (
-          <ActivityIndicator size="small" color="#888" style={{ marginRight: 4 }} />
+          <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 4 }} />
         )}
         <Ionicons
           name={open ? "chevron-up" : "chevron-down"}
           size={16}
-          color={open || selected ? colors.primary : "#888"}
+          color={open || selected ? colors.primary : colors.placeholder}
         />
       </TouchableOpacity>
 
@@ -148,11 +162,18 @@ const SheetDropdown = ({
             activeOpacity={1}
             onPress={() => setOpen(false)}
           />
-          <View className="bg-white rounded-2xl overflow-hidden border border-[#d4ece2]">
-            <View className="flex-row items-center px-4 py-3 bg-[#f0faf5] border-b border-[#d4ece2]">
+          <View
+            className="bg-white overflow-hidden"
+            style={{ borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border }}
+          >
+            <View
+              className="flex-row items-center px-4 py-3"
+              style={{ backgroundColor: colors.primarySoft, borderBottomWidth: 1, borderBottomColor: colors.border }}
+            >
               <Text
-                className="flex-1 text-[14px] font-bold text-[#0a3d2a]"
-                numberOfLines={1}
+                className="flex-1"
+                style={{ ...typography.input, color: colors.primaryDark, fontWeight: "600" }}
+                numberOfLines={2}
               >
                 {selected ? selected.label : displayPlaceholder}
               </Text>
@@ -164,16 +185,20 @@ const SheetDropdown = ({
               </TouchableOpacity>
             </View>
             {searchable && (
-              <View className="flex-row items-center gap-2 px-3 py-3 bg-[#f8fafb] border-b border-[#edf3f0]">
-                <View className="w-8 h-8 rounded-[10px] bg-[#e8f5ee] items-center justify-center">
+              <View
+                className="flex-row items-center gap-2 px-3 py-3"
+                style={{ backgroundColor: colors.fieldBg, borderBottomWidth: 1, borderBottomColor: colors.border }}
+              >
+                <View className="w-8 h-8 items-center justify-center" style={{ borderRadius: radius.sm, backgroundColor: colors.primaryMuted }}>
                   <Ionicons name="search-outline" size={15} color={colors.primary} />
                 </View>
                 <TextInput
-                  className="flex-1 text-[14px] text-[#1a1a2e] font-medium"
-                  style={{ paddingVertical: 0 }}
+                  className="flex-1"
+                  style={{ ...typography.input, paddingVertical: 0 }}
                   placeholder={t("research.common.search")}
-                  placeholderTextColor="#aab8b2"
+                  placeholderTextColor={colors.placeholder}
                   value={search}
+                  allowFontScaling
                   onChangeText={(text) => setSearch(sanitizeAcademicText(text))}
                   autoCorrect={false}
                   clearButtonMode="while-editing"
@@ -183,7 +208,7 @@ const SheetDropdown = ({
                     onPress={() => setSearch("")}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Ionicons name="close-circle" size={18} color="#9aa6b1" />
+                    <Ionicons name="close-circle" size={18} color={colors.placeholder} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -196,14 +221,14 @@ const SheetDropdown = ({
                 loading ? (
                   <View className="items-center py-8">
                     <ActivityIndicator size="small" color={colors.primary} />
-                    <Text className="text-[13px] text-[#9aa6b1] font-semibold mt-2">
+                    <Text style={[typography.caption, { marginTop: 8 }]}>
                       {t("research.common.loading")}
                     </Text>
                   </View>
                 ) : (
                   <View className="items-center py-8">
-                    <Ionicons name="search-outline" size={28} color="#c4d4cc" />
-                    <Text className="text-[13px] text-[#9aa6b1] font-semibold mt-2">
+                    <Ionicons name="search-outline" size={28} color={colors.borderStrong} />
+                    <Text style={[typography.caption, { marginTop: 8 }]}>
                       {t("research.common.notFound")}
                     </Text>
                   </View>

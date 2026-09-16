@@ -31,8 +31,8 @@ import { useEResearchText } from "./i18n";
 
 const SectionHeader = ({ icon, title }) => (
   <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-    <Ionicons name={icon} size={16} color="#00614a" />
-    <Text className="text-[13px] font-extrabold text-[#00614a]">{title}</Text>
+    <Ionicons name={icon} size={16} color="#174D42" />
+    <Text className="text-[14px] font-extrabold text-[#174D42]">{title}</Text>
   </View>
 );
 
@@ -150,7 +150,7 @@ const PersonalInfoCard = () => {
   if (loading) {
     return (
       <View className="bg-white border border-[#eef1f4] rounded-2xl items-center justify-center py-9 mb-4" style={{ elevation: 1 }}>
-        <ActivityIndicator size="small" color="#007a5a" />
+        <ActivityIndicator size="small" color="#07865F" />
       </View>
     );
   }
@@ -160,7 +160,7 @@ const PersonalInfoCard = () => {
       <SectionHeader icon="person-outline" title={te("researcher.title")} />
 
       <View className="p-[14px]">
-        <Text className="text-[12px] text-[#888] font-medium mb-[8px]">{te("researcher.workGroup")}</Text>
+        <Text className="text-[13px] text-[#888] font-medium mb-[8px]">{te("researcher.workGroup")}</Text>
         <View className="flex-row gap-6">
           {WORK_GROUP_OPTIONS.map((opt) => (
             <TouchableOpacity
@@ -172,9 +172,9 @@ const PersonalInfoCard = () => {
               <Ionicons
                 name={form.workGroup === opt.id ? "radio-button-on" : "radio-button-off"}
                 size={19}
-                color={form.workGroup === opt.id ? "#007a5a" : "#c4d4cc"}
+                color={form.workGroup === opt.id ? "#07865F" : "#c4d4cc"}
               />
-              <Text className="text-[13px] text-[#1f2a2e]">{opt.label}</Text>
+              <Text className="text-[14px] text-[#1f2a2e]">{opt.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -215,14 +215,14 @@ const PersonalInfoCard = () => {
 
       <View className="px-[14px] pt-2 pb-[14px]">
         <TouchableOpacity
-          className="flex-row items-center justify-center gap-2 bg-[#007a5a] rounded-xl py-[13px]"
+          className="flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-[13px]"
           style={{ elevation: 2, opacity: saving ? 0.65 : 1 }}
           onPress={handleSave}
           activeOpacity={0.85}
           disabled={saving}
         >
           {saving ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="checkmark-circle" size={18} color="#fff" />}
-          <Text className="text-white text-[14px] font-black">{te("researcher.updateInfo")}</Text>
+          <Text className="text-white text-[15px] font-black">{te("researcher.updateInfo")}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -287,32 +287,32 @@ const EducationSection = () => {
       <SectionHeader icon="school-outline" title={te("researcher.educationTitle")} />
       {loading ? (
         <View className="flex-row items-center justify-center py-7 gap-[10px]">
-          <ActivityIndicator size="small" color="#007a5a" />
-          <Text className="text-[13px] text-[#6b7a82]">{te("common.loading")}</Text>
+          <ActivityIndicator size="small" color="#07865F" />
+          <Text className="text-[14px] text-[#5F7069]">{te("common.loading")}</Text>
         </View>
       ) : items.length === 0 ? (
         <View className="items-center py-7">
-          <Ionicons name="folder-open-outline" size={36} color="#9aa6b1" />
-          <Text className="text-[13px] font-bold text-[#1f2a2e] mt-2">{te("researcher.educationEmpty")}</Text>
+          <Ionicons name="folder-open-outline" size={36} color="#5F7069" />
+          <Text className="text-[14px] font-bold text-[#1f2a2e] mt-2">{te("researcher.educationEmpty")}</Text>
         </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View>
             <View className="flex-row items-center bg-white border-b border-[#e3e7eb] px-3 py-3">
               {[{ w: 130, l: te("researcher.degree") }, { w: 210, l: te("researcher.qualification") }, { w: 180, l: te("researcher.university") }, { w: 70, l: te("date.yearShort") }, { w: 84, l: te("common.actions") }].map((c, i, arr) => (
-                <Text key={i} className="text-[11px] font-extrabold text-[#6b7a82] uppercase px-1" style={{ width: c.w, textAlign: i === arr.length - 1 ? "center" : "left" }}>{c.l}</Text>
+                <Text key={i} className="text-[12px] font-extrabold text-[#5F7069] uppercase px-1" style={{ width: c.w, textAlign: i === arr.length - 1 ? "center" : "left" }}>{c.l}</Text>
               ))}
             </View>
             {items.map((item) => (
               <View key={item.id} className="flex-row items-center px-3 py-3 border-b border-[#eef1f4]" style={editingItem?.id === item.id ? { backgroundColor: "#dff4ec" } : {}}>
-                <Text className="text-[12px] text-[#3f4d50] px-1" style={{ width: 130 }} numberOfLines={2}>{getLabel(DEGREE_OPTIONS, item.degree) || "-"}</Text>
-                <Text className="text-[13px] font-semibold text-[#1f2a2e] px-3" style={{ width: 210, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>
+                <Text className="text-[13px] text-[#33483f] px-1" style={{ width: 130 }} numberOfLines={2}>{getLabel(DEGREE_OPTIONS, item.degree) || "-"}</Text>
+                <Text className="text-[14px] font-semibold text-[#1f2a2e] px-3" style={{ width: 210, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>
                   {[item.qualification, item.major ?? item.course].filter(Boolean).join(" · ") || "-"}
                 </Text>
-                <Text className="text-[12px] text-[#3f4d50] px-3" style={{ width: 180, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{item.university || "-"}</Text>
+                <Text className="text-[13px] text-[#33483f] px-3" style={{ width: 180, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{item.university || "-"}</Text>
                 <View className="px-1" style={{ width: 70 }}>
                   <View className="self-start bg-[#e6f4ef] rounded-full px-[8px] py-[3px]">
-                    <Text className="text-[#00614a] text-[11px] font-extrabold">{item.year || "-"}</Text>
+                    <Text className="text-[#174D42] text-[12px] font-extrabold">{item.year || "-"}</Text>
                   </View>
                 </View>
                 <View className="flex-row gap-[6px] justify-center" style={{ width: 84 }}>
@@ -331,7 +331,7 @@ const EducationSection = () => {
 
       <Divider />
       <View className="p-[14px] gap-[2px]">
-        <Text className="text-[13px] font-extrabold text-[#3f4d50] mb-1">{editingItem ? te("researcher.educationEdit") : te("researcher.educationAdd")}</Text>
+        <Text className="text-[14px] font-extrabold text-[#33483f] mb-1">{editingItem ? te("researcher.educationEdit") : te("researcher.educationAdd")}</Text>
       </View>
       <InlineDropdown label={te("researcher.degree")} value={form.degree} options={DEGREE_OPTIONS} onSelect={(v) => setField("degree", v)} placeholder={te("researcher.degreePlaceholder")} />
       <FormField label={te("researcher.qualification")} value={form.qualification} onChangeText={(v) => setField("qualification", v)} />
@@ -339,17 +339,17 @@ const EducationSection = () => {
       <FormField label={te("researcher.university")} value={form.university} onChangeText={(v) => setField("university", v)} />
       <InlineDropdown label={te("researcher.gradYear")} value={form.year} options={YEAR_OPTIONS} onSelect={(v) => setField("year", v)} searchable />
       <View className="flex-row gap-[10px] px-[14px] pt-2 pb-[14px]">
-        <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-2 bg-[#007a5a] rounded-xl py-3" style={{ opacity: saving ? 0.6 : 1 }} onPress={handleSave} disabled={saving}>
+        <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-3" style={{ opacity: saving ? 0.6 : 1 }} onPress={handleSave} disabled={saving}>
           {saving ? <ActivityIndicator size="small" color="#fff" /> : (
             <>
               <Ionicons name={editingItem ? "checkmark-circle" : "add-circle"} size={17} color="#fff" />
-              <Text className="text-white text-[13px] font-black">{editingItem ? te("common.saveEdit") : te("common.add")}</Text>
+              <Text className="text-white text-[14px] font-black">{editingItem ? te("common.saveEdit") : te("common.add")}</Text>
             </>
           )}
         </TouchableOpacity>
         {editingItem && (
           <TouchableOpacity className="flex-row items-center gap-[6px] bg-[#f4f6f8] rounded-xl px-4" onPress={openNew}>
-            <Text className="text-[#6b7a82] text-[13px] font-bold">{te("common.cancel")}</Text>
+            <Text className="text-[#5F7069] text-[14px] font-bold">{te("common.cancel")}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -426,28 +426,28 @@ const ExpertiseSection = ({ scrollRef }) => {
       <SectionHeader icon="flask-outline" title={te("researcher.expertiseTitle")} />
       {loading ? (
         <View className="flex-row items-center justify-center py-7 gap-[10px]">
-          <ActivityIndicator size="small" color="#007a5a" />
-          <Text className="text-[13px] text-[#6b7a82]">{te("common.loading")}</Text>
+          <ActivityIndicator size="small" color="#07865F" />
+          <Text className="text-[14px] text-[#5F7069]">{te("common.loading")}</Text>
         </View>
       ) : items.length === 0 ? (
         <View className="items-center py-7">
-          <Ionicons name="folder-open-outline" size={36} color="#9aa6b1" />
-          <Text className="text-[13px] font-bold text-[#1f2a2e] mt-2">{te("researcher.expertiseEmpty")}</Text>
+          <Ionicons name="folder-open-outline" size={36} color="#5F7069" />
+          <Text className="text-[14px] font-bold text-[#1f2a2e] mt-2">{te("researcher.expertiseEmpty")}</Text>
         </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View>
             <View className="flex-row items-center bg-white border-b border-[#e3e7eb] px-3 py-3">
               {[{ w: 160, l: te("researcher.nameTh") }, { w: 160, l: te("researcher.nameEn") }, { w: 170, l: te("researcher.group") }, { w: 140, l: te("researcher.field") }, { w: 84, l: te("common.actions") }].map((c, i, arr) => (
-                <Text key={i} className="text-[11px] font-extrabold text-[#6b7a82] uppercase px-1" style={{ width: c.w, textAlign: i === arr.length - 1 ? "center" : "left" }}>{c.l}</Text>
+                <Text key={i} className="text-[12px] font-extrabold text-[#5F7069] uppercase px-1" style={{ width: c.w, textAlign: i === arr.length - 1 ? "center" : "left" }}>{c.l}</Text>
               ))}
             </View>
             {items.map((item) => (
               <View key={item.id} className="flex-row items-center px-3 py-3 border-b border-[#eef1f4]" style={editingItem?.id === item.id ? { backgroundColor: "#dff4ec" } : {}}>
-                <Text className="text-[13px] font-semibold text-[#1f2a2e] px-1" style={{ width: 160 }} numberOfLines={2}>{item.nameTh || "-"}</Text>
-                <Text className="text-[12px] text-[#3f4d50] px-3" style={{ width: 160, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{item.nameEn || "-"}</Text>
-                <Text className="text-[12px] text-[#3f4d50] px-3" style={{ width: 170, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{getLabel(EXPERTISE_GROUP_OPTIONS, String(item.group ?? "")) || "-"}</Text>
-                <Text className="text-[12px] text-[#3f4d50] px-3" style={{ width: 140, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{getLabel(RESEARCH_FIELD_OPTIONS, String(item.field ?? "")) || "-"}</Text>
+                <Text className="text-[14px] font-semibold text-[#1f2a2e] px-1" style={{ width: 160 }} numberOfLines={2}>{item.nameTh || "-"}</Text>
+                <Text className="text-[13px] text-[#33483f] px-3" style={{ width: 160, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{item.nameEn || "-"}</Text>
+                <Text className="text-[13px] text-[#33483f] px-3" style={{ width: 170, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{getLabel(EXPERTISE_GROUP_OPTIONS, String(item.group ?? "")) || "-"}</Text>
+                <Text className="text-[13px] text-[#33483f] px-3" style={{ width: 140, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{getLabel(RESEARCH_FIELD_OPTIONS, String(item.field ?? "")) || "-"}</Text>
                 <View className="flex-row gap-[6px] justify-center" style={{ width: 84 }}>
                   <TouchableOpacity className="w-[32px] h-[32px] rounded-lg bg-[#fff4e0] items-center justify-center" onPress={() => openEdit(item)}>
                     <Ionicons name="create-outline" size={16} color="#a8631a" />
@@ -464,24 +464,24 @@ const ExpertiseSection = ({ scrollRef }) => {
 
       <Divider />
       <View ref={formRef} className="p-[14px] pb-[2px]">
-        <Text className="text-[13px] font-extrabold text-[#3f4d50]">{editingItem ? te("researcher.expertiseEdit") : te("researcher.expertiseAdd")}</Text>
+        <Text className="text-[14px] font-extrabold text-[#33483f]">{editingItem ? te("researcher.expertiseEdit") : te("researcher.expertiseAdd")}</Text>
       </View>
       <InlineDropdown label={te("researcher.group")} value={form.group} options={EXPERTISE_GROUP_OPTIONS} onSelect={(v) => setField("group", v)} required placeholder={te("researcher.groupPlaceholder")} />
       <InlineDropdown label={te("researcher.field")} value={form.field} options={RESEARCH_FIELD_OPTIONS} onSelect={(v) => setField("field", v)} required placeholder={te("researcher.fieldPlaceholder")} />
       <FormField label={te("researcher.nameTh")} value={form.nameTh} onChangeText={(v) => setField("nameTh", v)} required />
       <FormField label={te("researcher.nameEn")} value={form.nameEn} onChangeText={(v) => setField("nameEn", v)} />
       <View className="flex-row gap-[10px] px-[14px] pt-2 pb-[14px]">
-        <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-2 bg-[#007a5a] rounded-xl py-3" style={{ opacity: saving ? 0.6 : 1 }} onPress={handleSave} disabled={saving}>
+        <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-3" style={{ opacity: saving ? 0.6 : 1 }} onPress={handleSave} disabled={saving}>
           {saving ? <ActivityIndicator size="small" color="#fff" /> : (
             <>
               <Ionicons name={editingItem ? "checkmark-circle" : "add-circle"} size={17} color="#fff" />
-              <Text className="text-white text-[13px] font-black">{editingItem ? te("common.saveEdit") : te("common.add")}</Text>
+              <Text className="text-white text-[14px] font-black">{editingItem ? te("common.saveEdit") : te("common.add")}</Text>
             </>
           )}
         </TouchableOpacity>
         {editingItem && (
           <TouchableOpacity className="flex-row items-center gap-[6px] bg-[#f4f6f8] rounded-xl px-4" onPress={openNew}>
-            <Text className="text-[#6b7a82] text-[13px] font-bold">{te("common.cancel")}</Text>
+            <Text className="text-[#5F7069] text-[14px] font-bold">{te("common.cancel")}</Text>
           </TouchableOpacity>
         )}
       </View>

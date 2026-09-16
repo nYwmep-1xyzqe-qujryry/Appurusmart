@@ -646,26 +646,26 @@ const ProfileForm = ({ navigation, route }) => {
 
       {loadingProfile || loadingOptions ? (
         <View className="flex-1 items-center justify-center gap-3">
-          <ActivityIndicator size="large" color="#007a5a" />
-          <Text className="text-[13px] text-[#007a5a] font-semibold">
+          <ActivityIndicator size="large" color="#07865F" />
+          <Text className="text-[14px] text-[#07865F] font-semibold">
             {t("research.common.loading")}
           </Text>
         </View>
       ) : profileError && !form.firstname_th ? (
         <View className="flex-1 items-center justify-center gap-4 px-8">
           <Ionicons name="cloud-offline-outline" size={52} color="#dc2626" />
-          <Text className="text-[15px] font-black text-[#dc2626] text-center">
+          <Text className="text-[16px] font-black text-[#dc2626] text-center">
             {t("research.profile.loadFailTitle")}
           </Text>
-          <Text className="text-[13px] text-[#6b7a82] text-center">
+          <Text className="text-[14px] text-[#5F7069] text-center">
             {t("research.profile.loadFailProfileMsg")}
           </Text>
           <TouchableOpacity
-            className="bg-[#007a5a] rounded-xl px-6 py-[13px] mt-2"
+            className="bg-[#07865F] rounded-xl px-6 py-[13px] mt-2"
             onPress={fetchProfile}
             activeOpacity={0.85}
           >
-            <Text className="text-white text-[13px] font-black">{t("research.profile.retry")}</Text>
+            <Text className="text-white text-[14px] font-black">{t("research.profile.retry")}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -700,7 +700,7 @@ const ProfileForm = ({ navigation, route }) => {
                   overflow: "hidden",
                   backgroundColor: "#e6f4ef",
                   borderWidth: 2.5,
-                  borderColor: "#007a5a",
+                  borderColor: "#07865F",
                 }}
               >
                 {photoUrl && failedPhotoUrl !== photoUrl ? (
@@ -727,7 +727,7 @@ const ProfileForm = ({ navigation, route }) => {
                   position: "absolute",
                   bottom: 0,
                   right: 0,
-                  backgroundColor: "#007a5a",
+                  backgroundColor: "#07865F",
                   borderRadius: 14,
                   width: 28,
                   height: 28,
@@ -751,15 +751,15 @@ const ProfileForm = ({ navigation, route }) => {
             )}
             <Text
               style={{
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: "900",
-                color: "#3f4d50",
+                color: "#33483f",
                 marginTop: 10,
               }}
             >
               {t("research.profile.editTitle")}
             </Text>
-            <Text style={{ fontSize: 11, color: "#9aa6b1", marginTop: 3 }}>
+            <Text style={{ fontSize: 12, color: "#5F7069", marginTop: 3 }}>
               {t("research.profile.tapPhoto")}
             </Text>
           </View>
@@ -770,8 +770,8 @@ const ProfileForm = ({ navigation, route }) => {
             style={{ elevation: 1 }}
           >
             <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-              <Ionicons name="person-outline" size={16} color="#00614a" />
-              <Text className="text-[13px] font-extrabold text-[#00614a]">
+              <Ionicons name="person-outline" size={16} color="#174D42" />
+              <Text className="text-[14px] font-extrabold text-[#174D42]">
                 ข้อมูลส่วนตัว
               </Text>
             </View>
@@ -820,7 +820,7 @@ const ProfileForm = ({ navigation, route }) => {
             />
             <View className="h-px bg-[#eef1f4]" />
             <View className="p-[14px]">
-              <Text className="text-[12px] text-[#888] font-medium mb-[6px]">
+              <Text className="text-[13px] text-[#888] font-medium mb-[6px]">
                 {t("research.profile.birthdate")}
               </Text>
               <TouchableOpacity
@@ -832,18 +832,18 @@ const ProfileForm = ({ navigation, route }) => {
                 <Ionicons
                   name="calendar-outline"
                   size={16}
-                  color="#007a5a"
+                  color="#07865F"
                   style={{ marginRight: 8 }}
                 />
                 <Text
-                  className="flex-1 text-[14px]"
-                  style={{ color: form.birthdate ? "#1f2a2e" : "#9aa6b1" }}
+                  className="flex-1 text-[16px] leading-6"
+                  style={{ color: form.birthdate ? "#1f2a2e" : "#5F7069", letterSpacing: 0 }}
                 >
                   {form.birthdate
                     ? formatThaiDate(form.birthdate)
                     : t("research.profile.birthdatePlaceholder")}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color="#9aa6b1" />
+                <Ionicons name="chevron-down" size={16} color="#5F7069" />
               </TouchableOpacity>
             </View>
           </View>
@@ -862,15 +862,15 @@ const ProfileForm = ({ navigation, route }) => {
                 <View className="bg-white rounded-t-[20px] pb-8">
                   <View className="flex-row items-center justify-between px-4 py-3 border-b border-[#eef1f4]">
                     <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                      <Text className="text-[15px] text-[#6b7a82] font-semibold">
+                      <Text className="text-[16px] text-[#5F7069] font-semibold">
                         {t("research.common.cancel")}
                       </Text>
                     </TouchableOpacity>
-                    <Text className="text-[15px] font-black text-[#3f4d50]">
+                    <Text className="text-[16px] font-black text-[#33483f]">
                       {t("research.profile.birthdate")}
                     </Text>
                     <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                      <Text className="text-[15px] text-[#007a5a] font-black">
+                      <Text className="text-[16px] text-[#07865F] font-black">
                         {t("research.profile.ok")}
                       </Text>
                     </TouchableOpacity>
@@ -904,8 +904,8 @@ const ProfileForm = ({ navigation, route }) => {
             style={{ elevation: 1 }}
           >
             <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-              <Ionicons name="briefcase-outline" size={16} color="#00614a" />
-              <Text className="text-[13px] font-extrabold text-[#00614a]">
+              <Ionicons name="briefcase-outline" size={16} color="#174D42" />
+              <Text className="text-[14px] font-extrabold text-[#174D42]">
                 {t("research.profile.workInfo")}
               </Text>
             </View>
@@ -967,8 +967,8 @@ const ProfileForm = ({ navigation, route }) => {
             style={{ elevation: 1 }}
           >
             <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-              <Ionicons name="home-outline" size={16} color="#00614a" />
-              <Text className="text-[13px] font-extrabold text-[#00614a]">
+              <Ionicons name="home-outline" size={16} color="#174D42" />
+              <Text className="text-[14px] font-extrabold text-[#174D42]">
                 ที่อยู่
               </Text>
             </View>
@@ -1044,8 +1044,8 @@ const ProfileForm = ({ navigation, route }) => {
             style={{ elevation: 1 }}
           >
             <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-              <Ionicons name="call-outline" size={16} color="#00614a" />
-              <Text className="text-[13px] font-extrabold text-[#00614a]">
+              <Ionicons name="call-outline" size={16} color="#174D42" />
+              <Text className="text-[14px] font-extrabold text-[#174D42]">
                 ช่องทางติดต่อ
               </Text>
             </View>
@@ -1086,8 +1086,8 @@ const ProfileForm = ({ navigation, route }) => {
             style={{ elevation: 1 }}
           >
             <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-              <Ionicons name="business-outline" size={16} color="#00614a" />
-              <Text className="text-[13px] font-extrabold text-[#00614a]">
+              <Ionicons name="business-outline" size={16} color="#174D42" />
+              <Text className="text-[14px] font-extrabold text-[#174D42]">
                 หน่วยงาน
               </Text>
             </View>
@@ -1135,13 +1135,13 @@ const ProfileForm = ({ navigation, route }) => {
           {/* ── ปุ่มบันทึก ── */}
           <View className="flex-row gap-[10px]">
             <TouchableOpacity
-              className="flex-1 flex-row items-center justify-center gap-2 bg-[#007a5a] rounded-xl py-[13px]"
+              className="flex-1 flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-[13px]"
               style={{ elevation: 2 }}
               onPress={handleSave}
               activeOpacity={0.85}
             >
               <Ionicons name="checkmark-circle" size={18} color="#fff" />
-              <Text className="text-white text-[14px] font-black">
+              <Text className="text-white text-[15px] font-black">
                 {t("research.common.save")}
               </Text>
             </TouchableOpacity>
@@ -1158,7 +1158,7 @@ const ProfileForm = ({ navigation, route }) => {
               activeOpacity={0.85}
             >
               <Ionicons name="refresh" size={17} color="#dc2626" />
-              <Text className="text-[#dc2626] text-[14px] font-black">
+              <Text className="text-[#dc2626] text-[15px] font-black">
                 {t("research.common.reset")}
               </Text>
             </TouchableOpacity>

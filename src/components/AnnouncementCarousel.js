@@ -4,6 +4,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { ANNOUNCE_PALETTES } from "../constants/announcePalettes";
+import AnnouncementImage from "./AnnouncementImage";
+import { normalizeAnnouncements } from "../utils/announcement";
+import { colors, typography } from "../theme/tokens";
 
 const CARD_GAP = 12;
 const SCROLL_ANIM_MS = 380; // ระยะเวลา animation scroll (ms)
@@ -11,7 +14,7 @@ const SCROLL_ANIM_MS = 380; // ระยะเวลา animation scroll (ms)
 export default function AnnouncementCarousel({ items = [], onViewAll, onPressItem, autoPlayMs = 0 }) {
   const { width } = useWindowDimensions();
   const { t } = useTranslation();
-  const announcements = Array.isArray(items) ? items : [];
+  const announcements = useMemo(() => normalizeAnnouncements(items), [items]);
   const count = announcements.length;
 
   const scrollRef = useRef(null);
@@ -24,6 +27,9 @@ export default function AnnouncementCarousel({ items = [], onViewAll, onPressIte
     if (width >= 600) return Math.min(300, width * 0.45);
     return Math.min(268, width * 0.68);
   }, [width]);
+  const previewHeight = Math.round(cardWidth * 9 / 16);
+  const hasImages = announcements.some((item) => item.thumbnailUrl || item.imageUrl);
+  const viewAllHeight = hasImages ? previewHeight + 108 : 158;
 
   // triple array เพื่อ infinite loop ในทั้ง 2 ทิศทาง
   const loopedItems = useMemo(() => {
@@ -92,18 +98,15 @@ export default function AnnouncementCarousel({ items = [], onViewAll, onPressIte
     }
   };
 
-  const getTitle = (item) => item.title || item.name || item.topic || item.message || t("announce.defaultTitle");
+  const getTitle = (item) => item.title || t("announce.defaultTitle");
 
   return (
-    <LinearGradient colors={["#043d2a", "#065f46"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: "100%", paddingTop: 16, paddingBottom: 20, overflow: "hidden" }}>
-      <View className="absolute w-[220px] h-[220px] rounded-full" style={{ top: -80, right: -60, backgroundColor: "rgba(255,255,255,0.04)" }} />
-      <View className="absolute w-[150px] h-[150px] rounded-full" style={{ bottom: -50, left: -40, backgroundColor: "rgba(255,255,255,0.03)" }} />
-
+    <LinearGradient colors={[colors.primaryDeep, colors.primaryLight]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: "100%", paddingTop: 16, paddingBottom: 20, overflow: "hidden" }}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-[18px] mb-[14px]">
         <View className="flex-row items-center gap-2">
-          <View className="w-1 h-5 rounded-[2px] bg-[#4ade80]" />
-          <Text className="text-white text-[16px] font-extrabold tracking-[-0.3px]">{t("announce.title")}</Text>
+          <View className="w-1 h-5 rounded-[2px]" style={{ backgroundColor: colors.brandYellow }} />
+          <Text className="text-white" style={{ ...typography.sectionTitle, color: colors.surface }}>{t("announce.title")}</Text>
         </View>
         <TouchableOpacity
           className="flex-row items-center gap-[3px] rounded-full px-3 py-[5px]"
@@ -112,7 +115,7 @@ export default function AnnouncementCarousel({ items = [], onViewAll, onPressIte
           onPress={onViewAll}
           hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
         >
-          <Text className="text-white/85 text-[12px] font-bold">{t("announce.viewAll")}</Text>
+          <Text className="text-white/85" style={{ ...typography.button, fontSize: 14, lineHeight: 20 }}>{t("announce.viewAll")}</Text>
           <Ionicons name="chevron-forward" size={13} color="rgba(255,255,255,0.75)" />
         </TouchableOpacity>
       </View>
@@ -141,42 +144,98 @@ export default function AnnouncementCarousel({ items = [], onViewAll, onPressIte
             {loopedItems.map((item, index) => {
               const realIndex = index % count;
               const palette = ANNOUNCE_PALETTES[realIndex % ANNOUNCE_PALETTES.length];
+              const imageUri = item.thumbnailUrl || item.imageUrl;
+              const summary = item.sub || item.body;
               return (
                 <TouchableOpacity
                   key={`${index}`}
                   activeOpacity={0.88}
                   onPress={() => onPressItem?.(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={getTitle(item)}
                   style={{ width: cardWidth }}
                 >
-                  <LinearGradient
-                    colors={item.colors ?? palette.colors}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={{ height: 158, borderRadius: 18, padding: 16, overflow: "hidden", justifyContent: "space-between", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" }}
-                  >
-                    <View className="absolute w-[110px] h-[110px] rounded-full" style={{ top: -30, right: -20, backgroundColor: "rgba(255,255,255,0.08)" }} />
-                    <View className="absolute w-[70px] h-[70px] rounded-full" style={{ bottom: -20, left: -10, backgroundColor: "rgba(255,255,255,0.05)" }} />
+                  {imageUri ? (
+                    <View style={{ width: "100%", borderRadius: 18, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+                      <AnnouncementImage
+                        uri={imageUri}
+                        alt={item.imageAlt}
+                        cacheKey={item.imageCacheKey}
+                        style={{ width: "100%", height: previewHeight }}
+                      />
 
-                    <View className="flex-row items-center justify-between">
-                      <View className="bg-white/20 rounded-full px-[10px] py-1 border border-white/[0.28]">
-                        <Text className="text-white text-[10px] font-extrabold tracking-[0.4px]">{item.tag ?? t("announce.defaultTag")}</Text>
-                      </View>
-                      <View className="w-[34px] h-[34px] rounded-[17px] bg-white/15 border border-white/[0.22] items-center justify-center">
-                        <Ionicons name={item.icon ?? palette.icon} size={18} color="rgba(255,255,255,0.9)" />
+                      <LinearGradient
+                        colors={item.colors ?? palette.colors}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={{ height: 4 }}
+                      />
+
+                      <View style={{ padding: 10, minHeight: 78 }}>
+                        <View className="flex-row items-center justify-between gap-2 mb-1">
+                          <View className="rounded-full px-[8px] py-[3px]" style={{ backgroundColor: colors.brandYellowSoft }}>
+                            <Text className="text-[12px] font-semibold" style={{ color: colors.brandYellowDark, lineHeight: 18, letterSpacing: 0 }}>
+                              {item.tag ?? t("announce.defaultTag")}
+                            </Text>
+                          </View>
+                          <View className="flex-row items-center gap-2">
+                            <LinearGradient
+                              colors={item.colors ?? palette.colors}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={{ width: 28, height: 28, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+                            >
+                              <Ionicons name={item.icon ?? palette.icon} size={16} color="#fff" />
+                            </LinearGradient>
+                            <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primary} />
+                          </View>
+                        </View>
+
+                        <Text style={{ ...typography.body, fontSize: 16, lineHeight: 22, fontWeight: "600" }} numberOfLines={2}>
+                          {getTitle(item)}
+                        </Text>
+
+                        {!!summary && (
+                          <Text style={{ ...typography.secondary, marginTop: 4 }} numberOfLines={1}>
+                            {summary}
+                          </Text>
+                        )}
                       </View>
                     </View>
-
-                    <Text className="text-white text-[13px] font-extrabold leading-5 tracking-[-0.1px] flex-1 my-2" numberOfLines={3}>
-                      {getTitle(item)}
-                    </Text>
-
-                    {!!item.sub && (
-                      <View className="flex-row items-center justify-between gap-[6px]">
-                        <Text className="flex-1 text-white/70 text-[10px] font-semibold" numberOfLines={1}>{item.sub}</Text>
-                        <Ionicons name="arrow-forward-circle-outline" size={16} color="rgba(255,255,255,0.65)" />
+                  ) : (
+                    <LinearGradient
+                      colors={item.colors ?? palette.colors}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{ height: 158, borderRadius: 18, padding: 14, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
+                    >
+                      <View className="flex-row items-start justify-between gap-2">
+                        <View className="bg-white/20 rounded-full px-[8px] py-[3px] border border-white/[0.25]">
+                          <Text className="text-white text-[12px] font-semibold" style={{ lineHeight: 18, letterSpacing: 0 }}>
+                            {item.tag ?? t("announce.defaultTag")}
+                          </Text>
+                        </View>
+                        <View className="w-[34px] h-[34px] rounded-[17px] bg-white/15 border border-white/[0.22] items-center justify-center">
+                          <Ionicons name={item.icon ?? palette.icon} size={18} color="rgba(255,255,255,0.95)" />
+                        </View>
                       </View>
-                    )}
-                  </LinearGradient>
+
+                      <View className="flex-1 justify-center py-1">
+                        <Text className="text-white" style={{ ...typography.body, color: colors.surface, fontSize: 16, lineHeight: 22, fontWeight: "600" }} numberOfLines={2}>
+                          {getTitle(item)}
+                        </Text>
+                        {!!summary && (
+                          <Text className="text-white/75" style={{ ...typography.secondary, color: "rgba(255,255,255,0.75)", marginTop: 4 }} numberOfLines={1}>
+                            {summary}
+                          </Text>
+                        )}
+                      </View>
+
+                      <View className="items-end">
+                        <Ionicons name="arrow-forward-circle-outline" size={18} color="rgba(255,255,255,0.9)" />
+                      </View>
+                    </LinearGradient>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -185,13 +244,15 @@ export default function AnnouncementCarousel({ items = [], onViewAll, onPressIte
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={onViewAll}
-              style={{ width: cardWidth * 0.5, height: 158, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.1)", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" }}
+              accessibilityRole="button"
+              accessibilityLabel={t("announce.viewAll")}
+              style={{ width: cardWidth * 0.5, height: viewAllHeight, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.1)", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" }}
             >
               <View className="items-center gap-2">
                 <View className="w-11 h-11 rounded-full bg-white items-center justify-center">
-                  <Ionicons name="grid-outline" size={22} color="#0f7a55" />
+                  <Ionicons name="grid-outline" size={22} color={colors.primary} />
                 </View>
-                <Text className="text-white/80 text-[12px] font-bold">{t("announce.viewAll")}</Text>
+                <Text className="text-white/80" style={{ ...typography.button, fontSize: 14, lineHeight: 20 }}>{t("announce.viewAll")}</Text>
               </View>
             </TouchableOpacity>
           </ScrollView>
@@ -206,7 +267,7 @@ export default function AnnouncementCarousel({ items = [], onViewAll, onPressIte
                     width: i === dotIndex ? 16 : 5,
                     height: 5,
                     borderRadius: 3,
-                    backgroundColor: i === dotIndex ? "#4ade80" : "rgba(255,255,255,0.3)",
+                    backgroundColor: i === dotIndex ? colors.brandYellow : "rgba(255,255,255,0.3)",
                   }}
                 />
               ))}

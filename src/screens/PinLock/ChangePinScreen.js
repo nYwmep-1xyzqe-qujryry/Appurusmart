@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PinKeypad from "../../components/PinKeypad";
-import { colors } from "../../theme/tokens";
+import { colors, typography } from "../../theme/tokens";
 import { setPin, verifyPin } from "../../services/pinService";
 import { getCurrentUserId } from "../../services/userSecurityKeys";
 
@@ -93,7 +93,7 @@ export default function ChangePinScreen({ navigation }) {
       : t("security.pinConfirmPrompt");
 
   return (
-    <View className="flex-1 bg-[#eaf5ef]">
+    <View className="flex-1" style={{ backgroundColor: colors.appBg }}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <View
         className="bg-primary flex-row items-center px-4 pb-[14px]"
@@ -106,13 +106,13 @@ export default function ChangePinScreen({ navigation }) {
         >
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
-        <Text className="flex-1 text-center text-[17px] font-extrabold text-white mr-9">
+        <Text className="flex-1 text-center mr-9" style={{ ...typography.sectionTitle, color: colors.surface }}>
           {t("security.changePin")}
         </Text>
       </View>
 
       <View className="flex-1 items-center justify-center px-6">
-        <Text className="text-[15px] font-semibold text-[#5f746b] mb-6">{promptText}</Text>
+        <Text style={{ ...typography.body, color: colors.textSoft, marginBottom: 24 }}>{promptText}</Text>
 
         <PinKeypad
           value={value}
@@ -122,7 +122,7 @@ export default function ChangePinScreen({ navigation }) {
           maxLength={PIN_LENGTH}
           belowDots={
             error && (
-              <Text className="text-[13px] font-semibold text-[#dc2626] text-center">
+              <Text style={{ ...typography.secondary, color: colors.danger, fontWeight: "600", textAlign: "center" }}>
                 {step === "confirm" ? t("security.pinMismatch") : t("security.pinWrong")}
               </Text>
             )

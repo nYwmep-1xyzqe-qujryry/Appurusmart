@@ -250,16 +250,16 @@ const buildProfilePdfHtml = ({
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
           color: #111827;
-          font-size: 11px;
+          font-size: 12px;
           line-height: 1.45;
         }
         h1 {
           text-align: center;
-          font-size: 17px;
+          font-size: 18px;
           margin: 0 0 14px;
         }
         h2 {
-          font-size: 12px;
+          font-size: 13px;
           margin: 14px 0 7px;
           color: #222;
         }
@@ -285,7 +285,7 @@ const buildProfilePdfHtml = ({
           padding-left: 12px;
         }
         .info-title {
-          font-size: 13px;
+          font-size: 14px;
           font-weight: 700;
           margin-bottom: 6px;
         }
@@ -355,14 +355,14 @@ const buildProfilePdfHtml = ({
 `;
 
 // ── Chip ───────────────────────────────────────────────────
-const Tag = ({ label, bg = "#e8f5ee", border = "#9fd4bc", color = "#007a5a" }) => (
+const Tag = ({ label, bg = "#e8f5ee", border = "#9fd4bc", color = "#07865F" }) => (
   <View style={{ backgroundColor: bg, borderWidth: 1, borderColor: border, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, marginRight: 6, marginBottom: 6 }}>
-    <Text style={{ fontSize: 12, fontWeight: "700", color }}>{label}</Text>
+    <Text style={{ fontSize: 13, fontWeight: "700", color }}>{label}</Text>
   </View>
 );
 
 // ── Section icon circle ────────────────────────────────────
-const SectionIcon = ({ name, color = "#fff", bg = "#007a5a" }) => (
+const SectionIcon = ({ name, color = "#fff", bg = "#07865F" }) => (
   <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}>
     <Ionicons name={name} size={16} color={color} />
   </View>
@@ -370,8 +370,8 @@ const SectionIcon = ({ name, color = "#fff", bg = "#007a5a" }) => (
 
 // ── Count badge ────────────────────────────────────────────
 const Badge = ({ n }) => (
-  <View style={{ backgroundColor: n > 0 ? "#007a5a" : "#bbc9c2", borderRadius: 99, minWidth: 26, paddingHorizontal: 7, paddingVertical: 2, alignItems: "center" }}>
-    <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800" }}>{n}</Text>
+  <View style={{ backgroundColor: n > 0 ? "#07865F" : "#bbc9c2", borderRadius: 99, minWidth: 26, paddingHorizontal: 7, paddingVertical: 2, alignItems: "center" }}>
+    <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>{n}</Text>
   </View>
 );
 
@@ -380,7 +380,7 @@ const FlatSection = ({ icon, iconBg, title, children }) => (
   <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#dde8e2", marginBottom: 12, overflow: "hidden", elevation: 1 }}>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#f2f9f5", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#dde8e2" }}>
       <SectionIcon name={icon} bg={iconBg} />
-      <Text style={{ fontSize: 14, fontWeight: "800", color: "#0a3d25" }}>{title}</Text>
+      <Text style={{ fontSize: 15, fontWeight: "800", color: "#0a3d25" }}>{title}</Text>
     </View>
     <View style={{ padding: 14 }}>{children}</View>
   </View>
@@ -400,7 +400,7 @@ const Section = ({ icon, iconBg, title, count, children, defaultOpen = false }) 
     <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#dde8e2", marginBottom: 10, overflow: "hidden", elevation: 1 }}>
       <TouchableOpacity onPress={toggle} activeOpacity={0.8} style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#f2f9f5", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: open ? 1 : 0, borderBottomColor: "#dde8e2" }}>
         <SectionIcon name={icon} bg={iconBg} />
-        <Text style={{ flex: 1, fontSize: 14, fontWeight: "800", color: "#0a3d25" }}>{title}</Text>
+        <Text style={{ flex: 1, fontSize: 15, fontWeight: "800", color: "#0a3d25" }}>{title}</Text>
         <Badge n={count ?? 0} />
         <Animated.View style={{ transform: [{ rotate: rot }], marginLeft: 4 }}>
           <Ionicons name="chevron-down" size={15} color="#6b8f80" />
@@ -416,13 +416,13 @@ const InfoRow = ({ icon, label, value, isEmail }) => {
   if (!value) return null;
   return (
     <View style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 7, gap: 7 }}>
-      <Ionicons name={icon} size={13} color="#007a5a" style={{ marginTop: 2 }} />
-      <Text style={{ fontSize: 12, fontWeight: "700", color: "#007a5a", minWidth: 70 }}>{label}</Text>
+      <Ionicons name={icon} size={13} color="#07865F" style={{ marginTop: 2 }} />
+      <Text style={{ fontSize: 13, fontWeight: "700", color: "#07865F", minWidth: 70 }}>{label}</Text>
       {isEmail
         ? <TouchableOpacity onPress={() => openLink(`mailto:${value}`)}>
-            <Text style={{ fontSize: 12, color: "#007a5a", fontWeight: "600", textDecorationLine: "underline" }}>{value}</Text>
+            <Text style={{ fontSize: 13, color: "#07865F", fontWeight: "600", textDecorationLine: "underline" }}>{value}</Text>
           </TouchableOpacity>
-        : <Text style={{ fontSize: 12, color: "#1a2820", flex: 1, lineHeight: 18, fontWeight: "500" }}>{value}</Text>
+        : <Text style={{ fontSize: 13, color: "#1a2820", flex: 1, lineHeight: 20, fontWeight: "500" }}>{value}</Text>
       }
     </View>
   );
@@ -434,7 +434,7 @@ const Empty = () => {
   return (
     <View style={{ alignItems: "center", paddingVertical: 18, gap: 5 }}>
       <Ionicons name="folder-open-outline" size={28} color="#c0cec7" />
-      <Text style={{ fontSize: 12, color: "#a0afaa", fontWeight: "500" }}>{t("research.profileDetail.noInfo")}</Text>
+      <Text style={{ fontSize: 13, color: "#a0afaa", fontWeight: "500" }}>{t("research.profileDetail.noInfo")}</Text>
     </View>
   );
 };
@@ -448,7 +448,7 @@ const DataTable = ({ cols, rows }) => (
       {/* Header */}
       <View style={{ flexDirection: "row", backgroundColor: "#e6f4ef", paddingVertical: 9, paddingHorizontal: 4 }}>
         {cols.map((c, i) => (
-          <Text key={i} style={{ fontSize: 11, fontWeight: "800", color: "#00614a", width: c.w, paddingHorizontal: 6, textAlign: (c.isCenter || i === 0) ? "center" : "left", letterSpacing: 0.2 }}>
+          <Text key={i} style={{ fontSize: 12, fontWeight: "800", color: "#174D42", width: c.w, paddingHorizontal: 6, textAlign: (c.isCenter || i === 0) ? "center" : "left", letterSpacing: 0 }}>
             {c.label}
           </Text>
         ))}
@@ -461,13 +461,13 @@ const DataTable = ({ cols, rows }) => (
             if (c.isLink && val) {
               return (
                 <TouchableOpacity key={ci} style={{ width: c.w, paddingHorizontal: 6 }} onPress={() => openLink(val)} activeOpacity={0.7}>
-                  <Text style={{ fontSize: 12, color: "#007a5a", fontWeight: "600", textDecorationLine: "underline" }} numberOfLines={2}>{val}</Text>
+                  <Text style={{ fontSize: 13, color: "#07865F", fontWeight: "600", textDecorationLine: "underline" }} numberOfLines={2}>{val}</Text>
                 </TouchableOpacity>
               );
             }
             return (
               <Text key={ci} numberOfLines={ci === 0 ? 1 : 4}
-                style={{ fontSize: 12, width: c.w, paddingHorizontal: 6, lineHeight: 18, textAlign: (c.isCenter || ci === 0) ? "center" : "left", color: ci === 0 ? "#007a5a" : "#1a2820", fontWeight: ci === 0 ? "800" : "500" }}>
+                style={{ fontSize: 13, width: c.w, paddingHorizontal: 6, lineHeight: 20, textAlign: (c.isCenter || ci === 0) ? "center" : "left", color: ci === 0 ? "#07865F" : "#1a2820", fontWeight: ci === 0 ? "800" : "500" }}>
                 {val}
               </Text>
             );
@@ -556,7 +556,7 @@ export default function ProfileDetail({ navigation, route }) {
           onAction={fetchProfile}
         />
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={{ fontSize: 13, color: colors.textSoft, fontWeight: "600", textAlign: "center" }}>{t("research.profileDetail.back")}</Text>
+          <Text style={{ fontSize: 14, color: colors.textSoft, fontWeight: "600", textAlign: "center" }}>{t("research.profileDetail.back")}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -767,15 +767,15 @@ export default function ProfileDetail({ navigation, route }) {
 
         {/* ── Info card ── */}
         <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#dde8e2", marginBottom: 14, overflow: "hidden", elevation: 2 }}>
-          <View style={{ height: 4, backgroundColor: "#007a5a" }} />
+          <View style={{ height: 4, backgroundColor: "#07865F" }} />
 
           <View style={{ flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6 }}>
             <TouchableOpacity onPress={handleDownloadPdf} disabled={pdfLoading} activeOpacity={0.8} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#e8f5ee", borderWidth: 1, borderColor: "#9fd4bc", borderRadius: 7, paddingHorizontal: 10, paddingVertical: 6, opacity: pdfLoading ? 0.6 : 1 }}>
               {pdfLoading
-                ? <ActivityIndicator size={13} color="#007a5a" />
-                : <Ionicons name="document-text-outline" size={13} color="#007a5a" />
+                ? <ActivityIndicator size={13} color="#07865F" />
+                : <Ionicons name="document-text-outline" size={13} color="#07865F" />
               }
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#007a5a" }}>{t(`${p}.downloadPdf`)}</Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#07865F" }}>{t(`${p}.downloadPdf`)}</Text>
             </TouchableOpacity>
           </View>
 
@@ -787,8 +787,8 @@ export default function ProfileDetail({ navigation, route }) {
               }
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: "900", color: "#0a1a12", lineHeight: 22, marginBottom: 1 }}>{name || "—"}</Text>
-              {!!nameEn && <Text style={{ fontSize: 11, color: "#6b8f80", marginBottom: 9, fontStyle: "italic" }}>{nameEn}</Text>}
+              <Text style={{ fontSize: 16, fontWeight: "900", color: "#0a1a12", lineHeight: 24, marginBottom: 1 }}>{name || "—"}</Text>
+              {!!nameEn && <Text style={{ fontSize: 12, color: "#6b8f80", marginBottom: 9, fontStyle: "italic" }}>{nameEn}</Text>}
               <View style={{ height: 1, backgroundColor: "#eef4f0", marginBottom: 9 }} />
               <InfoRow icon="briefcase-outline" label={t(`${p}.position`)} value={position} />
               <InfoRow icon="business-outline" label={t(`${p}.affiliation`)} value={affil} />
@@ -798,7 +798,7 @@ export default function ProfileDetail({ navigation, route }) {
           </View>
         </View>
 
-        <FlatSection icon="settings-sharp" iconBg="#007a5a" title={t(`${p}.secExpertise`)}>
+        <FlatSection icon="settings-sharp" iconBg="#07865F" title={t(`${p}.secExpertise`)}>
           {expertises.length > 0
             ? <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                 {expertises.map((e, i) => <Tag key={i} label={e.name ?? e.label ?? String(e)} />)}

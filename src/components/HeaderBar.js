@@ -89,8 +89,8 @@ const HeaderBar = ({ name, photoUrl, onNotification, onLogout }) => {
             <Ionicons name="notifications-outline" size={22} color="#fff" />
             {unreadCount > 0 && (
               <View
-                className="absolute -right-1 -top-1 min-w-[18px] h-[18px] rounded-full bg-[#ef4444] items-center justify-center px-1"
-                style={{ borderWidth: 1.5, borderColor: colors.primary }}
+                className="absolute -right-1 -top-1 min-w-[18px] h-[18px] rounded-full items-center justify-center px-1"
+                style={{ backgroundColor: colors.danger, borderWidth: 1.5, borderColor: colors.primary }}
               >
                 <Text className="text-white text-[10px] font-extrabold">
                   {unreadCount > 99 ? "99+" : unreadCount}

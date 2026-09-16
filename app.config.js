@@ -36,7 +36,7 @@ module.exports = {
         process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
-        backgroundColor: "#ffffff",
+        backgroundColor: "#111315",
       },
       edgeToEdgeEnabled: true,
       softwareKeyboardLayoutMode: "pan",

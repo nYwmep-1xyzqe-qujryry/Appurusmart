@@ -33,14 +33,14 @@ const getSearchByOptions = (t) => [
 ];
 
 const getPersonalMenus = (t) => [
-  { id: "profile",       label: t("research.screen.editProfile"),    icon: "person-outline",    color: "#0f7a55", bg: "#e8f5ee" },
+  { id: "profile",       label: t("research.screen.editProfile"),    icon: "person-outline",    color: "#07865F", bg: "#e8f5ee" },
   { id: "education",     label: t("research.screen.manageEducation"), icon: "school-outline",    color: "#185fa5", bg: "#e8f0fb" },
   { id: "work_history",  label: t("research.screen.manageWork"),      icon: "briefcase-outline", color: "#c95b05", bg: "#fff3e0" },
   { id: "admin_history", label: t("research.screen.manageAdmin"),     icon: "business-outline",  color: "#4527a0", bg: "#ede7f6" },
 ];
 
 const getExpertMenus = (t) => [
-  { id: "expertise",      label: t("research.screen.manageExpertise"), icon: "flask-outline",            color: "#0f7a55", bg: "#e8f5ee" },
+  { id: "expertise",      label: t("research.screen.manageExpertise"), icon: "flask-outline",            color: "#07865F", bg: "#e8f5ee" },
   { id: "interest",       label: t("research.screen.manageInterest"),  icon: "bulb-outline",             color: "#f57f17", bg: "#fff8e1" },
   { id: "research",       label: t("research.screen.manageResearch"),  icon: "bar-chart-outline",        color: "#185fa5", bg: "#e8f0fb" },
   { id: "journal",        label: t("research.screen.manageJournal"),   icon: "newspaper-outline",        color: "#00838f", bg: "#e0f7fa" },
@@ -50,7 +50,7 @@ const getExpertMenus = (t) => [
   { id: "award",          label: t("research.screen.manageAward"),     icon: "trophy-outline",           color: "#e65100", bg: "#fff3e0" },
   { id: "speaker",        label: t("research.screen.manageSpeaker"),   icon: "mic-outline",              color: "#c62828", bg: "#fce4ec" },
   { id: "training",       label: t("research.screen.manageTraining"),  icon: "clipboard-outline",        color: "#1565c0", bg: "#e3f2fd" },
-  { id: "service",        label: t("research.screen.manageService"),   icon: "people-outline",           color: "#0f7a55", bg: "#e8f5ee" },
+  { id: "service",        label: t("research.screen.manageService"),   icon: "people-outline",           color: "#07865F", bg: "#e8f5ee" },
   { id: "human_subjects", label: t("research.screen.manageHuman"),     icon: "shield-checkmark-outline", color: "#bf360c", bg: "#fbe9e7" },
 ];
 
@@ -68,7 +68,11 @@ const searchFieldStyle = {
   borderRadius: 12,
   minHeight: 46,
   paddingHorizontal: 14,
+  fontSize: 14,
+  lineHeight: 20,
+  letterSpacing: 0,
 };
+const searchTextStyle = { fontSize: 14, lineHeight: 20, letterSpacing: 0 };
 
 const SearchSection = ({ onSearch }) => {
   const { t } = useTranslation();
@@ -149,7 +153,7 @@ const SearchSection = ({ onSearch }) => {
           >
             <Ionicons name="search-outline" size={18} color="#fff" />
           </View>
-          <Text className="text-[15px] font-bold text-[#0a4d35]">
+          <Text className="text-[15px] font-bold text-[#0a4d35]" style={{ lineHeight: 22, letterSpacing: 0 }}>
             {t("research.screen.searchTitle")}
           </Text>
         </View>
@@ -166,6 +170,7 @@ const SearchSection = ({ onSearch }) => {
           onSelect={setSearchBy}
           containerClassName={SEARCH_FIELD_CONTAINER_CLASS}
           triggerStyle={searchFieldStyle}
+          triggerTextStyle={searchTextStyle}
         />
 
         <View className="flex-row items-center mt-[10px] gap-2">
@@ -173,7 +178,7 @@ const SearchSection = ({ onSearch }) => {
             className="flex-1 bg-[#f5f7f8] border border-[#e4e9ed] text-[14px] text-[#1a1a2e]"
             style={{ ...searchFieldStyle, minWidth: 0 }}
             placeholder={t("research.screen.keyword")}
-            placeholderTextColor="#aaa"
+            placeholderTextColor="#5F7069"
             value={keyword}
             onChangeText={(text) => setKeyword(sanitizeAcademicText(text))}
             onSubmitEditing={runKeywordSearch}
@@ -219,6 +224,7 @@ const SearchSection = ({ onSearch }) => {
             searchable
             containerClassName={SEARCH_FIELD_CONTAINER_CLASS}
             triggerStyle={searchFieldStyle}
+            triggerTextStyle={searchTextStyle}
           />
           <ResearchDropdown
             value={selectedInterest}
@@ -232,6 +238,7 @@ const SearchSection = ({ onSearch }) => {
             searchable
             containerClassName={SEARCH_FIELD_CONTAINER_CLASS}
             triggerStyle={searchFieldStyle}
+            triggerTextStyle={searchTextStyle}
           />
         </View>
 
@@ -269,7 +276,7 @@ const CountBadge = ({ count, color, bg, loading }) => {
       backgroundColor: bg, paddingHorizontal: 6,
       alignItems: "center", justifyContent: "center", marginRight: 8,
     }}>
-      <Text style={{ fontSize: 11, fontWeight: "700", color, letterSpacing: 0.2 }}>{display}</Text>
+      <Text style={{ fontSize: 12, fontWeight: "700", color, letterSpacing: 0 }}>{display}</Text>
     </View>
   );
 };
@@ -284,14 +291,14 @@ const MenuItem = ({ item, onPress, isLast, count, countLoading }) => (
       <View className="w-[38px] h-[38px] rounded-xl items-center justify-center" style={{ backgroundColor: item.bg }}>
         <Ionicons name={item.icon} size={19} color={item.color} />
       </View>
-      <Text className="text-[13px] font-semibold text-[#1a1a2e] flex-1 leading-5">{item.label}</Text>
+      <Text className="text-[14px] font-semibold text-[#1a1a2e] flex-1 leading-5">{item.label}</Text>
     </View>
     <View className="flex-row items-center">
       {count !== undefined && (
         <CountBadge count={count} color={item.color} bg={item.bg} loading={countLoading} />
       )}
       <View className="w-7 h-7 rounded-full bg-[#f4f6f8] items-center justify-center">
-        <Ionicons name="chevron-forward" size={14} color="#bbb" />
+        <Ionicons name="chevron-forward" size={14} color="#5F7069" />
       </View>
     </View>
   </TouchableOpacity>
@@ -304,9 +311,9 @@ const SectionCard = ({ title, sectionIcon, gradColors, items, onPress, counts, c
         <View className="w-7 h-7 rounded-[9px] bg-white/30 items-center justify-center">
           <Ionicons name={sectionIcon} size={15} color="#fff" />
         </View>
-        <Text className="text-[13px] font-bold text-white">{title}</Text>
+        <Text className="text-[14px] font-bold text-white">{title}</Text>
         <View className="ml-auto bg-white/25 rounded-full px-2 py-[2px]">
-          <Text className="text-white text-[11px] font-bold">{items.length}</Text>
+          <Text className="text-white text-[12px] font-bold">{items.length}</Text>
         </View>
       </View>
     </LinearGradient>
@@ -389,7 +396,7 @@ const ExpertHome = ({ navigation }) => {
   };
 
   return (
-    <View className="flex-1 bg-[#eaf5ef]">
+    <View className="flex-1 bg-[#F4F8F5]">
       <AppHeader title={t("research.screen.expertDb")} onBack={() => navigation.goBack()} />
       <ScrollView
         contentContainerStyle={{ padding: 14, paddingBottom: 30 + insets.bottom, gap: 14 }}
@@ -400,7 +407,7 @@ const ExpertHome = ({ navigation }) => {
         <SectionCard
           title={t("research.screen.personalInfo")}
           sectionIcon="person-outline"
-          gradColors={["#1a9068", "#0f7a55"]}
+          gradColors={["#1a9068", "#07865F"]}
           items={PERSONAL_MENUS}
           onPress={handleMenuPress}
           counts={counts}
@@ -409,7 +416,7 @@ const ExpertHome = ({ navigation }) => {
         <SectionCard
           title={t("research.screen.expertManage")}
           sectionIcon="folder-open-outline"
-          gradColors={["#064e35", "#0a6644"]}
+          gradColors={["#174D42", "#0a6644"]}
           items={EXPERT_MENUS}
           onPress={handleMenuPress}
           counts={counts}

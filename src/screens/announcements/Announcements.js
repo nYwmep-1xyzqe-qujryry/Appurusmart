@@ -22,14 +22,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ANNOUNCE_PALETTES } from "../../constants/announcePalettes";
+import AnnouncementImage from "../../components/AnnouncementImage";
+import AnnouncementImageViewer from "../../components/AnnouncementImageViewer";
 import useFetch from "../../hook/useFetch";
+import { getAnnouncementRows, normalizeAnnouncement, normalizeAnnouncements } from "../../utils/announcement";
+import { normalizeOptionalUrl } from "../../utils/url";
+import { colors as themeColors, radius, shadows, typography } from "../../theme/tokens";
 
 const SHEET_H = Dimensions.get("window").height * 0.72;
 
 // ── List card ─────────────────────────────────────────────
 const AnnouncementItem = ({ item, index, highlighted, defaultTag, defaultTitle, onPress }) => {
+  const announcement = normalizeAnnouncement(item, defaultTitle);
   const palette = ANNOUNCE_PALETTES[index % ANNOUNCE_PALETTES.length];
-  const title = item.title || item.name || item.topic || item.message || defaultTitle;
+  const title = announcement.title || defaultTitle;
+  const summary = announcement.sub || announcement.body;
+  const imageUri = announcement.thumbnailUrl || announcement.imageUrl;
 
   return (
     <ReAnimated.View entering={FadeInDown.delay(index * 60).springify().damping(14)}>
@@ -37,10 +45,12 @@ const AnnouncementItem = ({ item, index, highlighted, defaultTag, defaultTitle, 
         className="bg-white rounded-[18px] overflow-hidden border"
         activeOpacity={0.82}
         onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={title}
         style={{
-          borderColor: highlighted ? "#0f7a55" : "#dce8e2",
+          borderColor: highlighted ? themeColors.primary : themeColors.border,
           elevation: highlighted ? 5 : 2,
-          shadowColor: "#064e35",
+          shadowColor: themeColors.primaryDark,
           shadowOpacity: highlighted ? 0.18 : 0.06,
           shadowRadius: 8,
           shadowOffset: { width: 0, height: 3 },
@@ -53,37 +63,49 @@ const AnnouncementItem = ({ item, index, highlighted, defaultTag, defaultTitle, 
           style={{ height: 4 }}
         />
 
-        <View className="p-[14px] flex-row gap-3">
-          <LinearGradient
-            colors={item.colors ?? palette.colors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-          >
-            <Ionicons name={item.icon ?? palette.icon} size={22} color="rgba(255,255,255,0.95)" />
-          </LinearGradient>
-
-          <View className="flex-1">
+        <View className="p-[14px]">
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
             <View className="flex-row items-center gap-2 mb-[6px]">
-              <View className="bg-[#eef8f3] rounded-full px-2 py-[3px]">
-                <Text className="text-primary text-[10px] font-extrabold tracking-[0.3px]">{item.tag ?? defaultTag}</Text>
+              <View style={{ backgroundColor: themeColors.brandYellowSoft, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ color: themeColors.brandYellowDark, fontSize: 11, lineHeight: 17, fontWeight: "500", letterSpacing: 0 }}>{announcement.tag ?? defaultTag}</Text>
               </View>
-              {!!item.date && (
-                <Text className="text-[#9aabaa] text-[10px] font-semibold">{item.date}</Text>
+              {!!(announcement.date ?? announcement.published_at ?? announcement.created_at) && (
+                <Text style={{ color: themeColors.textMuted, fontSize: 11, lineHeight: 17, fontWeight: "400", letterSpacing: 0 }}>
+                  {announcement.date ?? announcement.published_at ?? announcement.created_at}
+                </Text>
               )}
             </View>
-            <Text className="text-[#0d1f18] text-[14px] font-extrabold leading-5" numberOfLines={2}>
+            <Text style={{ ...typography.body, fontSize: 16, lineHeight: 22, fontWeight: "600" }} numberOfLines={2}>
               {title}
             </Text>
-            {!!item.sub && (
-              <Text className="text-[#5f746b] text-[12px] font-medium leading-[17px] mt-1" numberOfLines={2}>
-                {item.sub}
+            {!!summary && (
+              <Text style={{ ...typography.secondary, marginTop: 4 }} numberOfLines={2}>
+                {summary}
               </Text>
             )}
-          </View>
+            </View>
 
-          <View className="justify-center">
-            <Ionicons name="chevron-forward" size={16} color="#c4d4cc" />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {imageUri ? (
+                <AnnouncementImage
+                  uri={imageUri}
+                  alt={announcement.imageAlt}
+                  cacheKey={announcement.imageCacheKey}
+                  style={{ width: 88, height: 66, borderRadius: radius.md }}
+                />
+              ) : (
+                <LinearGradient
+                  colors={announcement.colors ?? palette.colors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ width: 48, height: 48, borderRadius: radius.md, alignItems: "center", justifyContent: "center" }}
+                >
+                  <Ionicons name={announcement.icon ?? palette.icon} size={22} color="rgba(255,255,255,0.95)" />
+                </LinearGradient>
+              )}
+              <Ionicons name="chevron-forward" size={16} color={themeColors.borderStrong} />
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -99,7 +121,13 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
   const translateY = useRef(new Animated.Value(SHEET_H)).current;
   const backdrop = useRef(new Animated.Value(0)).current;
   const onCloseRef = useRef(onClose);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [linkError, setLinkError] = useState(null);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    setImageViewerVisible(false);
+    setLinkError(null);
+  }, [item]);
 
   // Open animation each time a new item is selected
   useEffect(() => {
@@ -141,12 +169,19 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
 
   if (!item) return null;
 
-  const title = item.title || item.name || item.topic || defaultTitle;
-  const body = item.message || item.body || item.content || item.detail || item.description || item.sub || "";
-  const tag = item.tag ?? defaultTag;
-  const icon = item.icon ?? ANNOUNCE_PALETTES[0].icon;
-  const colors = item.colors ?? ANNOUNCE_PALETTES[0].colors;
-  const hasUrl = !!item.url;
+  const announcement = normalizeAnnouncement(item, defaultTitle);
+  const title = announcement.title || defaultTitle;
+  const body = announcement.body;
+  const tag = announcement.tag ?? defaultTag;
+  const icon = announcement.icon ?? ANNOUNCE_PALETTES[0].icon;
+  const colors = announcement.colors ?? ANNOUNCE_PALETTES[0].colors;
+  const imageUri = announcement.imageUrl || announcement.thumbnailUrl;
+  const imageRatio = announcement.imageWidth && announcement.imageHeight
+    ? Math.min(2.2, Math.max(0.7, announcement.imageWidth / announcement.imageHeight))
+    : 16 / 9;
+  const sourceUrl = typeof announcement.url === "string" ? announcement.url.trim() : "";
+  const hasUrl = sourceUrl !== "";
+  const normalizedUrl = normalizeOptionalUrl(sourceUrl);
 
   const formatDate = (ds) => {
     if (!ds) return null;
@@ -158,17 +193,37 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
       return `${day} • ${time} น.`;
     } catch { return ds; }
   };
-  const dateStr = item.published_at ? formatDate(item.published_at) : (item.date ?? null);
+  const dateValue = announcement.published_at ?? announcement.created_at ?? announcement.date;
+  const dateStr = announcement.published_at || announcement.created_at
+    ? formatDate(dateValue)
+    : (announcement.date ?? null);
 
   const handleShare = async () => {
     try {
-      const msg = [title, body, item.url].filter(Boolean).join("\n\n");
+      const msg = [title, body, normalizedUrl.ok ? normalizedUrl.url : null].filter(Boolean).join("\n\n");
       await Share.share({ message: msg, title });
     } catch (_) {}
   };
 
+  const handleOpenUrl = async () => {
+    setLinkError(null);
+    if (!normalizedUrl.ok || !normalizedUrl.url) {
+      setLinkError(t("announce.invalidLink"));
+      return;
+    }
+
+    try {
+      const supported = await Linking.canOpenURL(normalizedUrl.url);
+      if (!supported) throw new Error("URL is not supported");
+      await Linking.openURL(normalizedUrl.url);
+    } catch (_) {
+      setLinkError(t("announce.linkOpenFailed"));
+    }
+  };
+
   return (
-    <Modal visible transparent statusBarTranslucent animationType="none" onRequestClose={dismiss}>
+    <>
+      <Modal visible transparent statusBarTranslucent animationType="none" onRequestClose={dismiss}>
       {/* Dimmed backdrop — tap to close */}
       <TouchableWithoutFeedback onPress={dismiss}>
         <Animated.View
@@ -181,11 +236,11 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
         <Animated.View
           style={{
             height: SHEET_H,
-            backgroundColor: "#fff",
+            backgroundColor: themeColors.surface,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             elevation: 24,
-            shadowColor: "#000",
+            shadowColor: themeColors.primaryDark,
             shadowOpacity: 0.22,
             shadowRadius: 24,
             shadowOffset: { width: 0, height: -6 },
@@ -198,7 +253,7 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
             {...panResponder.panHandlers}
             style={{ alignItems: "center", paddingTop: 12, paddingBottom: 10 }}
           >
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#dde7e3" }} />
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: themeColors.borderStrong }} />
           </View>
 
           <ScrollView
@@ -209,34 +264,52 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
           >
             {/* ── Hero ── */}
             <View style={{ alignItems: "center", paddingHorizontal: 24, paddingTop: 4, paddingBottom: 22, gap: 14 }}>
-              <LinearGradient
-                colors={colors}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 26,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  elevation: 4,
-                  shadowColor: colors[1],
-                  shadowOpacity: 0.35,
-                  shadowRadius: 12,
-                  shadowOffset: { width: 0, height: 4 },
-                }}
-              >
-                <Ionicons name={icon} size={38} color="rgba(255,255,255,0.97)" />
-              </LinearGradient>
+              {imageUri ? (
+                <TouchableOpacity
+                  activeOpacity={0.92}
+                  onPress={() => setImageViewerVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="เปิดภาพข่าวสารแบบเต็มหน้าจอ"
+                  style={{ width: "100%" }}
+                >
+                  <AnnouncementImage
+                    uri={imageUri}
+                    alt={announcement.imageAlt}
+                    resizeMode="contain"
+                    cacheKey={announcement.imageCacheKey}
+                    style={{ width: "100%", aspectRatio: imageRatio, maxHeight: 190, borderRadius: 18 }}
+                  />
+                </TouchableOpacity>
+              ) : (
+                <LinearGradient
+                  colors={colors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 26,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    elevation: 4,
+                    shadowColor: colors[1],
+                    shadowOpacity: 0.35,
+                    shadowRadius: 12,
+                    shadowOffset: { width: 0, height: 4 },
+                  }}
+                >
+                  <Ionicons name={icon} size={38} color="rgba(255,255,255,0.97)" />
+                </LinearGradient>
+              )}
 
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-                <View style={{ backgroundColor: "#eef8f3", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 }}>
-                  <Text style={{ color: "#0f7a55", fontSize: 11, fontWeight: "800", letterSpacing: 0.3 }}>{tag}</Text>
+                <View style={{ backgroundColor: themeColors.brandYellowSoft, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5 }}>
+                  <Text style={{ color: themeColors.brandYellowDark, fontSize: 12, lineHeight: 18, fontWeight: "500", letterSpacing: 0 }}>{tag}</Text>
                 </View>
                 {!!dateStr && (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Ionicons name="time-outline" size={12} color="#9aabaa" />
-                    <Text style={{ color: "#9aabaa", fontSize: 11, fontWeight: "600" }}>{dateStr}</Text>
+                    <Ionicons name="time-outline" size={12} color={themeColors.textMuted} />
+                    <Text style={{ color: themeColors.textMuted, fontSize: 12, lineHeight: 18, fontWeight: "400", letterSpacing: 0 }}>{dateStr}</Text>
                   </View>
                 )}
               </View>
@@ -244,18 +317,18 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
 
             {/* ── Title ── */}
             <View style={{ paddingHorizontal: 24, paddingBottom: 18 }}>
-              <Text style={{ color: "#0d1f18", fontSize: 20, fontWeight: "800", lineHeight: 29, letterSpacing: -0.4 }}>
+              <Text style={{ ...typography.pageTitle, color: themeColors.text, fontSize: 22, lineHeight: 30 }}>
                 {title}
               </Text>
             </View>
 
             {/* ── Divider ── */}
-            <View style={{ height: 1, backgroundColor: "#f0f4f2", marginHorizontal: 24, marginBottom: 20 }} />
+            <View style={{ height: 1, backgroundColor: themeColors.border, marginHorizontal: 24, marginBottom: 20 }} />
 
             {/* ── Body ── */}
             <View style={{ paddingHorizontal: 24, paddingBottom: 32 }}>
               {body ? (
-                <Text style={{ color: "#374151", fontSize: 14.5, lineHeight: 25, fontWeight: "500" }}>
+                <Text style={{ ...typography.body, color: themeColors.text, lineHeight: 27 }}>
                   {body}
                 </Text>
               ) : (
@@ -264,18 +337,18 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
                     width: 84,
                     height: 84,
                     borderRadius: 42,
-                    backgroundColor: "#f0f6f2",
+                    backgroundColor: themeColors.primarySoft,
                     alignItems: "center",
                     justifyContent: "center",
                     borderWidth: 2,
-                    borderColor: "#dce8e2",
+                    borderColor: themeColors.border,
                   }}>
-                    <Ionicons name="mail-open-outline" size={38} color="#b2cfc6" />
+                    <Ionicons name="mail-open-outline" size={38} color={themeColors.borderStrong} />
                   </View>
-                  <Text style={{ color: "#4a5568", fontSize: 15, fontWeight: "700", textAlign: "center" }}>
+                  <Text style={{ ...typography.sectionTitle, color: themeColors.text, textAlign: "center" }}>
                     {t("announce.detailEmpty")}
                   </Text>
-                  <Text style={{ color: "#9aabaa", fontSize: 13, fontWeight: "500", textAlign: "center", lineHeight: 20, maxWidth: 250 }}>
+                  <Text style={{ ...typography.secondary, textAlign: "center", lineHeight: 22, maxWidth: 250 }}>
                     {t("announce.detailEmptySub")}
                   </Text>
                 </View>
@@ -284,6 +357,12 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
           </ScrollView>
 
           {/* ── Footer actions ── */}
+          {linkError && (
+            <Text style={{ color: themeColors.danger, fontSize: 13, lineHeight: 19, fontWeight: "600", letterSpacing: 0, paddingHorizontal: 20, paddingTop: 10, textAlign: "center" }}>
+              {linkError}
+            </Text>
+          )}
+
           <View style={{
             flexDirection: "row",
             gap: 10,
@@ -291,17 +370,17 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
             paddingTop: 12,
             paddingBottom: Math.max(bottom, 16),
             borderTopWidth: 1,
-            borderTopColor: "#f0f4f2",
+            borderTopColor: themeColors.border,
           }}>
             {hasUrl && (
               <TouchableOpacity
-                onPress={() => Linking.openURL(item.url).catch(() => {})}
+                onPress={handleOpenUrl}
                 activeOpacity={0.85}
                 style={{
                   flex: 1,
                   height: 48,
-                  borderRadius: 15,
-                  backgroundColor: "#0f7a55",
+                  borderRadius: radius.md,
+                  backgroundColor: themeColors.primary,
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "center",
@@ -309,7 +388,7 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
                 }}
               >
                 <Ionicons name="open-outline" size={17} color="#fff" />
-                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>{t("announce.readMore")}</Text>
+                <Text style={{ ...typography.button, color: themeColors.surface, fontSize: 15 }}>{t("announce.readMore")}</Text>
               </TouchableOpacity>
             )}
 
@@ -320,17 +399,17 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
                 flex: hasUrl ? 0 : 1,
                 width: hasUrl ? 48 : undefined,
                 height: 48,
-                borderRadius: 15,
-                backgroundColor: "#f0f6f2",
+                borderRadius: radius.md,
+                backgroundColor: themeColors.primaryMuted,
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: hasUrl ? 0 : 6,
               }}
             >
-              <Ionicons name="share-social-outline" size={19} color="#0f7a55" />
+              <Ionicons name="share-social-outline" size={19} color={themeColors.primary} />
               {!hasUrl && (
-                <Text style={{ color: "#0f7a55", fontSize: 14, fontWeight: "700" }}>{t("announce.share")}</Text>
+                <Text style={{ ...typography.button, color: themeColors.primary, fontSize: 15 }}>{t("announce.share")}</Text>
               )}
             </TouchableOpacity>
 
@@ -340,18 +419,28 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
               style={{
                 width: 48,
                 height: 48,
-                borderRadius: 15,
-                backgroundColor: "#f0f6f2",
+                borderRadius: radius.md,
+                backgroundColor: themeColors.primaryMuted,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Ionicons name="close" size={20} color="#64748b" />
+              <Ionicons name="close" size={20} color={themeColors.textMuted} />
             </TouchableOpacity>
           </View>
         </Animated.View>
       </View>
-    </Modal>
+      </Modal>
+      <AnnouncementImageViewer
+        visible={imageViewerVisible}
+        uri={imageUri}
+        alt={announcement.imageAlt}
+        imageWidth={announcement.imageWidth}
+        imageHeight={announcement.imageHeight}
+        cacheKey={announcement.imageCacheKey}
+        onClose={() => setImageViewerVisible(false)}
+      />
+    </>
   );
 };
 
@@ -360,26 +449,31 @@ export default function AnnouncementsScreen({ navigation, route }) {
   const { t } = useTranslation();
   const { top } = useSafeAreaInsets();
   const { data: fetched, loading } = useFetch("/announcements", { initialData: [] });
-  const seedItems   = route.params?.items ?? [];
-  const items       = fetched?.length ? fetched : seedItems;
+  const fetchedItems = getAnnouncementRows(fetched);
+  const seedItems = getAnnouncementRows(route.params?.items);
+  const items = normalizeAnnouncements(
+    fetchedItems.length ? fetchedItems : seedItems,
+    t("announce.defaultTitle"),
+  );
   const highlightId = route.params?.highlightId ?? null;
   const [selected, setSelected] = useState(route.params?.selectedItem ?? null);
 
   const selectItem = useCallback((item, index) => {
     const palette = ANNOUNCE_PALETTES[index % ANNOUNCE_PALETTES.length];
+    const announcement = normalizeAnnouncement(item, t("announce.defaultTitle"));
     setSelected({
-      ...item,
-      colors: item.colors ?? palette.colors,
-      icon:   item.icon   ?? palette.icon,
+      ...announcement,
+      colors: announcement.colors ?? palette.colors,
+      icon: announcement.icon ?? palette.icon,
     });
-  }, []);
+  }, [t]);
 
   return (
-    <View className="flex-1 bg-[#f0f6f2]">
-      <StatusBar barStyle="light-content" backgroundColor="#0a6644" />
+    <View className="flex-1" style={{ backgroundColor: themeColors.appBg }}>
+      <StatusBar barStyle="light-content" backgroundColor={themeColors.primaryDark} />
 
       <LinearGradient
-        colors={["#064e35", "#0a6644"]}
+        colors={[themeColors.primaryDark, themeColors.primary]}
         style={{ paddingTop: top + 10, paddingBottom: 18, paddingHorizontal: 16 }}
       >
         <View className="flex-row items-center gap-3">
@@ -392,8 +486,8 @@ export default function AnnouncementsScreen({ navigation, route }) {
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
           <View className="flex-1">
-            <Text className="text-white text-[20px] font-extrabold tracking-[-0.3px]">{t("announce.title")}</Text>
-            <Text className="text-white/60 text-[12px] font-semibold mt-[2px]">
+            <Text className="text-white text-[21px] font-bold" style={{ lineHeight: 29, letterSpacing: 0 }}>{t("announce.title")}</Text>
+            <Text className="text-white/70 text-[13px] mt-[2px]" style={{ lineHeight: 19, fontWeight: "400", letterSpacing: 0 }}>
               {loading ? t("announce.loading") : t("announce.itemCount", { count: items.length })}
             </Text>
           </View>
@@ -401,7 +495,7 @@ export default function AnnouncementsScreen({ navigation, route }) {
             <ActivityIndicator size="small" color="rgba(255,255,255,0.7)" />
           ) : (
             <View className="bg-white/15 rounded-full px-3 py-[5px]">
-              <Text className="text-white text-[11px] font-bold">
+              <Text className="text-white text-[12px] font-semibold" style={{ lineHeight: 18, letterSpacing: 0 }}>
                 {t("announce.itemCount", { count: items.length })}
               </Text>
             </View>
@@ -416,21 +510,24 @@ export default function AnnouncementsScreen({ navigation, route }) {
           <AnnouncementItem
             item={item}
             index={index}
-            highlighted={highlightId != null && item.id === highlightId}
+            highlighted={highlightId != null && String(item.id) === String(highlightId)}
             defaultTag={t("announce.defaultTag")}
             defaultTitle={t("announce.defaultTitle")}
-            onPress={() => selectItem(item, index)}
+            onPress={() => navigation.navigate("AnnouncementDetail", {
+              announcementId: item.id,
+              announcement: item,
+            })}
           />
         )}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 36, gap: 10 }}
         ListEmptyComponent={
           <ReAnimated.View entering={FadeInDown.springify()} className="items-center justify-center pt-20 gap-4">
-            <View className="w-24 h-24 rounded-full bg-white border border-[#dce8e2] items-center justify-center" style={{ elevation: 2 }}>
-              <Ionicons name="newspaper-outline" size={44} color="#c4d4cc" />
+            <View className="w-24 h-24 rounded-full bg-white items-center justify-center" style={{ borderWidth: 1, borderColor: themeColors.border, elevation: 2 }}>
+              <Ionicons name="newspaper-outline" size={44} color={themeColors.borderStrong} />
             </View>
-            <Text className="text-[16px] font-bold text-[#94a3b8]">{t("announce.empty")}</Text>
-            <Text className="text-[13px] text-[#bbc]">{t("announce.emptySub")}</Text>
+            <Text style={{ ...typography.sectionTitle, color: themeColors.text }}>{t("announce.empty")}</Text>
+            <Text style={typography.secondary}>{t("announce.emptySub")}</Text>
           </ReAnimated.View>
         }
       />

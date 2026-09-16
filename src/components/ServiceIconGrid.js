@@ -2,22 +2,22 @@ import React, { useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { colors, hitSlop, radius } from "../theme/tokens";
+import { colors, hitSlop, radius, serviceColors } from "../theme/tokens";
 
 const SERVICES = [
-  { icon: "document-text-outline",  iconColor: "#1a6b3c", label: "Expert",      bgColor: "#e8f5ee", url: null },
-  { icon: "journal-outline",        iconColor: "#0f7a55", label: "e-Research",  bgColor: "#d6f0e3", url: null },
-  { icon: "book-outline",           iconColor: "#1a6b3c", label: "LMS",         bgColor: "#e8f5ee", url: "https://lms.uru.ac.th" },
-  { icon: "videocam-outline",       iconColor: "#185fa5", label: "E-Meeting",   bgColor: "#e8f0fb", url: "https://meeting.uru.ac.th" },
-  { icon: "people-outline",         iconColor: "#e65100", label: "HRMS",        bgColor: "#fff3e0", url: "https://hrms.uru.ac.th" },
-  { icon: "document-outline",       iconColor: "#c62828", label: "e-Doc",       bgColor: "#fce4ec", url: "https://edoc.uru.ac.th" },
-  { icon: "school-outline",         iconColor: "#7b1fa2", label: "Advisor",     bgColor: "#f3e5f5", url: "https://advisor.uru.ac.th" },
-  { icon: "bar-chart-outline",      iconColor: "#00838f", label: "Workload",    bgColor: "#e0f7fa", url: "https://workload.uru.ac.th" },
-  { icon: "calendar-number-outline",iconColor: "#f57f17", label: "ตารางสอน",   bgColor: "#fff8e1", url: "https://academic.uru.ac.th/addteacherNew/show_timetable_teacher.php" },
-  { icon: "map-outline",            iconColor: "#2e7d32", label: "ห้องเรียน",  bgColor: "#e8f5e9", url: "https://academic.uru.ac.th/appl/admin/check_room.asp" },
-  { icon: "reader-outline",         iconColor: "#bf360c", label: "ACD",         bgColor: "#fbe9e7", url: "https://academic.uru.ac.th" },
-  { icon: "star-outline",           iconColor: "#4527a0", label: "AUN-QA",      bgColor: "#ede7f6", url: "http://aunqa.uru.ac.th" },
-  { icon: "car-outline",            iconColor: "#1565c0", label: "จองรถ",       bgColor: "#e3f2fd", url: "http://202.29.52.231/reserve/public/login" },
+  { icon: "document-text-outline", ...serviceColors.expert, label: "Expert", url: null },
+  { icon: "journal-outline", ...serviceColors.research, label: "e-Research", url: null },
+  { icon: "book-outline", ...serviceColors.lms, label: "LMS", url: "https://lms.uru.ac.th" },
+  { icon: "videocam-outline", ...serviceColors.meeting, label: "E-Meeting", url: "https://meeting.uru.ac.th" },
+  { icon: "people-outline", ...serviceColors.hrms, label: "HRMS", url: "https://hrms.uru.ac.th" },
+  { icon: "document-outline", ...serviceColors.document, label: "e-Doc", url: "https://edoc.uru.ac.th" },
+  { icon: "school-outline", ...serviceColors.advisor, label: "Advisor", url: "https://advisor.uru.ac.th" },
+  { icon: "bar-chart-outline", ...serviceColors.workload, label: "Workload", url: "https://workload.uru.ac.th" },
+  { icon: "calendar-number-outline", ...serviceColors.schedule, label: "ตารางสอน", url: "https://academic.uru.ac.th/addteacherNew/show_timetable_teacher.php" },
+  { icon: "map-outline", ...serviceColors.classroom, label: "ห้องเรียน", url: "https://academic.uru.ac.th/appl/admin/check_room.asp" },
+  { icon: "reader-outline", ...serviceColors.academic, label: "ACD", url: "https://academic.uru.ac.th" },
+  { icon: "star-outline", ...serviceColors.quality, label: "AUN-QA", url: "http://aunqa.uru.ac.th" },
+  { icon: "car-outline", ...serviceColors.vehicle, label: "จองรถ", url: "http://202.29.52.231/reserve/public/login" },
 ];
 
 const ITEMS_PER_PAGE = 8;
@@ -101,7 +101,7 @@ const ServiceIconGrid = ({ navigation }) => {
                               className="w-[56px] h-[56px] items-center justify-center mb-[7px]"
                               style={[
                                 {
-                                  backgroundColor: item.bgColor,
+                                  backgroundColor: item.backgroundColor,
                                   borderRadius: radius.md,
                                   borderWidth: 1,
                                   borderColor: "rgba(15,122,85,0.08)",
@@ -113,7 +113,7 @@ const ServiceIconGrid = ({ navigation }) => {
                             </View>
                             <Text
                               className="text-[11px] text-center leading-[15px]"
-                              style={{ color: colors.textMuted, fontWeight: "700" }}
+                              style={{ color: colors.text, fontWeight: "700" }}
                               numberOfLines={2}
                             >
                               {getLabel(item)}

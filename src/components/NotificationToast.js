@@ -9,19 +9,20 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { colors, serviceColors, typography } from "../theme/tokens";
 
 const SHOW_MS = 4000;
 const SLIDE_OFFSET = -140;
 
 const TYPE_MAP = {
-  announcement:   { icon: "megaphone-outline",      color: "#0f7a55", bg: "#e8f5ee" },
-  beforeClass:    { icon: "alarm-outline",           color: "#2167b2", bg: "#e8f1fb" },
-  before_class:   { icon: "alarm-outline",           color: "#2167b2", bg: "#e8f1fb" },
-  holiday:        { icon: "calendar-clear-outline",  color: "#c95b05", bg: "#fff4e0" },
-  gradeDeadline:  { icon: "document-text-outline",   color: "#7c3aed", bg: "#f1eafe" },
-  grade_deadline: { icon: "document-text-outline",   color: "#7c3aed", bg: "#f1eafe" },
+  announcement:   { icon: "megaphone-outline",      color: colors.primary, bg: colors.primaryMuted },
+  beforeClass:    { icon: "alarm-outline",           color: serviceColors.meeting.iconColor, bg: serviceColors.meeting.backgroundColor },
+  before_class:   { icon: "alarm-outline",           color: serviceColors.meeting.iconColor, bg: serviceColors.meeting.backgroundColor },
+  holiday:        { icon: "calendar-clear-outline",  color: colors.warning, bg: colors.surfaceWarning },
+  gradeDeadline:  { icon: "document-text-outline",   color: serviceColors.advisor.iconColor, bg: serviceColors.advisor.backgroundColor },
+  grade_deadline: { icon: "document-text-outline",   color: serviceColors.advisor.iconColor, bg: serviceColors.advisor.backgroundColor },
 };
-const DEFAULT_TYPE = { icon: "notifications-outline", color: "#0f7a55", bg: "#e8f5ee" };
+const DEFAULT_TYPE = { icon: "notifications-outline", color: colors.primary, bg: colors.primaryMuted };
 
 const listeners = new Set();
 export const subscribeToast = (cb) => {
@@ -103,15 +104,15 @@ export default function NotificationToast({ onPress }) {
         activeOpacity={0.9}
         onPress={() => { hide(); onPress?.(item); }}
         style={{
-          backgroundColor: "#fff",
+          backgroundColor: colors.surface,
           borderRadius: 18,
           padding: 14,
           flexDirection: "row",
           alignItems: "center",
           gap: 12,
           borderWidth: 1,
-          borderColor: "rgba(0,0,0,0.07)",
-          shadowColor: "#000",
+          borderColor: colors.border,
+          shadowColor: colors.primaryDark,
           shadowOpacity: 0.13,
           shadowRadius: 14,
           shadowOffset: { width: 0, height: 4 },
@@ -137,12 +138,12 @@ export default function NotificationToast({ onPress }) {
         {/* text */}
         <View style={{ flex: 1, gap: 2 }}>
           {!!title && (
-            <Text style={{ fontSize: 14, fontWeight: "800", color: "#0d1f18" }} numberOfLines={1}>
+            <Text style={{ ...typography.label, color: colors.text }} numberOfLines={1}>
               {title}
             </Text>
           )}
           {!!body && (
-            <Text style={{ fontSize: 12, color: "#4a5e56", lineHeight: 17 }} numberOfLines={2}>
+            <Text style={{ ...typography.secondary, color: colors.secondaryText }} numberOfLines={2}>
               {body}
             </Text>
           )}
@@ -154,7 +155,7 @@ export default function NotificationToast({ onPress }) {
           hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
           style={{ alignSelf: "flex-start", padding: 2 }}
         >
-          <Ionicons name="close" size={16} color="#b0b8b4" />
+          <Ionicons name="close" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </TouchableOpacity>
     </Animated.View>

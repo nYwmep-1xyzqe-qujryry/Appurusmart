@@ -13,6 +13,7 @@ import Homepage from "../screens/Homepage";
 import Cardpage from "../screens/Card";
 import ChatbotPage from "../screens/Chatbot";
 import AnnouncementsScreen from "../screens/announcements/Announcements";
+import AnnouncementDetail from "../screens/announcements/AnnouncementDetail";
 
 import Settingpage from "../screens/Settings/Setting";
 import NotificationSettingPage from "../screens/Settings/NotificationSettingPage";
@@ -119,7 +120,7 @@ function AnimatedTabIcon({ name, focused, color }) {
           width: 54,
           height: 34,
           borderRadius: 17,
-          backgroundColor: "rgba(15, 122, 85, 0.12)",
+          backgroundColor: colors.primaryMuted,
           opacity: pillOpacity,
           transform: [{ scale: pillScale }],
         }}
@@ -173,8 +174,9 @@ function MainTabs() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSoft,
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "700",
+          fontSize: 13,
+          lineHeight: 18,
+          fontWeight: "500",
           letterSpacing: 0,
           marginTop: 0,
         },
@@ -232,6 +234,7 @@ export default function AppNavigator() {
       <RootStack.Screen name="ChangePin" component={ChangePinScreen} />
       <RootStack.Screen name="MainTabs" component={MainTabs} />
       <RootStack.Screen name="Announcements" component={AnnouncementsScreen} />
+      <RootStack.Screen name="AnnouncementDetail" component={AnnouncementDetail} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />
       <RootStack.Screen name="NotificationDetail" component={NotificationDetail} />
       <RootStack.Screen name="Research" component={ExpertHome} />

@@ -123,8 +123,8 @@ export default function ArticleForm({ navigation, route }) {
       >
         <View className="bg-white border border-[#eef1f4] rounded-2xl overflow-hidden mb-4" style={{ elevation: 1 }}>
           <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-            <Ionicons name={editingItem ? "create" : "add-circle"} size={16} color="#00614a" />
-            <Text className="text-[13px] font-extrabold text-[#00614a]">
+            <Ionicons name={editingItem ? "create" : "add-circle"} size={16} color="#174D42" />
+            <Text className="text-[14px] font-extrabold text-[#174D42]">
               {editingItem ? te("article.editTitle") : te("article.addTitle")}
             </Text>
           </View>
@@ -149,7 +149,7 @@ export default function ArticleForm({ navigation, route }) {
 
           <View className="flex-row gap-[10px] px-4 pt-2 pb-[18px]">
             <TouchableOpacity
-              className="flex-1 flex-row items-center justify-center gap-2 bg-[#007a5a] rounded-xl py-[13px]"
+              className="flex-1 flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-[13px]"
               style={{ elevation: 2, opacity: saving || connecting || sessionLoading || !canEdit ? 0.6 : 1 }}
               onPress={handleSave}
               disabled={saving || connecting || sessionLoading || !canEdit}
@@ -158,7 +158,7 @@ export default function ArticleForm({ navigation, route }) {
               {saving || connecting ? <ActivityIndicator size="small" color="#fff" /> : (
                 <>
                   <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                  <Text className="text-white text-[14px] font-black">{te("common.saveData")}</Text>
+                  <Text className="text-white text-[15px] font-black">{te("common.saveData")}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -167,7 +167,7 @@ export default function ArticleForm({ navigation, route }) {
               onPress={() => navigation.goBack()}
               activeOpacity={0.85}
             >
-              <Text className="text-[#6b7a82] text-[14px] font-black">{te("common.cancel")}</Text>
+              <Text className="text-[#5F7069] text-[15px] font-black">{te("common.cancel")}</Text>
             </TouchableOpacity>
           </View>
         </View>

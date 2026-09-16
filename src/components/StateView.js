@@ -61,7 +61,7 @@ const StateView = ({
           style={{
             fontSize: compact ? 14 : 16,
             lineHeight: compact ? 20 : 23,
-            fontWeight: "800",
+            fontWeight: "700",
             color: colors.text,
             textAlign: "center",
           }}
@@ -97,7 +97,7 @@ const StateView = ({
             backgroundColor: colors.primary,
           }}
         >
-          <Text style={{ color: colors.surface, fontSize: 14, fontWeight: "800" }}>
+          <Text style={{ color: colors.surface, fontSize: 14, lineHeight: 20, fontWeight: "600", letterSpacing: 0 }}>
             {actionLabel}
           </Text>
         </TouchableOpacity>

@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AppNavigator from "./src/navigation/AppNavigator";
 import {
   flushPendingNavigation,
@@ -217,26 +218,28 @@ export default function App() {
   if (!ready) return null;
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
-        <AppNavigator />
-      </NavigationContainer>
-      <LockOverlay
-        locked={locked}
-        onUnlock={() => {
-          // อัปเดต lockedRef.current แบบ synchronous ทันที ไม่รอ useEffect ที่ sync
-          // จาก state เพราะ effect นั้นรันหลัง re-render (async เท่ากับ setState) —
-          // ถ้าปล่อยให้รอ effect จะมีหน้าต่างสั้นๆ ที่ AppState 'active' event ที่สอง
-          // (เกิดจาก Face ID prompt ปิดแล้ว iOS ส่ง active ซ้ำระหว่าง transition)
-          // ยังเห็น lockedRef.current เป็น true อยู่ ทำให้ auto biometric เด้งซ้ำ
-          lockedRef.current = false;
-          setLocked(false);
-          // ล้าง timestamp ที่อาจค้างจากตอนล็อก (เช่น Face ID prompt ทำให้ inactive
-          // ชั่วคราว) กัน AppState transition ถัดไปเข้าใจผิดว่า background นานเกิน
-          // threshold ทั้งที่เพิ่ง unlock สำเร็จ — ไม่งั้นจะเด้งกลับมาล็อกซ้ำวนลูป
-          clearBackgroundTime();
-        }}
-      />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
+          <AppNavigator />
+        </NavigationContainer>
+        <LockOverlay
+          locked={locked}
+          onUnlock={() => {
+            // อัปเดต lockedRef.current แบบ synchronous ทันที ไม่รอ useEffect ที่ sync
+            // จาก state เพราะ effect นั้นรันหลัง re-render (async เท่ากับ setState) —
+            // ถ้าปล่อยให้รอ effect จะมีหน้าต่างสั้นๆ ที่ AppState 'active' event ที่สอง
+            // (เกิดจาก Face ID prompt ปิดแล้ว iOS ส่ง active ซ้ำระหว่าง transition)
+            // ยังเห็น lockedRef.current เป็น true อยู่ ทำให้ auto biometric เด้งซ้ำ
+            lockedRef.current = false;
+            setLocked(false);
+            // ล้าง timestamp ที่อาจค้างจากตอนล็อก (เช่น Face ID prompt ทำให้ inactive
+            // ชั่วคราว) กัน AppState transition ถัดไปเข้าใจผิดว่า background นานเกิน
+            // threshold ทั้งที่เพิ่ง unlock สำเร็จ — ไม่งั้นจะเด้งกลับมาล็อกซ้ำวนลูป
+            clearBackgroundTime();
+          }}
+        />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -14,11 +14,11 @@ const DetailRow = ({ icon, label, value }) => {
   return (
     <View className="flex-row items-start py-2">
       <View className="w-8 h-8 rounded-[10px] bg-[#edf7f2] items-center justify-center mr-3">
-        <Ionicons name={icon} size={15} color="#0f7a55" />
+        <Ionicons name={icon} size={15} color="#07865F" />
       </View>
       <View className="flex-1">
-        <Text className="text-[11px] font-semibold text-[#789086]">{label}</Text>
-        <Text className="text-[13px] font-semibold text-[#294339] mt-[2px]" selectable>{value}</Text>
+        <Text className="text-[12px] font-semibold text-[#5F7069]">{label}</Text>
+        <Text className="text-[14px] font-semibold text-[#294339] mt-[2px]" selectable>{value}</Text>
       </View>
     </View>
   );
@@ -42,17 +42,17 @@ const ResearcherSummary = ({ profile, education, expertise, photoUrl, onEdit, te
   const initials = `${profile.firstName?.[0] ?? ""}${profile.lastName?.[0] ?? ""}` || "?";
 
   return (
-    <View className="bg-white rounded-[20px] mb-5 overflow-hidden" style={{ elevation: 2, shadowColor: "#064e35", shadowOpacity: 0.07, shadowRadius: 10 }}>
+    <View className="bg-white rounded-[20px] mb-5 overflow-hidden" style={{ elevation: 2, shadowColor: "#174D42", shadowOpacity: 0.07, shadowRadius: 10 }}>
       <View className="px-4 pt-4 pb-3 flex-row items-start">
         <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: "#dff2e9", alignItems: "center", justifyContent: "center", marginRight: 12, overflow: "hidden" }}>
           {photoUrl
             ? <Image source={{ uri: photoUrl }} style={{ width: 56, height: 56 }} resizeMode="cover" />
-            : <Text className="text-[#0f7a55] text-[19px] font-black">{initials}</Text>
+            : <Text className="text-[#07865F] text-[20px] font-black">{initials}</Text>
           }
         </View>
         <View className="flex-1 pt-1">
-          <Text className="text-[17px] font-black text-[#17352a]" numberOfLines={2}>{fullName}</Text>
-          <Text className="text-[12px] text-[#5d776c] mt-1" numberOfLines={2}>
+          <Text className="text-[18px] font-black text-[#17352a]" numberOfLines={2}>{fullName}</Text>
+          <Text className="text-[13px] text-[#5F7069] mt-1" numberOfLines={2}>
             {[profile.position, department, faculty].filter(Boolean).join(" · ") || te("home.noPositionAffiliation")}
           </Text>
         </View>
@@ -63,7 +63,7 @@ const ResearcherSummary = ({ profile, education, expertise, photoUrl, onEdit, te
           accessibilityRole="button"
           accessibilityLabel={te("home.researcherInfo")}
         >
-          <Ionicons name="create-outline" size={19} color="#0f7a55" />
+          <Ionicons name="create-outline" size={19} color="#07865F" />
         </TouchableOpacity>
       </View>
 
@@ -76,24 +76,24 @@ const ResearcherSummary = ({ profile, education, expertise, photoUrl, onEdit, te
       </View>
 
       <View className="px-4 pb-4">
-        <Text className="text-[11px] font-semibold text-[#789086] mb-2">{te("home.expertise")}</Text>
+        <Text className="text-[12px] font-semibold text-[#5F7069] mb-2">{te("home.expertise")}</Text>
         {expertise.length > 0 ? (
           <View className="flex-row flex-wrap gap-2">
             {expertise.slice(0, 3).map((item) => (
               <View key={item.id} className="bg-[#e8f5ee] rounded-full px-3 py-[6px]">
-                <Text className="text-[11px] font-bold text-[#0f7a55]" numberOfLines={1}>{item.nameTh ?? item.title_th ?? ""}</Text>
+                <Text className="text-[12px] font-bold text-[#07865F]" numberOfLines={1}>{item.nameTh ?? item.title_th ?? ""}</Text>
               </View>
             ))}
             {expertise.length > 3 && (
               <View className="bg-[#f1f4f2] rounded-full px-3 py-[6px]">
-                <Text className="text-[11px] font-bold text-[#5d776c]">+{expertise.length - 3}</Text>
+                <Text className="text-[12px] font-bold text-[#5F7069]">+{expertise.length - 3}</Text>
               </View>
             )}
           </View>
         ) : (
           <TouchableOpacity className="min-h-[44px] border border-dashed border-[#a8c8ba] rounded-xl flex-row items-center justify-center" onPress={onEdit} activeOpacity={0.75}>
-            <Ionicons name="add-circle-outline" size={17} color="#0f7a55" />
-            <Text className="text-[12px] font-bold text-[#0f7a55] ml-2">{te("home.addExpertise")}</Text>
+            <Ionicons name="add-circle-outline" size={17} color="#07865F" />
+            <Text className="text-[13px] font-bold text-[#07865F] ml-2">{te("home.addExpertise")}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -104,7 +104,7 @@ const ResearcherSummary = ({ profile, education, expertise, photoUrl, onEdit, te
 const MenuCard = ({ icon, color, background, title, description, count, onPress }) => (
   <TouchableOpacity
     className="bg-white rounded-2xl p-4 mb-3 flex-row items-center"
-    style={{ elevation: 2, shadowColor: "#064e35", shadowOpacity: 0.07, shadowRadius: 10 }}
+    style={{ elevation: 2, shadowColor: "#174D42", shadowOpacity: 0.07, shadowRadius: 10 }}
     onPress={onPress}
     activeOpacity={0.78}
     accessibilityRole="button"
@@ -114,15 +114,15 @@ const MenuCard = ({ icon, color, background, title, description, count, onPress 
       <Ionicons name={icon} size={24} color={color} />
     </View>
     <View className="flex-1 pr-2">
-      <Text className="text-[15px] font-extrabold text-[#17352a]">{title}</Text>
-      <Text className="text-[12px] text-[#6b7a72] mt-1" numberOfLines={2}>{description}</Text>
+      <Text className="text-[16px] font-extrabold text-[#17352a]">{title}</Text>
+      <Text className="text-[13px] text-[#5F7069] mt-1" numberOfLines={2}>{description}</Text>
     </View>
     {typeof count === "number" && (
       <View className="min-w-[32px] h-8 px-2 rounded-full bg-[#e8f5ee] items-center justify-center mr-2">
-        <Text className="text-[13px] font-black text-[#0f7a55]">{count}</Text>
+        <Text className="text-[14px] font-black text-[#07865F]">{count}</Text>
       </View>
     )}
-    <Ionicons name="chevron-forward" size={20} color="#91a79e" />
+    <Ionicons name="chevron-forward" size={20} color="#5F7069" />
   </TouchableOpacity>
 );
 
@@ -246,18 +246,18 @@ export default function EResearch({ navigation }) {
 
   return (
     <View className="flex-1 bg-[#edf5f1]">
-      <StatusBar barStyle="light-content" backgroundColor="#064e35" />
+      <StatusBar barStyle="light-content" backgroundColor="#174D42" />
       <AppHeader title="e-Research" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        <View className="bg-[#0f7a55] rounded-[20px] p-5 mb-5 overflow-hidden">
+        <View className="bg-[#07865F] rounded-[20px] p-5 mb-5 overflow-hidden">
           <View className="w-24 h-24 rounded-full bg-white/10 absolute -right-5 -top-6" />
           <View className="flex-row items-center">
             <View className="w-12 h-12 rounded-[14px] bg-white/15 items-center justify-center mr-3">
               <Ionicons name="flask-outline" size={25} color="#fff" />
             </View>
             <View className="flex-1">
-              <Text className="text-white text-[19px] font-black">{te("home.heroTitle")}</Text>
-              <Text className="text-[#cde8dc] text-[12px] mt-1">{te("home.heroSubtitle")}</Text>
+              <Text className="text-white text-[20px] font-black">{te("home.heroTitle")}</Text>
+              <Text className="text-[#cde8dc] text-[13px] mt-1">{te("home.heroSubtitle")}</Text>
             </View>
           </View>
           {!hasProfile && !loading && (
@@ -266,8 +266,8 @@ export default function EResearch({ navigation }) {
               onPress={() => navigation.navigate("ResearcherForm")}
               activeOpacity={0.82}
             >
-              <Ionicons name="person-add-outline" size={18} color="#0f7a55" />
-              <Text className="text-[#0f7a55] font-extrabold text-[13px] ml-2">{te("home.startProfile")}</Text>
+              <Ionicons name="person-add-outline" size={18} color="#07865F" />
+              <Text className="text-[#07865F] font-extrabold text-[14px] ml-2">{te("home.startProfile")}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -277,11 +277,11 @@ export default function EResearch({ navigation }) {
             <View className="w-12 h-12 rounded-full bg-[#fff0e8] items-center justify-center mb-3">
               <Ionicons name="cloud-offline-outline" size={23} color="#b65321" />
             </View>
-            <Text className="text-[15px] font-black text-[#273a32] text-center">{te("home.sessionErrorTitle")}</Text>
-            <Text className="text-[12px] text-[#6b7a72] text-center mt-2">{sessionError}</Text>
-            <TouchableOpacity className="min-h-[44px] bg-[#0f7a55] rounded-xl px-5 mt-4 flex-row items-center justify-center" onPress={retrySession} activeOpacity={0.8}>
+            <Text className="text-[16px] font-black text-[#273a32] text-center">{te("home.sessionErrorTitle")}</Text>
+            <Text className="text-[13px] text-[#5F7069] text-center mt-2">{sessionError}</Text>
+            <TouchableOpacity className="min-h-[44px] bg-[#07865F] rounded-xl px-5 mt-4 flex-row items-center justify-center" onPress={retrySession} activeOpacity={0.8}>
               <Ionicons name="refresh-outline" size={17} color="#fff" />
-              <Text className="text-white text-[13px] font-bold ml-2">{te("home.retryConnect")}</Text>
+              <Text className="text-white text-[14px] font-bold ml-2">{te("home.retryConnect")}</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -289,22 +289,22 @@ export default function EResearch({ navigation }) {
         {!loading && !sessionError && session?.authenticated && !connected ? (
           <View className="bg-white rounded-[20px] p-5 mb-5 items-center" style={{ elevation: 2 }}>
             <View className="w-12 h-12 rounded-full bg-[#e3f3eb] items-center justify-center mb-3">
-              <Ionicons name="link-outline" size={23} color="#0f7a55" />
+              <Ionicons name="link-outline" size={23} color="#07865F" />
             </View>
-            <Text className="text-[15px] font-black text-[#273a32] text-center">{te("home.connectTitle")}</Text>
-            <Text className="text-[12px] text-[#6b7a72] text-center mt-2">{te("home.connectDescription")}</Text>
+            <Text className="text-[16px] font-black text-[#273a32] text-center">{te("home.connectTitle")}</Text>
+            <Text className="text-[13px] text-[#5F7069] text-center mt-2">{te("home.connectDescription")}</Text>
             {connectError ? (
-              <Text className="text-[12px] text-[#b65321] text-center mt-2">{connectError}</Text>
+              <Text className="text-[13px] text-[#b65321] text-center mt-2">{connectError}</Text>
             ) : null}
             <TouchableOpacity
-              className="min-h-[44px] bg-[#0f7a55] rounded-xl px-5 mt-4 flex-row items-center justify-center"
+              className="min-h-[44px] bg-[#07865F] rounded-xl px-5 mt-4 flex-row items-center justify-center"
               onPress={handleConnect}
               disabled={connecting}
               activeOpacity={0.8}
               style={{ opacity: connecting ? 0.65 : 1 }}
             >
               {connecting ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="person-add-outline" size={17} color="#fff" />}
-              <Text className="text-white text-[13px] font-bold ml-2">
+              <Text className="text-white text-[14px] font-bold ml-2">
                 {connecting ? te("home.connecting") : te("home.connectButton")}
               </Text>
             </TouchableOpacity>
@@ -313,7 +313,7 @@ export default function EResearch({ navigation }) {
 
         {!loading && !sessionError && hasProfile && (
           <>
-            <Text className="text-[12px] font-extrabold text-[#527064] uppercase mb-3">{te("home.researcherInfo")}</Text>
+            <Text className="text-[13px] font-extrabold text-[#5F7069] uppercase mb-3">{te("home.researcherInfo")}</Text>
             <ResearcherSummary
               profile={profile}
               education={education}
@@ -325,15 +325,15 @@ export default function EResearch({ navigation }) {
           </>
         )}
 
-        {!sessionError && connected && <Text className="text-[12px] font-extrabold text-[#527064] uppercase mb-3">{te("home.manageData")}</Text>}
+        {!sessionError && connected && <Text className="text-[13px] font-extrabold text-[#5F7069] uppercase mb-3">{te("home.manageData")}</Text>}
         {loading ? (
           <View className="items-center py-12">
-            <ActivityIndicator color="#0f7a55" />
-            <Text className="text-[12px] text-[#6b7a72] mt-3">{te("home.loadingData")}</Text>
+            <ActivityIndicator color="#07865F" />
+            <Text className="text-[13px] text-[#5F7069] mt-3">{te("home.loadingData")}</Text>
           </View>
         ) : !sessionError && connected ? (
           <>
-            <MenuCard icon="person-outline" color="#0f7a55" background="#e3f3eb" title={te("home.profileTitle")} description={te("home.profileDescription")} onPress={() => navigation.navigate("ResearcherForm")} />
+            <MenuCard icon="person-outline" color="#07865F" background="#e3f3eb" title={te("home.profileTitle")} description={te("home.profileDescription")} onPress={() => navigation.navigate("ResearcherForm")} />
             <MenuCard icon="folder-open-outline" color="#185fa5" background="#e8f0fb" title={te("home.projectsTitle")} description={te("home.projectsDescription")} count={projectsLoading ? undefined : projectsTotal} onPress={() => navigation.navigate("ProjectList")} />
             <MenuCard icon="document-text-outline" color="#b56a18" background="#fff3df" title={te("home.articlesTitle")} description={te("home.articlesDescription")} count={articlesLoading ? undefined : articlesTotal} onPress={() => navigation.navigate("ArticleList")} />
             <MenuCard icon="print-outline" color="#6b3fa0" background="#f1e9fa" title={te("home.printTitle")} description={te("home.printDescription")} onPress={() => navigation.navigate("ProfilePrint")} />

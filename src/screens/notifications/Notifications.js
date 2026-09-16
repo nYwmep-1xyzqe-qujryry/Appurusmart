@@ -12,14 +12,15 @@ import {
   subscribeNotificationInbox,
   syncNotificationInboxFromBackend,
 } from "../../services/notificationService";
+import { colors, radius, shadows, typography } from "../../theme/tokens";
 
 const NotifItem = ({ item, onPress, index }) => (
   <Animated.View entering={FadeInRight.delay(index * 50).springify().damping(16)}>
     <TouchableOpacity
-      className={`rounded-[18px] p-[14px] flex-row gap-3 mb-2 overflow-hidden ${item.read ? "bg-white border border-[#dce8e2]" : "border border-[#b2deca]"}`}
+      className="rounded-[18px] p-[14px] flex-row gap-3 mb-2 overflow-hidden"
       style={!item.read
-        ? { backgroundColor: "#f0faf5", elevation: 2, shadowColor: "#0f7a55", shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } }
-        : { elevation: 1 }
+        ? { backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.borderStrong, ...shadows.card }
+        : { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...shadows.card }
       }
       onPress={onPress}
       activeOpacity={0.75}
@@ -32,7 +33,7 @@ const NotifItem = ({ item, onPress, index }) => (
       {/* Icon */}
       {!item.read ? (
         <LinearGradient
-          colors={[item.iconBg ?? "#e8f5ee", "#d4efe5"]}
+          colors={[item.iconBg ?? colors.primaryMuted, colors.borderStrong]}
           style={{ width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", flexShrink: 0 }}
         >
           <Ionicons name={item.icon} size={22} color={item.iconColor} />
@@ -47,15 +48,16 @@ const NotifItem = ({ item, onPress, index }) => (
       <View className="flex-1 gap-[3px] pl-1">
         <View className="flex-row items-center gap-[6px]">
           <Text
-            className={`flex-1 text-[14px] text-[#0d1f18] ${item.read ? "font-semibold" : "font-extrabold"}`}
+            className="flex-1"
+            style={{ ...typography.body, fontSize: 16, lineHeight: 24, fontWeight: "600" }}
             numberOfLines={1}
           >
             {item.title}
           </Text>
           {!item.read && <View className="w-2 h-2 rounded-full bg-primary shrink-0" />}
         </View>
-        <Text className="text-[12px] text-[#4a5e56] leading-[18px]" numberOfLines={2}>{item.body}</Text>
-        <Text className="text-[11px] text-[#8fa89f] font-semibold mt-[2px]">{item.time}</Text>
+        <Text className="text-[13px] leading-[20px]" style={{ color: colors.secondaryText, fontWeight: "400", letterSpacing: 0 }} numberOfLines={2}>{item.body}</Text>
+        <Text className="text-[12px] mt-[2px]" style={{ color: colors.textSoft, fontWeight: "400", lineHeight: 18, letterSpacing: 0 }}>{item.time}</Text>
       </View>
     </TouchableOpacity>
   </Animated.View>
@@ -98,9 +100,9 @@ export default function NotificationsScreen({ navigation }) {
   const markAllRead = () => markAllNotificationsRead();
   const openNotification = (item) => {
     markNotificationRead(item.id);
-    if (item.data?.type === "announcement") {
-      navigation.navigate("Announcements", {
-        highlightId: item.data.announcement_id,
+    if (item.data?.type === "announcement" && item.data?.announcement_id != null) {
+      navigation.navigate("AnnouncementDetail", {
+        announcementId: item.data.announcement_id,
       });
       return;
     }
@@ -140,11 +142,11 @@ export default function NotificationsScreen({ navigation }) {
   ];
 
   return (
-    <View className="flex-1 bg-[#f0f6f2]">
-      <StatusBar barStyle="light-content" backgroundColor="#064e35" />
+    <View className="flex-1" style={{ backgroundColor: colors.surfaceMuted }}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primaryDark} />
 
       {/* Header */}
-      <LinearGradient colors={["#064e35", "#0a6644"]} style={{ paddingTop: top + 10, paddingBottom: 18, paddingHorizontal: 16 }}>
+      <LinearGradient colors={[colors.primaryDark, colors.primaryLight]} style={{ paddingTop: top + 10, paddingBottom: 18, paddingHorizontal: 16 }}>
         <View className="flex-row items-center gap-[10px]">
           <TouchableOpacity
             className="w-9 h-9 rounded-xl items-center justify-center"
@@ -154,10 +156,10 @@ export default function NotificationsScreen({ navigation }) {
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
           <View className="flex-1 flex-row items-center gap-2">
-            <Text className="text-white text-[20px] font-extrabold tracking-[-0.3px]">{t("notifications.title")}</Text>
+            <Text className="text-white text-[21px] font-bold" style={{ lineHeight: 29, letterSpacing: 0 }}>{t("notifications.title")}</Text>
             {unreadCount > 0 && (
               <View className="bg-red-500 rounded-full min-w-[22px] h-[22px] items-center justify-center px-[6px]">
-                <Text className="text-white text-[11px] font-extrabold">{unreadCount}</Text>
+            <Text className="text-white text-[12px] font-semibold" style={typography.numeric}>{unreadCount}</Text>
               </View>
             )}
           </View>
@@ -167,7 +169,7 @@ export default function NotificationsScreen({ navigation }) {
               style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
               onPress={markAllRead}
             >
-              <Text className="text-white text-[12px] font-bold">{t("notifications.markAllRead")}</Text>
+              <Text className="text-white" style={{ ...typography.button, fontSize: 14, lineHeight: 20 }}>{t("notifications.markAllRead")}</Text>
             </TouchableOpacity>
           ) : (
             <View className="w-20" />
@@ -190,26 +192,26 @@ export default function NotificationsScreen({ navigation }) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => refreshInbox(true)}
-            tintColor="#0f7a55"
-            colors={["#0f7a55"]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         ListEmptyComponent={
           <Animated.View entering={FadeInDown.springify()} className="flex-1 items-center justify-center gap-3">
             <View
-              className="w-[90px] h-[90px] rounded-full bg-white border border-[#dce8e2] items-center justify-center mb-1"
-              style={{ elevation: 2 }}
+              className="w-[90px] h-[90px] rounded-full bg-white items-center justify-center mb-1"
+              style={{ borderWidth: 1, borderColor: colors.border, ...shadows.card }}
             >
-              <Ionicons name="notifications-off-outline" size={44} color="#8fa89f" />
+              <Ionicons name="notifications-off-outline" size={44} color={colors.textSoft} />
             </View>
-            <Text className="text-[17px] font-extrabold text-[#0d1f18]">{t("notifications.empty")}</Text>
-            <Text className="text-[13px] text-[#8fa89f] font-medium">{t("notifications.emptySub")}</Text>
+            <Text className="text-[18px] font-semibold" style={{ color: colors.text, lineHeight: 26, letterSpacing: 0 }}>{t("notifications.empty")}</Text>
+            <Text className="text-[14px]" style={{ color: colors.textSoft, lineHeight: 21, fontWeight: "400", letterSpacing: 0 }}>{t("notifications.emptySub")}</Text>
           </Animated.View>
         }
         renderItem={({ item, index }) => {
           if (item.type === "label") {
             return (
-              <Text className="text-[11px] font-extrabold text-[#8fa89f] tracking-[0.8px] uppercase mt-4 mb-2 ml-[2px]">
+              <Text className="text-[12px] uppercase mt-4 mb-2 ml-[2px]" style={{ color: colors.textMuted, lineHeight: 18, fontWeight: "600", letterSpacing: 0 }}>
                 {item.text}
               </Text>
             );

@@ -15,7 +15,13 @@ function loadModule(relativePath) {
   const mod = new Module(filename, module);
   mod.filename = filename;
   mod.paths = Module._nodeModulePaths(path.dirname(filename));
-  mod._compile(output.code, filename);
+  require.cache[filename] = mod;
+  try {
+    mod._compile(output.code, filename);
+  } catch (error) {
+    delete require.cache[filename];
+    throw error;
+  }
   return mod.exports;
 }
 
@@ -23,6 +29,9 @@ const thaiDate = loadModule("src/utils/thaiDate.js");
 const image = loadModule("src/utils/image.js");
 const name = loadModule("src/utils/name.js");
 const expertFields = loadModule("src/utils/expertFields.js");
+const inputSanitize = loadModule("src/utils/inputSanitize.js");
+const url = loadModule("src/utils/url.js");
+const announcement = loadModule("src/utils/announcement.js");
 
 const tests = [];
 
@@ -146,6 +155,57 @@ addTest(
   "{ year: 2568 }",
   "2568",
   expertFields.getExpertYear({ year: 2568 }),
+);
+
+const normalizedAnnouncement = announcement.normalizeAnnouncement({
+  announcement_id: 42,
+  title: "  ข่าวทดสอบ  ",
+  body: "  รายละเอียดข่าว  ",
+  image_url: "https://cdn.example.test/news.jpg",
+  thumbnail_url: "https://cdn.example.test/news-thumb.jpg",
+});
+addTest(
+  "TC13",
+  "announcement.normalizeAnnouncement",
+  "ใช้ title และ body ที่ trim แล้วเป็นข้อมูลกลางของข่าว",
+  "title/body มีช่องว่างรอบข้อความ",
+  "ข่าวทดสอบ | รายละเอียดข่าว",
+  `${normalizedAnnouncement.title} | ${normalizedAnnouncement.body}`,
+);
+addTest(
+  "TC14",
+  "announcement.normalizeAnnouncement",
+  "รองรับรูปเต็มและ thumbnail จาก Backend",
+  "image_url และ thumbnail_url เป็น HTTPS",
+  "https://cdn.example.test/news.jpg | https://cdn.example.test/news-thumb.jpg",
+  `${normalizedAnnouncement.imageUrl} | ${normalizedAnnouncement.thumbnailUrl}`,
+);
+addTest(
+  "TC15",
+  "announcement.normalizeAnnouncement",
+  "ข่าวเก่าที่ไม่มีรูปยังอ่านได้และไม่สร้างกรอบรูปว่าง",
+  "ไม่มี image_url และ thumbnail_url",
+  "ข่าวเก่า | null | null",
+  (() => {
+    const legacy = announcement.normalizeAnnouncement({ name: "ข่าวเก่า", content: "รายละเอียดเก่า" });
+    return `${legacy.title} | ${legacy.imageUrl} | ${legacy.thumbnailUrl}`;
+  })(),
+);
+addTest(
+  "TC16",
+  "inputSanitize.sanitizeAcademicText",
+  "ลบ emoji และอักขระอันตราย แต่คงสัญลักษณ์วิชาการที่อนุญาต",
+  "ข้อมูล 🫶 €$|<>{}^!?#*¥ + [] = _ %",
+  "ข้อมูล + [] = _ %",
+  inputSanitize.sanitizeAcademicText("ข้อมูล 🫶 €$|<>{}^!?#*¥ + [] = _ %"),
+);
+addTest(
+  "TC17",
+  "url.normalizeOptionalUrl",
+  "ปฏิเสธ protocol ที่ไม่ปลอดภัยสำหรับลิงก์ต้นฉบับ",
+  "javascript:alert(1)",
+  "false",
+  String(url.normalizeOptionalUrl("javascript:alert(1)").ok),
 );
 
 function escapeCell(value) {

@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PinKeypad from "./PinKeypad";
-import { colors } from "../theme/tokens";
+import { colors, typography } from "../theme/tokens";
 import { verifyPin } from "../services/pinService";
 import { checkSupport, getBiometricPresentation, isBiometricEnabled, authenticateLocally } from "../services/biometricService";
 import { recordFailedPinAttempt, resetPinAttempts, wipeForPinFailure, clearSessionOnly } from "../services/lockService";
@@ -233,12 +233,12 @@ export default function LockOverlay({ locked, onUnlock }) {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: "#eaf5ef",
+        backgroundColor: colors.appBg,
         zIndex: 999,
         elevation: 999,
       }}
     >
-      <StatusBar barStyle="dark-content" backgroundColor="#eaf5ef" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.appBg} />
 
       <View
         style={{ flex: 1, alignItems: "center", paddingHorizontal: 24, paddingTop: top }}
@@ -251,7 +251,7 @@ export default function LockOverlay({ locked, onUnlock }) {
           <>
             <View style={{ flex: 1 }} />
 
-            <Text style={{ fontSize: 17, fontWeight: "600", color: colors.text, marginBottom: 28 }}>
+            <Text style={{ ...typography.body, fontWeight: "600", color: colors.text, marginBottom: 28 }}>
               {t("security.pinEnterPrompt")}
             </Text>
 
@@ -266,7 +266,7 @@ export default function LockOverlay({ locked, onUnlock }) {
               scale={1.15}
               belowDots={
                 !!error && (
-                  <Text className="text-[14px] font-semibold text-[#dc2626] text-center">
+                  <Text className="text-[15px] font-semibold text-[#dc2626] text-center">
                     {error}
                   </Text>
                 )
@@ -285,7 +285,7 @@ export default function LockOverlay({ locked, onUnlock }) {
                 borderRadius: 16,
                 borderWidth: 1.5,
                 borderColor: colors.primary,
-                backgroundColor: ssoButtonPressed ? "#d5ecdf" : colors.primaryMuted,
+                backgroundColor: ssoButtonPressed ? colors.border : colors.primaryMuted,
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "center",
@@ -293,7 +293,7 @@ export default function LockOverlay({ locked, onUnlock }) {
               }}
             >
               <Ionicons name="school-outline" size={19} color={colors.primaryDark} />
-              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.primaryDark }}>
+              <Text style={{ ...typography.button, color: colors.primaryDark }}>
                 {t("security.useSsoInstead")}
               </Text>
             </TouchableOpacity>

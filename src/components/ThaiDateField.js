@@ -155,6 +155,6 @@ const styles = {
     gap: 8,
   },
   summaryEmpty: { backgroundColor: colors.fieldBg },
-  summaryText: { ...typography.input, color: colors.primary, fontWeight: "700", flex: 1 },
+  summaryText: { ...typography.input, color: colors.text, fontWeight: "600", flex: 1 },
   placeholder: { color: colors.placeholder, fontWeight: "500" },
 };

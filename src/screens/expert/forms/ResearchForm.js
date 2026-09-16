@@ -286,18 +286,18 @@ const ResearchForm = ({ navigation }) => {
           style={{ elevation: 1 }}
         >
           <View className="w-11 h-11 rounded-xl bg-[#e6f4ef] items-center justify-center mr-3">
-            <Ionicons name="flask" size={22} color="#007a5a" />
+            <Ionicons name="flask" size={22} color="#07865F" />
           </View>
           <View className="flex-1">
-            <Text className="text-[11px] font-bold text-[#6b7a82] uppercase tracking-[0.8px]">
+            <Text className="text-[12px] font-bold text-[#5F7069] uppercase" style={{ letterSpacing: 0 }}>
               {t("research.common.manageData")}
             </Text>
-            <Text className="text-[19px] font-black text-[#3f4d50] mt-[2px]">
+            <Text className="text-[20px] font-black text-[#33483f] mt-[2px]">
               {t("research.researchForm.title")}
             </Text>
           </View>
-          <View className="bg-[#007a5a] rounded-full min-w-9 px-[10px] py-[5px] items-center">
-            <Text className="text-white text-[13px] font-black">
+          <View className="bg-[#07865F] rounded-full min-w-9 px-[10px] py-[5px] items-center">
+            <Text className="text-white text-[14px] font-black">
               {items.length}
             </Text>
           </View>
@@ -309,26 +309,26 @@ const ResearchForm = ({ navigation }) => {
           style={{ elevation: 1 }}
         >
           <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-            <Ionicons name="list-outline" size={16} color="#00614a" />
-            <Text className="text-[13px] font-extrabold text-[#00614a]">
+            <Ionicons name="list-outline" size={16} color="#174D42" />
+            <Text className="text-[17px] font-extrabold text-[#174D42]" style={{ lineHeight: 24, letterSpacing: 0 }}>
               {t("research.researchForm.listTitle") ??
                 t("research.researchForm.title")}
             </Text>
           </View>
           {loadingItems ? (
             <View className="flex-row items-center justify-center py-9 gap-[10px]">
-              <ActivityIndicator size="small" color="#007a5a" />
-              <Text className="text-[13px] text-[#6b7a82]">
+              <ActivityIndicator size="small" color="#07865F" />
+              <Text className="text-[14px] text-[#5F7069]">
                 {t("research.common.loading")}
               </Text>
             </View>
           ) : items.length === 0 ? (
             <View className="items-center py-9">
-              <Ionicons name="folder-open-outline" size={42} color="#9aa6b1" />
-              <Text className="text-[14px] font-bold text-[#1f2a2e] mt-[10px]">
+              <Ionicons name="folder-open-outline" size={42} color="#5F7069" />
+              <Text className="text-[15px] font-bold text-[#1f2a2e] mt-[10px]">
                 {t("research.researchForm.noData")}
               </Text>
-              <Text className="text-[12px] text-[#6b7a82] mt-1">
+              <Text className="text-[13px] text-[#5F7069] mt-1">
                 {t("research.common.addBelow")}
               </Text>
             </View>
@@ -345,7 +345,7 @@ const ResearchForm = ({ navigation }) => {
                   ].map((col, i, columns) => (
                     <Text
                       key={i}
-                      className="text-[11px] font-extrabold text-[#6b7a82] uppercase tracking-[0.5px] px-1"
+                      className="text-[12px] font-extrabold text-[#5F7069] uppercase px-1"
                       style={{
                         width: col.w,
                         textAlign: i === columns.length - 1 ? "center" : "left",
@@ -370,20 +370,20 @@ const ResearchForm = ({ navigation }) => {
                       ]}
                     >
                       <Text
-                        className="text-[14px] font-bold text-[#1f2a2e] text-left px-1"
+                        className="text-[15px] font-bold text-[#1f2a2e] text-left px-1"
                         style={{ width: 40 }}
                       >
                         {index + 1}
                       </Text>
                       <View className="px-1" style={{ width: 86 }}>
                         <View className="self-start bg-[#e6f4ef] rounded-full px-[10px] py-[3px]">
-                          <Text className="text-[#00614a] text-[12px] font-extrabold">
+                          <Text className="text-[#174D42] text-[13px] font-extrabold">
                             {year || "—"}
                           </Text>
                         </View>
                       </View>
                       <Text
-                        className="text-[13px] font-semibold text-[#1f2a2e] leading-5 px-3"
+                        className="text-[14px] font-semibold text-[#1f2a2e] leading-5 px-3"
                         style={{
                           width: 240,
                           borderLeftWidth: 1,
@@ -394,7 +394,7 @@ const ResearchForm = ({ navigation }) => {
                         {title || "—"}
                       </Text>
                       <Text
-                        className="text-[12px] text-[#3f4d50] px-3"
+                        className="text-[13px] text-[#33483f] px-3"
                         style={{
                           width: 120,
                           borderLeftWidth: 1,
@@ -449,9 +449,9 @@ const ResearchForm = ({ navigation }) => {
               <Ionicons
                 name={editingItem ? "create" : "add-circle"}
                 size={18}
-                color="#007a5a"
+                color="#07865F"
               />
-              <Text className="text-[16px] font-black text-[#3f4d50] ml-2">
+              <Text className="text-[17px] font-black text-[#33483f] ml-2">
                 {editingItem
                   ? t("research.researchForm.editForm")
                   : t("research.researchForm.addForm")}
@@ -460,7 +460,7 @@ const ResearchForm = ({ navigation }) => {
             {editingItem && (
               <View className="flex-row items-center bg-[#fff0d6] rounded-full px-[10px] py-1">
                 <Ionicons name="create-outline" size={13} color="#a8631a" />
-                <Text className="text-[#a8631a] text-[11px] font-extrabold ml-1">
+                <Text className="text-[#a8631a] text-[12px] font-extrabold ml-1">
                   {t("research.common.editing")}
                 </Text>
               </View>
@@ -475,14 +475,14 @@ const ResearchForm = ({ navigation }) => {
             searchable
           />
           <View className="px-4 py-2">
-            <Text className="text-[13px] font-extrabold text-[#3f4d50] mb-[6px]">
+            <Text className="text-[14px] font-extrabold text-[#33483f] mb-[6px]">
               {t("research.researchForm.fieldTitle")}
               <Text className="text-[#d83a36]"> *</Text>
             </Text>
             <TextInput
-              className="bg-white border border-[#e3e7eb] rounded-[10px] px-[14px] py-[12px] text-[14px] text-[#1f2a2e]"
+              className="bg-white border border-[#e3e7eb] rounded-[10px] px-[14px] py-[12px] text-[16px] leading-6 text-[#1f2a2e]"
               placeholder={t("research.researchForm.placeholderTitle")}
-              placeholderTextColor="#9aa6b1"
+              placeholderTextColor="#5F7069"
               value={form.title}
               onChangeText={(v) => setField("title", sanitizeAcademicText(v))}
               maxLength={500}
@@ -492,8 +492,8 @@ const ResearchForm = ({ navigation }) => {
           </View>
           {loadingTypes ? (
             <View className="flex-row items-center gap-[10px] px-4 py-[14px]">
-              <ActivityIndicator size="small" color="#007a5a" />
-              <Text className="text-[13px] text-[#6b7a82]">
+              <ActivityIndicator size="small" color="#07865F" />
+              <Text className="text-[14px] text-[#5F7069]">
                 {t("research.researchForm.loadingTypes")}
               </Text>
             </View>
@@ -508,7 +508,7 @@ const ResearchForm = ({ navigation }) => {
           {/* ปิดไว้ชั่วคราว: dropdown PMU และระดับผลงานวิจัยยังไม่ใช้งาน */}
           <View className="flex-row gap-[10px] px-4 pt-[14px]">
             <TouchableOpacity
-              className="flex-1 flex-row items-center justify-center gap-2 bg-[#007a5a] rounded-xl py-[13px]"
+              className="flex-1 flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-[13px]"
               style={{ elevation: 2, opacity: saving ? 0.6 : 1 }}
               onPress={handleSave}
               disabled={saving}
@@ -523,7 +523,7 @@ const ResearchForm = ({ navigation }) => {
                     size={18}
                     color="#fff"
                   />
-                  <Text className="text-white text-[14px] font-black">
+                  <Text className="text-white text-[15px] font-black">
                     {editingItem
                       ? t("research.common.save")
                       : t("research.common.addData")}
@@ -544,7 +544,7 @@ const ResearchForm = ({ navigation }) => {
               activeOpacity={0.85}
             >
               <Ionicons name="refresh" size={17} color="#dc2626" />
-              <Text className="text-[#dc2626] text-[14px] font-black">
+              <Text className="text-[#dc2626] text-[15px] font-black">
                 {t("research.common.reset")}
               </Text>
             </TouchableOpacity>

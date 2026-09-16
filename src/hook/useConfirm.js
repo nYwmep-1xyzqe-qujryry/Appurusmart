@@ -4,6 +4,7 @@ import {
   TouchableOpacity, TouchableWithoutFeedback, View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { colors, radius, shadows, typography } from "../theme/tokens";
 
 /**
  * useConfirm — reusable confirm dialog
@@ -89,40 +90,36 @@ export default function useConfirm() {
               width: "100%",
               maxWidth: 340,
               backgroundColor: "#fff",
-              borderRadius: 20,
+              borderRadius: radius.xl,
               overflow: "hidden",
               transform: [{ scale: scaleAnim }],
-              elevation: 20,
-              shadowColor: "#000",
-              shadowOpacity: 0.2,
-              shadowRadius: 24,
-              shadowOffset: { width: 0, height: 10 },
+              ...shadows.floating,
             }}>
               {/* Icon + Title */}
               <View style={{ alignItems: "center", paddingTop: 28, paddingBottom: 16, paddingHorizontal: 24 }}>
                 <View style={{
                   width: 54, height: 54, borderRadius: 27,
-                  backgroundColor: opts.iconColor ? `${opts.iconColor}18` : "#fde7e7",
+                  backgroundColor: opts.iconColor ? `${opts.iconColor}18` : colors.surfaceDanger,
                   alignItems: "center", justifyContent: "center", marginBottom: 14,
                 }}>
                   <Ionicons
                     name={opts.icon ?? "alert-circle-outline"}
                     size={28}
-                    color={opts.iconColor ?? "#dc2626"}
+                    color={opts.iconColor ?? colors.danger}
                   />
                 </View>
-                <Text style={{ fontSize: 17, fontWeight: "800", color: "#1f2a2e", textAlign: "center", lineHeight: 24 }}>
+                <Text style={{ ...typography.sectionTitle, fontWeight: "700", color: colors.text, textAlign: "center" }}>
                   {opts.title ?? "ยืนยัน"}
                 </Text>
                 {!!opts.message && (
-                  <Text style={{ fontSize: 13, color: "#6b7a82", textAlign: "center", marginTop: 8, lineHeight: 20 }}>
+                  <Text style={{ ...typography.secondary, color: colors.textSoft, textAlign: "center", marginTop: 8 }}>
                     {opts.message}
                   </Text>
                 )}
               </View>
 
               {/* Divider */}
-              <View style={{ height: 1, backgroundColor: "#f0f3f4" }} />
+              <View style={{ height: 1, backgroundColor: colors.border }} />
 
               {/* Buttons */}
               <View style={{ flexDirection: "row" }}>
@@ -132,10 +129,10 @@ export default function useConfirm() {
                   style={{
                     flex: 1, paddingVertical: 15,
                     alignItems: "center", justifyContent: "center",
-                    borderRightWidth: 1, borderRightColor: "#f0f3f4",
+                    borderRightWidth: 1, borderRightColor: colors.border,
                   }}
                 >
-                  <Text style={{ fontSize: 15, fontWeight: "600", color: "#6b7a82" }}>
+                  <Text style={{ ...typography.button, color: colors.textSoft }}>
                     {opts.cancelText ?? "ยกเลิก"}
                   </Text>
                 </TouchableOpacity>
@@ -148,8 +145,8 @@ export default function useConfirm() {
                   }}
                 >
                   <Text style={{
-                    fontSize: 15, fontWeight: "800",
-                    color: opts.confirmColor ?? "#dc2626",
+                    ...typography.button,
+                    color: opts.confirmColor ?? colors.danger,
                   }}>
                     {opts.confirmText ?? "ยืนยัน"}
                   </Text>

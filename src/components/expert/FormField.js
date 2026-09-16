@@ -62,6 +62,7 @@ const FormField = React.forwardRef(
             keyboardType={multiline ? "default" : keyboardType || "default"}
             multiline={multiline}
             numberOfLines={multiline ? 3 : 1}
+            allowFontScaling
             textAlignVertical={multiline ? "top" : "center"}
             autoCorrect={
               multiline ? false : Platform.OS === "ios" ? true : false
@@ -90,7 +91,7 @@ const FormField = React.forwardRef(
           />
         ) : (
           <View style={styles.disabledBox}>
-            <Text style={styles.disabledText}>{value || ""}</Text>
+            <Text style={styles.disabledText} allowFontScaling>{value || ""}</Text>
           </View>
         )}
       </View>
@@ -125,8 +126,8 @@ const styles = {
     backgroundColor: colors.primarySoft,
   },
   inputMultiline: {
-    minHeight: 88,
-    paddingTop: 12,
+    minHeight: 96,
+    paddingTop: 14,
     textAlignVertical: "top",
   },
   disabledBox: {

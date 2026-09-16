@@ -19,7 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { colors, shadows } from "../theme/tokens";
+import { colors, radius, shadows, typography } from "../theme/tokens";
 import HeaderBar from "../components/HeaderBar";
 import AiProviderLogo, { normalizeProvider } from "../components/AiProviderLogo";
 import useCurrentUser from "../hook/useCurrentUser";
@@ -60,13 +60,13 @@ const TypingDot = ({ delay }) => {
     return () => loop.stop();
   }, [anim, delay]);
   return (
-    <Animated.View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#0f7a55", opacity: anim, marginHorizontal: 2 }} />
+    <Animated.View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.primary, opacity: anim, marginHorizontal: 2 }} />
   );
 };
 
 const TypingBubble = () => (
   <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
-    <LinearGradient colors={["#0a6644", "#0f7a55"]} style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" }}>
+    <LinearGradient colors={[colors.primaryDark, colors.primary]} style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" }}>
       <Ionicons name="sparkles" size={15} color="rgba(255,255,255,0.95)" />
     </LinearGradient>
     <View style={{ backgroundColor: "#fff", borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 13, borderWidth: 1, borderColor: "#e8ede9", flexDirection: "row", alignItems: "center" }}>
@@ -124,14 +124,14 @@ const ChatBubble = ({ item, onRetry, onEdit }) => {
   if (item.error) {
     return (
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
-        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#fef2f2", alignItems: "center", justifyContent: "center" }}>
-          <Ionicons name="alert-circle" size={18} color="#dc2626" />
+        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surfaceDanger, alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="alert-circle" size={18} color={colors.danger} />
         </View>
-        <View style={{ maxWidth: "78%", backgroundColor: "#fff5f5", borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 11, borderWidth: 1, borderColor: "#fecaca" }}>
-          <Text style={{ color: "#dc2626", fontSize: 13, fontWeight: "600", lineHeight: 20 }}>{t("chatbot.connectError")}</Text>
+        <View style={{ maxWidth: "78%", backgroundColor: colors.surfaceDanger, borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 11, borderWidth: 1, borderColor: colors.borderDanger }}>
+          <Text style={{ color: colors.danger, fontSize: 14, lineHeight: 22, fontWeight: "600", letterSpacing: 0 }}>{t("chatbot.connectError")}</Text>
           <TouchableOpacity onPress={() => onRetry(item.retryText)} activeOpacity={0.75} style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Ionicons name="refresh" size={13} color="#0f7a55" />
-            <Text style={{ color: "#0f7a55", fontSize: 12, fontWeight: "700" }}>{t("chatbot.retry")}</Text>
+            <Ionicons name="refresh" size={13} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontSize: 13, lineHeight: 19, fontWeight: "600", letterSpacing: 0 }}>{t("chatbot.retry")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -150,7 +150,7 @@ const ChatBubble = ({ item, onRetry, onEdit }) => {
         }}
       >
         {!isUser && (
-          <LinearGradient colors={["#0a6644", "#0f7a55"]} style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" }}>
+          <LinearGradient colors={[colors.primaryDark, colors.primary]} style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="sparkles" size={15} color="rgba(255,255,255,0.95)" />
           </LinearGradient>
         )}
@@ -162,16 +162,16 @@ const ChatBubble = ({ item, onRetry, onEdit }) => {
             style={{ maxWidth: "66%", minWidth: 88, flexShrink: 1, alignSelf: "flex-end" }}
           >
             <LinearGradient
-              colors={[colors.primary, "#1a9068"]}
+              colors={[colors.primary, colors.primaryLight]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={{ borderRadius: 22, borderBottomRightRadius: 7, paddingHorizontal: 16, paddingVertical: 12 }}
             >
-              <Text style={{ color: "#fff", fontSize: 15, lineHeight: 22, fontWeight: "500" }}>{item.text}</Text>
+              <Text style={{ ...typography.body, color: colors.surface }}>{item.text}</Text>
             </LinearGradient>
           </Pressable>
         ) : (
-          <Pressable ref={bubbleRef} onLongPress={openMenu} delayLongPress={350} style={{ maxWidth: "78%", backgroundColor: "#fff", borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 11, borderWidth: 1, borderColor: "#e8ede9", elevation: 1, shadowColor: "#064e35", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4 }}>
-            <Text style={{ color: "#102019", fontSize: 14, lineHeight: 21, fontWeight: "500" }}>{item.text}</Text>
+          <Pressable ref={bubbleRef} onLongPress={openMenu} delayLongPress={350} style={{ maxWidth: "78%", backgroundColor: colors.surface, borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 11, borderWidth: 1, borderColor: colors.border, ...shadows.card }}>
+          <Text style={{ ...typography.body, color: colors.text, fontSize: 15, lineHeight: 23 }}>{item.text}</Text>
           </Pressable>
         )}
       </View>
@@ -180,14 +180,14 @@ const ChatBubble = ({ item, onRetry, onEdit }) => {
       {item.stopped && isUser && (
         <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 5, gap: 6 }}>
           <TouchableOpacity onPress={handleEdit} activeOpacity={0.75}
-            style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#f0f9f4", borderWidth: 1, borderColor: "#b8d9c8", borderRadius: 20, paddingHorizontal: 11, paddingVertical: 5 }}>
-            <Ionicons name="pencil-outline" size={13} color="#0f7a55" />
-            <Text style={{ color: "#0f7a55", fontSize: 12, fontWeight: "700" }}>แก้ไข</Text>
+            style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.primaryMuted, borderWidth: 1, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 5 }}>
+            <Ionicons name="pencil-outline" size={13} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontSize: 13, lineHeight: 19, fontWeight: "600", letterSpacing: 0 }}>แก้ไข</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleCopy} activeOpacity={0.75}
-            style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#f0f9f4", borderWidth: 1, borderColor: "#b8d9c8", borderRadius: 20, paddingHorizontal: 11, paddingVertical: 5 }}>
-            <Ionicons name="copy-outline" size={13} color="#0f7a55" />
-            <Text style={{ color: "#0f7a55", fontSize: 12, fontWeight: "700" }}>คัดลอก</Text>
+            style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.primaryMuted, borderWidth: 1, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 5 }}>
+            <Ionicons name="copy-outline" size={13} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontSize: 13, lineHeight: 19, fontWeight: "600", letterSpacing: 0 }}>คัดลอก</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -196,7 +196,7 @@ const ChatBubble = ({ item, onRetry, onEdit }) => {
       <Modal visible={menuVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setMenuVisible(false)}>
         <View style={{ flex: 1 }}>
           <Pressable
-            style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(8, 30, 22, 0.30)" }}
+            style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(38, 54, 50, 0.30)" }}
             onPress={() => setMenuVisible(false)}
           />
           <View
@@ -205,14 +205,14 @@ const ChatBubble = ({ item, onRetry, onEdit }) => {
             top: menuPos.top,
             left: menuPos.left,
             width: MENU_W,
-            borderRadius: 24,
+            borderRadius: radius.xl,
             overflow: "hidden",
-            backgroundColor: "#fbfcfd",
+            backgroundColor: colors.surfaceMuted,
             ...shadows.floating,
           }}
           >
             <View style={{ height: 46, justifyContent: "center", paddingHorizontal: 18 }}>
-              <Text style={{ color: "#7a7f87", fontSize: 15, fontWeight: "500" }} numberOfLines={1}>
+              <Text style={{ ...typography.caption, color: colors.textSoft }} numberOfLines={1}>
                 {formatBubbleTime(item.createdAt) || "ข้อความ"}
               </Text>
             </View>
@@ -223,12 +223,12 @@ const ChatBubble = ({ item, onRetry, onEdit }) => {
               style={{
                 height: 56,
                 justifyContent: "center",
-                backgroundColor: "#fbfcfd",
+                backgroundColor: colors.surfaceMuted,
               }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18 }}>
-                <Ionicons name="copy-outline" size={25} color="#111827" />
-                <Text style={{ color: "#111827", fontSize: 18, fontWeight: "500", marginLeft: 18 }}>คัดลอก</Text>
+                <Ionicons name="copy-outline" size={25} color={colors.text} />
+                <Text style={{ ...typography.body, marginLeft: 18 }}>คัดลอก</Text>
               </View>
             </TouchableOpacity>
 
@@ -236,11 +236,11 @@ const ChatBubble = ({ item, onRetry, onEdit }) => {
               <TouchableOpacity
                 onPress={handleEdit}
                 activeOpacity={0.68}
-                style={{ height: 56, justifyContent: "center", backgroundColor: "#fbfcfd" }}
+                style={{ height: 56, justifyContent: "center", backgroundColor: colors.surfaceMuted }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18 }}>
-                  <Ionicons name="pencil-outline" size={25} color="#111827" />
-                  <Text style={{ color: "#111827", fontSize: 18, fontWeight: "500", marginLeft: 18 }}>แก้ไข</Text>
+                  <Ionicons name="pencil-outline" size={25} color={colors.text} />
+                  <Text style={{ ...typography.body, marginLeft: 18 }}>แก้ไข</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -473,37 +473,37 @@ const HistoryRow = ({ item, active, onPress, onMenu }) => (
           borderRadius: 14,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: active ? "#0f7a55" : "#f1f7f4",
+          backgroundColor: active ? "#07865F" : "#f1f7f4",
         }}
       >
         <Ionicons
           name={active ? "chatbubble" : "chatbubble-outline"}
           size={18}
-          color={active ? "#fff" : "#0f7a55"}
+          color={active ? "#fff" : "#07865F"}
         />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           numberOfLines={1}
-          style={{ color: "#102019", fontSize: 15, fontWeight: "800" }}
+          style={{ color: "#102019", fontSize: 16, fontWeight: "800" }}
         >
           {item.title}
         </Text>
         {!!item.preview && (
           <Text
             numberOfLines={1}
-            style={{ color: "#6a7b74", fontSize: 12, fontWeight: "600", marginTop: 4 }}
+            style={{ color: "#5F7069", fontSize: 13, fontWeight: "600", marginTop: 4 }}
           >
             {item.preview}
           </Text>
         )}
       </View>
-      <Text style={{ color: "#8fa198", fontSize: 11, fontWeight: "700" }}>
+      <Text style={{ color: "#8fa198", fontSize: 12, fontWeight: "700" }}>
         {formatChatTime(item.updatedAt)}
       </Text>
     </TouchableOpacity>
     {item.pinned && (
-      <Ionicons name="pin" size={15} color="#0f7a55" />
+      <Ionicons name="pin" size={15} color="#07865F" />
     )}
     <TouchableOpacity
       onPress={(event) => {
@@ -523,7 +523,7 @@ const HistoryRow = ({ item, active, onPress, onMenu }) => (
         borderColor: "#dce8e2",
       }}
     >
-      <Ionicons name="ellipsis-horizontal" size={18} color="#5f746b" />
+      <Ionicons name="ellipsis-horizontal" size={18} color="#5F7069" />
     </TouchableOpacity>
   </View>
 );
@@ -1013,7 +1013,7 @@ export default function ChatbotPage({ navigation }) {
             numberOfLines={1}
             style={{
               color: "#102019",
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: "900",
               paddingHorizontal: 10,
               paddingTop: 6,
@@ -1037,9 +1037,9 @@ export default function ChatbotPage({ navigation }) {
             <Ionicons
               name={selectedConversation.pinned ? "pin" : "pin-outline"}
               size={22}
-              color="#0f7a55"
+              color="#07865F"
             />
-            <Text style={{ color: "#102019", fontSize: 16, fontWeight: "800" }}>
+            <Text style={{ color: "#102019", fontSize: 17, fontWeight: "800" }}>
               {selectedConversation.pinned ? t("chatbot.unpinChat") : t("chatbot.pinChat")}
             </Text>
           </Pressable>
@@ -1055,8 +1055,8 @@ export default function ChatbotPage({ navigation }) {
               borderRadius: 16,
             }}
           >
-            <Ionicons name="pencil-outline" size={22} color="#0f7a55" />
-            <Text style={{ color: "#102019", fontSize: 16, fontWeight: "800" }}>
+            <Ionicons name="pencil-outline" size={22} color="#07865F" />
+            <Text style={{ color: "#102019", fontSize: 17, fontWeight: "800" }}>
               {t("chatbot.renameChat")}
             </Text>
           </Pressable>
@@ -1077,7 +1077,7 @@ export default function ChatbotPage({ navigation }) {
             }}
           >
             <Ionicons name="trash-outline" size={22} color="#dc2626" />
-            <Text style={{ color: "#dc2626", fontSize: 16, fontWeight: "900" }}>
+            <Text style={{ color: "#dc2626", fontSize: 17, fontWeight: "900" }}>
               {t("chatbot.deleteChat")}
             </Text>
           </Pressable>
@@ -1157,22 +1157,22 @@ export default function ChatbotPage({ navigation }) {
 
             {/* Title */}
             <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 }}>
-              <Text style={{ color: "#102019", fontSize: 18, fontWeight: "900" }}>เลือกโมเดล AI</Text>
-              <Text style={{ color: "#7a9186", fontSize: 13, fontWeight: "600", marginTop: 2 }}>
-                กำลังใช้: <Text style={{ color: "#0f7a55", fontWeight: "800" }}>{getModelDisplayName(selectedModel)}</Text>
+              <Text style={{ color: "#102019", fontSize: 19, fontWeight: "900" }}>เลือกโมเดล AI</Text>
+              <Text style={{ color: "#5F7069", fontSize: 14, fontWeight: "600", marginTop: 2 }}>
+                กำลังใช้: <Text style={{ color: colors.text, fontWeight: "700" }}>{getModelDisplayName(selectedModel)}</Text>
               </Text>
             </View>
 
             {/* Provider sections — vertical scroll */}
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {grouped.map(([provider, models]) => {
-                const ps = PROVIDER_ICONS[provider] ?? { icon: "hardware-chip-outline", color: "#0f7a55" };
+                const ps = PROVIDER_ICONS[provider] ?? { icon: "hardware-chip-outline", color: "#07865F" };
                 return (
                   <View key={provider} style={{ marginBottom: 18 }}>
                     {/* Provider label with real logo */}
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, marginBottom: 10 }}>
                       <AiProviderLogo provider={provider} size={18} />
-                      <Text style={{ color: "#3d5248", fontSize: 12, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" }}>{provider}</Text>
+                      <Text style={{ color: "#3d5248", fontSize: 13, fontWeight: "800", letterSpacing: 0, textTransform: "uppercase" }}>{provider}</Text>
                     </View>
 
                     {/* Model chips — wrap row */}
@@ -1202,7 +1202,7 @@ export default function ChatbotPage({ navigation }) {
                               ? <Ionicons name="checkmark" size={13} color="#fff" />
                               : <AiProviderLogo provider={provider} size={15} />
                             }
-                            <Text style={{ color: isSelected ? "#fff" : "#2d4840", fontSize: 14, fontWeight: "700" }}>
+                            <Text style={{ color: isSelected ? "#fff" : "#2d4840", fontSize: 15, fontWeight: "700" }}>
                               {label}
                             </Text>
                           </TouchableOpacity>
@@ -1261,10 +1261,10 @@ export default function ChatbotPage({ navigation }) {
             elevation: 14,
           }}
         >
-          <Text style={{ color: "#102019", fontSize: 20, fontWeight: "900" }}>
+          <Text style={{ color: "#102019", fontSize: 21, fontWeight: "900" }}>
             {t("chatbot.renameChat")}
           </Text>
-          <Text style={{ color: "#6a7b74", fontSize: 13, fontWeight: "600", marginTop: 4 }}>
+          <Text style={{ color: "#5F7069", fontSize: 14, fontWeight: "600", marginTop: 4 }}>
             {t("chatbot.renameChatHint")}
           </Text>
           <TextInput
@@ -1282,7 +1282,7 @@ export default function ChatbotPage({ navigation }) {
               backgroundColor: "#f8fbf9",
               color: "#102019",
               paddingHorizontal: 14,
-              fontSize: 16,
+              fontSize: 17,
               fontWeight: "700",
               marginTop: 16,
             }}
@@ -1303,7 +1303,7 @@ export default function ChatbotPage({ navigation }) {
                 backgroundColor: "#f1f7f4",
               }}
             >
-              <Text style={{ color: "#5f746b", fontSize: 14, fontWeight: "900" }}>
+              <Text style={{ color: "#5F7069", fontSize: 15, fontWeight: "900" }}>
                 {t("chatbot.cancel")}
               </Text>
             </TouchableOpacity>
@@ -1317,10 +1317,10 @@ export default function ChatbotPage({ navigation }) {
                 borderRadius: 14,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: renameTitle.trim() ? "#0f7a55" : "#8fa89f",
+                backgroundColor: renameTitle.trim() ? "#07865F" : "#5F7069",
               }}
             >
-              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "900" }}>
+              <Text style={{ color: "#fff", fontSize: 15, fontWeight: "900" }}>
                 {t("chatbot.save")}
               </Text>
             </TouchableOpacity>
@@ -1331,8 +1331,8 @@ export default function ChatbotPage({ navigation }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#f0f6f2" }}>
-      <StatusBar barStyle="light-content" backgroundColor="#064e35" />
+    <View style={{ flex: 1, backgroundColor: colors.appBg }}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primaryDark} />
       <HeaderBar name={user.name} photoUrl={user.photoUrl} onNotification={() => navigation.navigate("Notifications")} onLogout={logout} />
 
       <KeyboardAvoidingView
@@ -1343,16 +1343,16 @@ export default function ChatbotPage({ navigation }) {
         }
       >
         {/* Title bar */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#dce8e2", paddingHorizontal: 16, paddingVertical: 14 }}>
-          <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: "#e6f5ef", alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="chatbubble-ellipses" size={22} color="#0f7a55" />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: 16, paddingVertical: 14 }}>
+          <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primaryMuted, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: "#102019", fontSize: 17, fontWeight: "800" }}>{t("chatbot.title")}</Text>
+            <Text style={{ ...typography.sectionTitle, color: colors.text }}>{t("chatbot.title")}</Text>
             <TouchableOpacity onPress={() => setModelSelectorVisible(true)} activeOpacity={0.7} style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 }}>
               <AiProviderLogo provider={(() => { const m = (availableModels.length ? availableModels : FALLBACK_MODELS).find(x => (x.id ?? x.name) === selectedModel); return m?.provider ?? "Claude"; })()} size={14} />
-              <Text style={{ color: "#0f7a55", fontSize: 12, fontWeight: "700" }} numberOfLines={1}>{getModelDisplayName(selectedModel)}</Text>
-              <Ionicons name="chevron-down" size={11} color="#0f7a55" />
+              <Text style={{ color: colors.text, fontSize: 13, lineHeight: 19, fontWeight: "500", letterSpacing: 0 }} numberOfLines={1}>{getModelDisplayName(selectedModel)}</Text>
+              <Ionicons name="chevron-down" size={11} color={colors.primary} />
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -1367,12 +1367,12 @@ export default function ChatbotPage({ navigation }) {
               borderRadius: 14,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "#f8fbf9",
+              backgroundColor: colors.fieldBg,
               borderWidth: 1,
-              borderColor: "#dce8e2",
+              borderColor: colors.border,
             }}
           >
-            <Ionicons name="time-outline" size={19} color="#5f746b" />
+            <Ionicons name="time-outline" size={19} color={colors.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={startNewChat}
@@ -1384,13 +1384,13 @@ export default function ChatbotPage({ navigation }) {
               borderRadius: 14,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "#f8fbf9",
+              backgroundColor: colors.fieldBg,
               borderWidth: 1,
-              borderColor: "#dce8e2",
+              borderColor: colors.border,
               opacity: !messages.length && !conversationId ? 0.55 : 1,
             }}
           >
-            <Ionicons name="create-outline" size={19} color="#5f746b" />
+            <Ionicons name="create-outline" size={19} color={colors.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={confirmClearHistory}
@@ -1402,13 +1402,13 @@ export default function ChatbotPage({ navigation }) {
               borderRadius: 14,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: messages.length ? "#f8fbf9" : "#f3f6f4",
+              backgroundColor: messages.length ? colors.fieldBg : colors.fieldDisabled,
               borderWidth: 1,
-              borderColor: "#dce8e2",
+              borderColor: colors.border,
               opacity: messages.length ? 1 : 0.55,
             }}
           >
-            <Ionicons name="trash-outline" size={18} color="#5f746b" />
+            <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
 
@@ -1450,10 +1450,10 @@ export default function ChatbotPage({ navigation }) {
                 <Ionicons
                   name={loadingHistory ? "time-outline" : "chatbubbles-outline"}
                   size={34}
-                  color="#0f7a55"
+                  color="#07865F"
                 />
               </View>
-              <Text style={{ color: "#587066", fontSize: 14, fontWeight: "600", textAlign: "center" }}>
+              <Text style={{ ...typography.secondary, fontSize: 15, textAlign: "center" }}>
                 {loadingHistory ? t("chatbot.loadingHistory") : t("chatbot.emptyHint")}
               </Text>
             </View>
@@ -1462,29 +1462,30 @@ export default function ChatbotPage({ navigation }) {
         />
 
         {/* Composer */}
-        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10, backgroundColor: "#fff", paddingHorizontal: 16, paddingTop: 10, paddingBottom: Platform.OS === "ios" ? 18 : 14 }}>
+        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10, backgroundColor: colors.surface, paddingHorizontal: 16, paddingTop: 10, paddingBottom: Platform.OS === "ios" ? 18 : 14 }}>
           <TextInput
             ref={inputRef}
-            style={{ flex: 1, minHeight: 44, maxHeight: 110, borderRadius: 16, borderWidth: 1, borderColor: "#dce8e2", backgroundColor: "#f8fbf9", color: "#102019", paddingHorizontal: 14, paddingTop: 11, paddingBottom: 10, fontSize: 14, fontWeight: "500" }}
+            style={{ ...typography.input, flex: 1, minHeight: 44, maxHeight: 110, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.fieldBg, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 10 }}
+            allowFontScaling
             value={input}
             onChangeText={setInput}
             placeholder={sending ? t("chatbot.waitingReply") : t("chatbot.placeholder")}
-            placeholderTextColor="#8fa89f"
+            placeholderTextColor={colors.placeholder}
             multiline
             maxLength={2000}
             onSubmitEditing={() => { if (!sending) sendMessage(); }}
           />
           {sending ? (
             <TouchableOpacity
-              style={{ width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "#f0f5f2", borderWidth: 1.5, borderColor: "#c8d9d2" }}
+              style={{ width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: colors.fieldBg, borderWidth: 1.5, borderColor: colors.borderStrong }}
               onPress={stopMessage}
               activeOpacity={0.75}
             >
-              <Ionicons name="stop" size={18} color="#0f7a55" />
+              <Ionicons name="stop" size={18} color={colors.primary} />
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={{ width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: !input.trim() ? "#c8d9d2" : "#0f7a55" }}
+              style={{ width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: !input.trim() ? colors.borderStrong : colors.primary }}
               onPress={() => sendMessage()}
               activeOpacity={0.85}
               disabled={!input.trim()}
@@ -1501,8 +1502,8 @@ export default function ChatbotPage({ navigation }) {
         presentationStyle="pageSheet"
         onRequestClose={() => setHistoryVisible(false)}
       >
-        <View style={{ flex: 1, backgroundColor: "#f0f6f2" }}>
-          <StatusBar barStyle="dark-content" backgroundColor="#f0f6f2" />
+        <View style={{ flex: 1, backgroundColor: colors.appBg }}>
+          <StatusBar barStyle="dark-content" backgroundColor={colors.appBg} />
           <View
             style={{
               flexDirection: "row",
@@ -1511,9 +1512,9 @@ export default function ChatbotPage({ navigation }) {
               paddingHorizontal: 18,
               paddingTop: Platform.OS === "ios" ? 18 : 14,
               paddingBottom: 14,
-              backgroundColor: "#fff",
+              backgroundColor: colors.surface,
               borderBottomWidth: 1,
-              borderBottomColor: "#dce8e2",
+              borderBottomColor: colors.border,
             }}
           >
             <TouchableOpacity
@@ -1525,16 +1526,16 @@ export default function ChatbotPage({ navigation }) {
                 borderRadius: 15,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "#f1f7f4",
+                backgroundColor: colors.primarySoft,
               }}
             >
-              <Ionicons name="close" size={22} color="#102019" />
+              <Ionicons name="close" size={22} color={colors.text} />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#102019", fontSize: 22, fontWeight: "900" }}>
+              <Text style={{ ...typography.pageTitle, color: colors.text }}>
                 {t("chatbot.historyTitle")}
               </Text>
-              <Text style={{ color: "#6a7b74", fontSize: 12, fontWeight: "700", marginTop: 2 }}>
+              <Text style={{ ...typography.secondary, marginTop: 2 }}>
                 {t("chatbot.historySubtitle")}
               </Text>
             </View>
@@ -1548,11 +1549,11 @@ export default function ChatbotPage({ navigation }) {
                 height: 42,
                 paddingHorizontal: 14,
                 borderRadius: 15,
-                backgroundColor: "#0f7a55",
+                backgroundColor: colors.primary,
               }}
             >
               <Ionicons name="add" size={18} color="#fff" />
-              <Text style={{ color: "#fff", fontSize: 13, fontWeight: "900" }}>
+              <Text style={{ ...typography.button, color: colors.surface, fontSize: 14 }}>
                 {t("chatbot.newChat")}
               </Text>
             </TouchableOpacity>
@@ -1579,12 +1580,12 @@ export default function ChatbotPage({ navigation }) {
             ListEmptyComponent={
               <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 28 }}>
                 <View style={{ width: 78, height: 78, borderRadius: 28, backgroundColor: "#e6f5ef", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="chatbubbles-outline" size={36} color="#0f7a55" />
+                  <Ionicons name="chatbubbles-outline" size={36} color="#07865F" />
                 </View>
-                <Text style={{ color: "#102019", fontSize: 18, fontWeight: "900", textAlign: "center" }}>
+                <Text style={{ color: "#102019", fontSize: 19, fontWeight: "900", textAlign: "center" }}>
                   {t("chatbot.noHistory")}
                 </Text>
-                <Text style={{ color: "#6a7b74", fontSize: 13, fontWeight: "600", lineHeight: 20, textAlign: "center" }}>
+                <Text style={{ color: "#5F7069", fontSize: 14, fontWeight: "600", lineHeight: 22, textAlign: "center" }}>
                   {t("chatbot.noHistoryHint")}
                 </Text>
               </View>
