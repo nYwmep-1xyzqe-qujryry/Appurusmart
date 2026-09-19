@@ -69,12 +69,18 @@ const HeaderBar = ({ name, photoUrl, onNotification, onLogout }) => {
             pointerEvents: "none",
           }}
         >
-          <Image
-            source={logo}
-            style={{ width: 120, height: 40 }}
-            tintColor="#fff"
-            resizeMode="contain"
-          />
+          <View
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 12,
+              overflow: "hidden",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Image source={logo} style={{ width: 42, height: 42 }} resizeMode="contain" />
+          </View>
         </View>
 
         {/* Actions — push to right */}

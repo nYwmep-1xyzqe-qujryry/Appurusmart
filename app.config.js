@@ -36,7 +36,7 @@ module.exports = {
         process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
-        backgroundColor: "#111315",
+        backgroundColor: "#F0F6EF",
       },
       edgeToEdgeEnabled: true,
       softwareKeyboardLayoutMode: "pan",
@@ -55,13 +55,14 @@ module.exports = {
       [
         "expo-notifications",
         {
-          // Android notification small icons must be a monochrome asset with
-          // transparency; the full-color launcher icon renders blank here.
+          // Android renders the URU mark as the notification small icon.
+          // The launcher artwork remains the full-color URU SMART icon.
           icon: "./assets/notification-icon.png",
-          color: "#0f7a55",
+          color: "#07865F",
           defaultChannel: "default",
         },
       ],
+      "./plugins/withNotificationLargeIcon",
       "expo-local-authentication",
       "expo-secure-store",
       [

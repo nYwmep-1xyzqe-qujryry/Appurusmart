@@ -206,7 +206,18 @@ export default function Cardpage({ navigation }) {
               >
                 {/* Top row */}
                 <View className="flex-row items-center justify-between">
-                  <Image source={logo} style={{ width: 110, height: 48 }} tintColor="#fff" resizeMode="contain" />
+                  <View
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: radius.sm,
+                      overflow: "hidden",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Image source={logo} style={{ width: 48, height: 48 }} resizeMode="contain" />
+                  </View>
                   <View className="flex-row items-center gap-[5px] bg-white/20 border border-white/30 rounded-full px-3 py-[5px]">
                     <View className="w-[7px] h-[7px] rounded-full" style={{ backgroundColor: colors.brandYellow }} />
                     <Text className="text-white text-[11px] font-semibold" style={{ lineHeight: 17, letterSpacing: 0 }}>{t("card.activeBadge")}</Text>
