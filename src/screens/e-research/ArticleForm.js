@@ -10,7 +10,7 @@ import useLrdResource from "../../hook/useLrdResource";
 import useLrdSession from "../../hook/useLrdSession";
 import { LRD_ENDPOINTS } from "../../services/lrdApi";
 import { normalizeOptionalUrl } from "../../utils/url";
-import { DOCUMENT_TYPE_OPTIONS, FUNDING_SOURCE_OPTIONS, buildYearOptions } from "./mockOptions";
+import { DOCUMENT_TYPE_OPTIONS, FUNDING_SOURCE_OPTIONS } from "./mockOptions";
 import { useEResearchText, withPlaceholder } from "./i18n";
 
 const emptyForm = {
@@ -37,7 +37,6 @@ export default function ArticleForm({ navigation, route }) {
     refetchAfterMutation: false,
   });
   const { items: paperIndexes, loading: paperIndexesLoading } = useLrdResource(LRD_ENDPOINTS.paperIndexes);
-  const yearOptions = buildYearOptions(te("article.publishYearPlaceholder"));
   const fundingSourceOptions = withPlaceholder(FUNDING_SOURCE_OPTIONS, te("article.fundingPlaceholder"));
   const paperIndexOptions = paperIndexes.length > 0
       ? [{ id: "", label: te("article.documentTypePlaceholder") }, ...paperIndexes.map((item) => ({
@@ -137,7 +136,13 @@ export default function ArticleForm({ navigation, route }) {
           <FormField label={te("article.keywords")} value={form.keywords} onChangeText={(v) => set("keywords", v)} placeholder={te("article.keywordsPlaceholder")} />
           <FormField label={te("article.contributors")} value={form.contributors} onChangeText={(v) => set("contributors", v)} />
           <FormField label={te("article.journal")} value={form.journal} onChangeText={(v) => set("journal", v)} />
-          <InlineDropdown label={te("article.publishYear")} value={form.publishYear} options={yearOptions} onSelect={(v) => set("publishYear", v)} searchable />
+          <FormField
+            label={te("article.publishYear")}
+            value={form.publishYear}
+            onChangeText={(value) => set("publishYear", value.replace(/[^0-9]/g, "").slice(0, 4))}
+            keyboardType="numeric"
+            placeholder={te("article.publishYearPlaceholder")}
+          />
           <FormField
             label={te("article.url")}
             value={form.url}

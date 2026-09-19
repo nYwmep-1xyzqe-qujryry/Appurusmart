@@ -9,8 +9,9 @@ import useLrdSession from "../../hook/useLrdSession";
 import { sanitizeAcademicText } from "../../utils/inputSanitize";
 import { useEResearchText } from "./i18n";
 
-export default function ProjectList({ navigation }) {
+export default function ProjectList({ navigation, route }) {
   const { te } = useEResearchText();
+  const searchMode = route?.params?.mode === "search";
   const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState("");
   const [query, setQuery] = useState("");
@@ -18,7 +19,8 @@ export default function ProjectList({ navigation }) {
   const perPage = 20;
   const { researcherId, loading: sessionLoading } = useLrdSession();
   const { items, total, loading, error, remove, refetch } = useLrdResource(LRD_ENDPOINTS.projects, {
-    params: { scope: "all", page, per_page: perPage, ...(query ? { q: query } : {}) },
+    // โหมดจัดการเป็นของฉัน ส่วนโหมดสืบค้นเป็นผลงานของผู้ใช้อื่น
+    params: { scope: searchMode ? "others" : "mine", page, per_page: perPage, ...(query ? { q: query } : {}) },
     skip: sessionLoading,
   });
   const { confirm, ConfirmDialog } = useConfirm();
@@ -59,7 +61,7 @@ export default function ProjectList({ navigation }) {
 
   return (
     <View className="flex-1 bg-[#f0f4f2]">
-      <AppHeader title={te("project.title")} onBack={() => navigation.goBack()} />
+      <AppHeader title={te(searchMode ? "project.searchTitle" : "project.title")} onBack={() => navigation.goBack()} />
       <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 14, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <View className="bg-white rounded-2xl p-3 mb-4 flex-row items-center" style={{ elevation: 1 }}>
           <Ionicons name="search-outline" size={19} color="#5F7069" />
@@ -77,6 +79,14 @@ export default function ProjectList({ navigation }) {
             <Text className="text-white text-[14px] font-bold">{te("common.search")}</Text>
           </TouchableOpacity>
         </View>
+        {searchMode && !loading && !error && (
+          <View className="bg-[#FFF8E6] rounded-xl px-4 py-3 mb-4 flex-row items-center">
+            <Ionicons name="library-outline" size={19} color="#8A6412" />
+            <Text className="text-[14px] font-bold text-[#6F5312] ml-2">
+              {te("project.searchTotal", { total })}
+            </Text>
+          </View>
+        )}
         <View className="bg-white border border-[#eef1f4] rounded-2xl overflow-hidden mb-4" style={{ elevation: 1 }}>
           <View className="flex-row items-center bg-[#07865F] px-[14px] py-[11px]">
             <Text className="text-white text-[14px] font-extrabold flex-1">{te("common.order")}</Text>
@@ -107,7 +117,7 @@ export default function ProjectList({ navigation }) {
             </View>
           ) : (
             items.map((item, index) => {
-              const canManage = isOwnedByCurrentUser(item);
+              const canManage = !searchMode && isOwnedByCurrentUser(item);
               return (
               <View key={item.id} className="flex-row items-center px-[14px] py-3 border-t border-[#eef1f4]">
                 <Text className="text-[14px] font-bold text-[#1f2a2e] flex-1">{(page - 1) * perPage + index + 1}</Text>
@@ -199,15 +209,17 @@ export default function ProjectList({ navigation }) {
           </View>
         )}
 
-        <TouchableOpacity
-          className="flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-[13px]"
-          style={{ elevation: 2 }}
-          onPress={() => navigation.navigate("ProjectForm")}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add-circle-outline" size={19} color="#fff" />
-          <Text className="text-white text-[15px] font-black">{te("common.add")}</Text>
-        </TouchableOpacity>
+        {!searchMode && (
+          <TouchableOpacity
+            className="flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-[13px]"
+            style={{ elevation: 2 }}
+            onPress={() => navigation.navigate("ProjectForm")}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add-circle-outline" size={19} color="#fff" />
+            <Text className="text-white text-[15px] font-black">{te("common.add")}</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
       <ConfirmDialog />
     </View>

@@ -262,8 +262,10 @@ export default function AppNavigator() {
       <RootStack.Screen name="EResearch" component={EResearch} />
       <RootStack.Screen name="ResearcherForm" component={ResearcherForm} />
       <RootStack.Screen name="ProjectList" component={ProjectList} />
+      <RootStack.Screen name="ProjectSearch" component={ProjectList} />
       <RootStack.Screen name="ProjectForm" component={ProjectForm} />
       <RootStack.Screen name="ArticleList" component={ArticleList} />
+      <RootStack.Screen name="ArticleSearch" component={ArticleList} />
       <RootStack.Screen name="ArticleForm" component={ArticleForm} />
       <RootStack.Screen name="ProfilePrint" component={ProfilePrint} />
       <RootStack.Screen

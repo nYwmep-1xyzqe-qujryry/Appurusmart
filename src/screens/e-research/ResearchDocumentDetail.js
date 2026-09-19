@@ -57,7 +57,7 @@ const paperRows = (item, te) => [
 ];
 
 const resolveDocumentUrl = (item) => {
-  const raw = item.url || item.file;
+  const raw = item.pdf_url || item.pdfUrl || item.document_url || item.url || item.file;
   if (!raw) return null;
   if (/^https?:\/\//i.test(raw)) return raw;
   return `${LRD_API_BASE_URL.replace(/\/$/, "")}/${String(raw).replace(/^\//, "")}`;

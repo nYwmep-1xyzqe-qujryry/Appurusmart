@@ -183,8 +183,10 @@ export default function EResearch({ navigation }) {
   const [profileLoading, setProfileLoading] = useState(false);
   const { items: education, loading: educationLoading, refetch: refetchEducation } = useLrdResource(LRD_ENDPOINTS.educations, { skip: !canLoadLrd, loadOnFocus: false });
   const { items: expertise, loading: expertiseLoading, refetch: refetchExpertise } = useLrdResource(LRD_ENDPOINTS.expertises, { skip: !canLoadLrd, loadOnFocus: false });
-  const { total: projectsTotal, loading: projectsLoading, refetch: refetchProjects } = useLrdResource(LRD_ENDPOINTS.projects, { params: { scope: "all" }, skip: !canLoadLrd, loadOnFocus: false });
-  const { total: articlesTotal, loading: articlesLoading, refetch: refetchArticles } = useLrdResource(LRD_ENDPOINTS.papers, { params: { scope: "all" }, skip: !canLoadLrd, loadOnFocus: false });
+  const { total: projectsTotal, loading: projectsLoading, refetch: refetchProjects } = useLrdResource(LRD_ENDPOINTS.projects, { params: { scope: "mine" }, skip: !canLoadLrd, loadOnFocus: false });
+  const { total: articlesTotal, loading: articlesLoading, refetch: refetchArticles } = useLrdResource(LRD_ENDPOINTS.papers, { params: { scope: "mine" }, skip: !canLoadLrd, loadOnFocus: false });
+  const { total: otherProjectsTotal, loading: otherProjectsLoading, error: otherProjectsError, refetch: refetchOtherProjects } = useLrdResource(LRD_ENDPOINTS.projects, { params: { scope: "others" }, skip: !canLoadLrd, loadOnFocus: false });
+  const { total: otherArticlesTotal, loading: otherArticlesLoading, error: otherArticlesError, refetch: refetchOtherArticles } = useLrdResource(LRD_ENDPOINTS.papers, { params: { scope: "others" }, skip: !canLoadLrd, loadOnFocus: false });
 
   const refetchProfile = useCallback(async () => {
     if (!canLoadLrd) return;
@@ -218,6 +220,8 @@ export default function EResearch({ navigation }) {
       refetchExpertise(),
       refetchProjects(),
       refetchArticles(),
+      refetchOtherProjects(),
+      refetchOtherArticles(),
     ]).catch(() => {});
   }, [
     canLoadLrd,
@@ -227,6 +231,8 @@ export default function EResearch({ navigation }) {
     refetchExpertise,
     refetchProjects,
     refetchArticles,
+    refetchOtherProjects,
+    refetchOtherArticles,
   ]);
 
   const loading = sessionLoading || (canLoadLrd && (profileLoading || educationLoading || expertiseLoading));
@@ -337,6 +343,9 @@ export default function EResearch({ navigation }) {
             <MenuCard icon="folder-open-outline" color="#185fa5" background="#e8f0fb" title={te("home.projectsTitle")} description={te("home.projectsDescription")} count={projectsLoading ? undefined : projectsTotal} onPress={() => navigation.navigate("ProjectList")} />
             <MenuCard icon="document-text-outline" color="#b56a18" background="#fff3df" title={te("home.articlesTitle")} description={te("home.articlesDescription")} count={articlesLoading ? undefined : articlesTotal} onPress={() => navigation.navigate("ArticleList")} />
             <MenuCard icon="print-outline" color="#6b3fa0" background="#f1e9fa" title={te("home.printTitle")} description={te("home.printDescription")} onPress={() => navigation.navigate("ProfilePrint")} />
+            <Text className="text-[13px] font-extrabold text-[#5F7069] uppercase mt-2 mb-3">{te("home.searchData")}</Text>
+            <MenuCard icon="search-outline" color="#0F7A55" background="#E7F4ED" title={te("home.searchProjectsTitle")} description={te("home.searchProjectsDescription")} count={otherProjectsLoading || otherProjectsError ? undefined : otherProjectsTotal} onPress={() => navigation.navigate("ProjectSearch", { mode: "search" })} />
+            <MenuCard icon="search-outline" color="#68458C" background="#F3EEFA" title={te("home.searchArticlesTitle")} description={te("home.searchArticlesDescription")} count={otherArticlesLoading || otherArticlesError ? undefined : otherArticlesTotal} onPress={() => navigation.navigate("ArticleSearch", { mode: "search" })} />
           </>
         ) : null}
       </ScrollView>

@@ -9,7 +9,7 @@ import KeyboardAwareScrollView from "../../components/expert/KeyboardAwareScroll
 import useLrdResource from "../../hook/useLrdResource";
 import { LRD_ENDPOINTS } from "../../services/lrdApi";
 import useLrdSession from "../../hook/useLrdSession";
-import { FUNDING_SOURCE_OPTIONS, RESEARCH_FIELD_OPTIONS, buildYearOptions } from "./mockOptions";
+import { FUNDING_SOURCE_OPTIONS, RESEARCH_FIELD_OPTIONS } from "./mockOptions";
 import { useEResearchText, withPlaceholder } from "./i18n";
 
 const emptyForm = {
@@ -56,7 +56,6 @@ export default function ProjectForm({ navigation, route }) {
         }
       : emptyForm,
   );
-  const yearOptions = buildYearOptions(te("project.yearPlaceholder"));
   const researchFieldOptions = withPlaceholder(RESEARCH_FIELD_OPTIONS, te("project.fieldPlaceholder"));
   const fundingSourceOptions = withPlaceholder(FUNDING_SOURCE_OPTIONS, te("project.fundingPlaceholder"));
 
@@ -118,7 +117,14 @@ export default function ProjectForm({ navigation, route }) {
             </Text>
           </View>
 
-          <InlineDropdown label={te("project.year")} value={form.year} options={yearOptions} onSelect={(v) => set("year", v)} required searchable />
+          <FormField
+            label={te("project.year")}
+            value={form.year}
+            onChangeText={(value) => set("year", value.replace(/[^0-9]/g, "").slice(0, 4))}
+            keyboardType="numeric"
+            placeholder={te("project.yearPlaceholder")}
+            required
+          />
           <InlineDropdown label={te("project.field")} value={form.field} options={researchFieldOptions} onSelect={(v) => set("field", v)} required searchable />
           <InlineDropdown label={te("project.funding")} value={form.fundingSource} options={fundingSourceOptions} onSelect={(v) => set("fundingSource", v)} required searchable compact />
           <FormField label={te("project.titleTh")} value={form.titleTh} onChangeText={(v) => set("titleTh", v)} required />

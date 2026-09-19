@@ -29,14 +29,41 @@ import {
 } from "./mockOptions";
 import { useEResearchText } from "./i18n";
 
-const SectionHeader = ({ icon, title }) => (
-  <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
-    <Ionicons name={icon} size={16} color="#174D42" />
-    <Text className="text-[14px] font-extrabold text-[#174D42]">{title}</Text>
-  </View>
-);
+const FORM_COLORS = {
+  ink: "#1F302A",
+  body: "#33483F",
+  muted: "#5F7069",
+  primary: "#0F7A55",
+  primaryDark: "#174D42",
+  sectionBg: "#F1F7F4",
+  border: "#DCE8E3",
+  divider: "#E5ECE9",
+  editingBg: "#FFF8E6",
+  gold: "#8A6412",
+  goldBg: "#FFF3D2",
+  lavenderBg: "#F3EEFA",
+  lavenderText: "#68458C",
+  peachBg: "#FFF0E8",
+  peachText: "#A8542A",
+};
 
-const Divider = () => <View className="h-px bg-[#eef1f4]" />;
+const SECTION_TONES = {
+  mint: { backgroundColor: FORM_COLORS.sectionBg, color: FORM_COLORS.primaryDark },
+  lavender: { backgroundColor: FORM_COLORS.lavenderBg, color: FORM_COLORS.lavenderText },
+  peach: { backgroundColor: FORM_COLORS.peachBg, color: FORM_COLORS.peachText },
+};
+
+const SectionHeader = ({ icon, title, tone = "mint" }) => {
+  const colors = SECTION_TONES[tone] ?? SECTION_TONES.mint;
+  return (
+    <View className="flex-row items-center gap-2 border-b px-[14px] py-[11px]" style={{ backgroundColor: colors.backgroundColor, borderBottomColor: FORM_COLORS.divider }}>
+      <Ionicons name={icon} size={16} color={colors.color} />
+      <Text className="text-[14px] font-extrabold" style={{ color: colors.color }}>{title}</Text>
+    </View>
+  );
+};
+
+const Divider = () => <View className="h-px" style={{ backgroundColor: FORM_COLORS.divider }} />;
 
 // ── ข้อมูลส่วนตัว ─────────────────────────────────────────────
 const EMPTY_PROFILE = {
@@ -149,18 +176,18 @@ const PersonalInfoCard = () => {
 
   if (loading) {
     return (
-      <View className="bg-white border border-[#eef1f4] rounded-2xl items-center justify-center py-9 mb-4" style={{ elevation: 1 }}>
-        <ActivityIndicator size="small" color="#07865F" />
+      <View className="bg-white rounded-2xl items-center justify-center py-9 mb-4" style={{ elevation: 1, borderWidth: 1, borderColor: FORM_COLORS.border }}>
+        <ActivityIndicator size="small" color={FORM_COLORS.primary} />
       </View>
     );
   }
 
   return (
-    <View className="bg-white border border-[#eef1f4] rounded-2xl overflow-hidden mb-4" style={{ elevation: 1 }}>
+    <View className="bg-white rounded-2xl overflow-hidden mb-4" style={{ elevation: 1, borderWidth: 1, borderColor: FORM_COLORS.border }}>
       <SectionHeader icon="person-outline" title={te("researcher.title")} />
 
       <View className="p-[14px]">
-        <Text className="text-[13px] text-[#888] font-medium mb-[8px]">{te("researcher.workGroup")}</Text>
+        <Text className="text-[13px] font-medium mb-[8px]" style={{ color: FORM_COLORS.muted }}>{te("researcher.workGroup")}</Text>
         <View className="flex-row gap-6">
           {WORK_GROUP_OPTIONS.map((opt) => (
             <TouchableOpacity
@@ -172,9 +199,9 @@ const PersonalInfoCard = () => {
               <Ionicons
                 name={form.workGroup === opt.id ? "radio-button-on" : "radio-button-off"}
                 size={19}
-                color={form.workGroup === opt.id ? "#07865F" : "#c4d4cc"}
+                color={form.workGroup === opt.id ? FORM_COLORS.primary : "#8CA49A"}
               />
-              <Text className="text-[14px] text-[#1f2a2e]">{opt.label}</Text>
+              <Text className="text-[14px]" style={{ color: FORM_COLORS.ink }}>{opt.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -215,8 +242,8 @@ const PersonalInfoCard = () => {
 
       <View className="px-[14px] pt-2 pb-[14px]">
         <TouchableOpacity
-          className="flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-[13px]"
-          style={{ elevation: 2, opacity: saving ? 0.65 : 1 }}
+          className="flex-row items-center justify-center gap-2 rounded-xl py-[13px]"
+          style={{ backgroundColor: FORM_COLORS.primary, elevation: 2, opacity: saving ? 0.65 : 1 }}
           onPress={handleSave}
           activeOpacity={0.85}
           disabled={saving}
@@ -283,17 +310,17 @@ const EducationSection = () => {
   };
 
   return (
-    <View className="bg-white border border-[#eef1f4] rounded-2xl overflow-hidden mb-4" style={{ elevation: 1 }}>
-      <SectionHeader icon="school-outline" title={te("researcher.educationTitle")} />
+    <View className="bg-white rounded-2xl overflow-hidden mb-4" style={{ elevation: 1, borderWidth: 1, borderColor: FORM_COLORS.border }}>
+      <SectionHeader icon="school-outline" title={te("researcher.educationTitle")} tone="lavender" />
       {loading ? (
         <View className="flex-row items-center justify-center py-7 gap-[10px]">
-          <ActivityIndicator size="small" color="#07865F" />
-          <Text className="text-[14px] text-[#5F7069]">{te("common.loading")}</Text>
+          <ActivityIndicator size="small" color={FORM_COLORS.primary} />
+          <Text className="text-[14px]" style={{ color: FORM_COLORS.muted }}>{te("common.loading")}</Text>
         </View>
       ) : items.length === 0 ? (
         <View className="items-center py-7">
-          <Ionicons name="folder-open-outline" size={36} color="#5F7069" />
-          <Text className="text-[14px] font-bold text-[#1f2a2e] mt-2">{te("researcher.educationEmpty")}</Text>
+          <Ionicons name="folder-open-outline" size={36} color={FORM_COLORS.muted} />
+          <Text className="text-[14px] font-bold mt-2" style={{ color: FORM_COLORS.ink }}>{te("researcher.educationEmpty")}</Text>
         </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -304,15 +331,15 @@ const EducationSection = () => {
               ))}
             </View>
             {items.map((item) => (
-              <View key={item.id} className="flex-row items-center px-3 py-3 border-b border-[#eef1f4]" style={editingItem?.id === item.id ? { backgroundColor: "#dff4ec" } : {}}>
+              <View key={item.id} className="flex-row items-center px-3 py-3 border-b border-[#eef1f4]" style={editingItem?.id === item.id ? { backgroundColor: FORM_COLORS.editingBg } : {}}>
                 <Text className="text-[13px] text-[#33483f] px-1" style={{ width: 130 }} numberOfLines={2}>{getLabel(DEGREE_OPTIONS, item.degree) || "-"}</Text>
                 <Text className="text-[14px] font-semibold text-[#1f2a2e] px-3" style={{ width: 210, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>
                   {[item.qualification, item.major ?? item.course].filter(Boolean).join(" · ") || "-"}
                 </Text>
                 <Text className="text-[13px] text-[#33483f] px-3" style={{ width: 180, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{item.university || "-"}</Text>
                 <View className="px-1" style={{ width: 70 }}>
-                  <View className="self-start bg-[#e6f4ef] rounded-full px-[8px] py-[3px]">
-                    <Text className="text-[#174D42] text-[12px] font-extrabold">{item.year || "-"}</Text>
+                  <View className="self-start rounded-full px-[8px] py-[3px]" style={{ backgroundColor: FORM_COLORS.goldBg }}>
+                    <Text className="text-[12px] font-extrabold" style={{ color: FORM_COLORS.gold }}>{item.year || "-"}</Text>
                   </View>
                 </View>
                 <View className="flex-row gap-[6px] justify-center" style={{ width: 84 }}>
@@ -422,17 +449,17 @@ const ExpertiseSection = ({ scrollRef }) => {
   };
 
   return (
-    <View className="bg-white border border-[#eef1f4] rounded-2xl overflow-hidden mb-4" style={{ elevation: 1 }}>
-      <SectionHeader icon="flask-outline" title={te("researcher.expertiseTitle")} />
+    <View className="bg-white rounded-2xl overflow-hidden mb-4" style={{ elevation: 1, borderWidth: 1, borderColor: FORM_COLORS.border }}>
+      <SectionHeader icon="flask-outline" title={te("researcher.expertiseTitle")} tone="peach" />
       {loading ? (
         <View className="flex-row items-center justify-center py-7 gap-[10px]">
-          <ActivityIndicator size="small" color="#07865F" />
-          <Text className="text-[14px] text-[#5F7069]">{te("common.loading")}</Text>
+          <ActivityIndicator size="small" color={FORM_COLORS.primary} />
+          <Text className="text-[14px]" style={{ color: FORM_COLORS.muted }}>{te("common.loading")}</Text>
         </View>
       ) : items.length === 0 ? (
         <View className="items-center py-7">
-          <Ionicons name="folder-open-outline" size={36} color="#5F7069" />
-          <Text className="text-[14px] font-bold text-[#1f2a2e] mt-2">{te("researcher.expertiseEmpty")}</Text>
+          <Ionicons name="folder-open-outline" size={36} color={FORM_COLORS.muted} />
+          <Text className="text-[14px] font-bold mt-2" style={{ color: FORM_COLORS.ink }}>{te("researcher.expertiseEmpty")}</Text>
         </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -443,7 +470,7 @@ const ExpertiseSection = ({ scrollRef }) => {
               ))}
             </View>
             {items.map((item) => (
-              <View key={item.id} className="flex-row items-center px-3 py-3 border-b border-[#eef1f4]" style={editingItem?.id === item.id ? { backgroundColor: "#dff4ec" } : {}}>
+              <View key={item.id} className="flex-row items-center px-3 py-3 border-b border-[#eef1f4]" style={editingItem?.id === item.id ? { backgroundColor: FORM_COLORS.editingBg } : {}}>
                 <Text className="text-[14px] font-semibold text-[#1f2a2e] px-1" style={{ width: 160 }} numberOfLines={2}>{item.nameTh || "-"}</Text>
                 <Text className="text-[13px] text-[#33483f] px-3" style={{ width: 160, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{item.nameEn || "-"}</Text>
                 <Text className="text-[13px] text-[#33483f] px-3" style={{ width: 170, borderLeftWidth: 1, borderLeftColor: "#eef1f4" }} numberOfLines={2}>{getLabel(EXPERTISE_GROUP_OPTIONS, String(item.group ?? "")) || "-"}</Text>
@@ -471,7 +498,7 @@ const ExpertiseSection = ({ scrollRef }) => {
       <FormField label={te("researcher.nameTh")} value={form.nameTh} onChangeText={(v) => setField("nameTh", v)} required />
       <FormField label={te("researcher.nameEn")} value={form.nameEn} onChangeText={(v) => setField("nameEn", v)} />
       <View className="flex-row gap-[10px] px-[14px] pt-2 pb-[14px]">
-        <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-3" style={{ opacity: saving ? 0.6 : 1 }} onPress={handleSave} disabled={saving}>
+        <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-2 rounded-xl py-3" style={{ backgroundColor: FORM_COLORS.primary, opacity: saving ? 0.6 : 1 }} onPress={handleSave} disabled={saving}>
           {saving ? <ActivityIndicator size="small" color="#fff" /> : (
             <>
               <Ionicons name={editingItem ? "checkmark-circle" : "add-circle"} size={17} color="#fff" />
@@ -494,7 +521,7 @@ export default function ResearcherForm({ navigation }) {
   const { te } = useEResearchText();
   const scrollRef = useRef(null);
   return (
-    <FormContainer className="flex-1 bg-[#f5f7f8]">
+    <FormContainer className="flex-1 bg-[#FBF8F2]">
       <AppHeader title={te("researcher.title")} onBack={() => navigation.goBack()} />
       <KeyboardAwareScrollView
         ref={scrollRef}
