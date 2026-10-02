@@ -755,18 +755,6 @@ if (Platform.OS !== "web" && !isExpoGo) {
         shouldSetBadge: true,
       }),
     });
-
-    // Channels must exist before any push arrives. Creating them only during
-    // push registration ties them to a signed-in session, so a notification
-    // delivered before the first successful registration targets a channel
-    // Android does not know — and Android drops it silently, with the in-app
-    // inbox still showing the row. Creating them at startup is safe and
-    // idempotent: it needs no permission and no session.
-    void configureAndroidNotificationChannels(Notifications).catch((error) => {
-      if (__DEV__) {
-        console.warn("[Notifications] channel setup skipped:", error?.message);
-      }
-    });
   } catch (error) {
     if (__DEV__) {
       console.warn("[Notifications] handler setup skipped:", error?.message);
