@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from "react-native";
+import React, { useRef, useState } from "react";
+import { ActivityIndicator, Alert, Keyboard, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AppHeader from "../../components/AppHeader";
 import FormContainer from "../../components/expert/FormContainer";
@@ -37,6 +37,14 @@ export default function ProjectForm({ navigation, route }) {
     loadOnFocus: false,
     refetchAfterMutation: false,
   });
+  const titleThRef = useRef(null);
+  const titleEnRef = useRef(null);
+  const keywordsRef = useRef(null);
+  const objectiveRef = useRef(null);
+  const abstractRef = useRef(null);
+  const contributorsRef = useRef(null);
+  const localExpertsRef = useRef(null);
+  const budgetRef = useRef(null);
   const [form, setForm] = useState(
     editingItem
       ? {
@@ -91,7 +99,10 @@ export default function ProjectForm({ navigation, route }) {
         local_expert: form.localExperts.trim() || null,
         budget: form.budget === "" ? null : Number(form.budget),
       };
-      editingItem ? await update(editingItem.id, payload) : await create(payload);
+      const mutationResult = editingItem
+        ? await update(editingItem.id, payload)
+        : await create(payload);
+      if (mutationResult === null) return;
       Alert.alert(editingItem ? te("common.editSuccess") : te("common.saveSuccess"), te("project.saveMessage"), [
         { text: te("common.ok"), onPress: () => navigation.goBack() },
       ]);
@@ -108,6 +119,7 @@ export default function ProjectForm({ navigation, route }) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        scrollOnFocus
       >
         <View className="bg-white border border-[#eef1f4] rounded-2xl overflow-hidden mb-4" style={{ elevation: 1 }}>
           <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
@@ -124,17 +136,20 @@ export default function ProjectForm({ navigation, route }) {
             keyboardType="numeric"
             placeholder={te("project.yearPlaceholder")}
             required
+            returnKeyType="done"
+            onSubmitEditing={() => Keyboard.dismiss()}
+            blurOnSubmit
           />
           <InlineDropdown label={te("project.field")} value={form.field} options={researchFieldOptions} onSelect={(v) => set("field", v)} required searchable />
           <InlineDropdown label={te("project.funding")} value={form.fundingSource} options={fundingSourceOptions} onSelect={(v) => set("fundingSource", v)} required searchable compact />
-          <FormField label={te("project.titleTh")} value={form.titleTh} onChangeText={(v) => set("titleTh", v)} required />
-          <FormField label={te("project.titleEn")} value={form.titleEn} onChangeText={(v) => set("titleEn", v)} />
-          <FormField label={te("project.keywords")} value={form.keywords} onChangeText={(v) => set("keywords", v)} placeholder={te("project.keywordsPlaceholder")} required />
-          <FormField label={te("project.objective")} value={form.objective} onChangeText={(v) => set("objective", v)} multiline />
-          <FormField label={te("project.abstract")} value={form.abstract} onChangeText={(v) => set("abstract", v)} multiline />
-          <FormField label={te("project.contributors")} value={form.contributors} onChangeText={(v) => set("contributors", v)} />
-          <FormField label={te("project.localExperts")} value={form.localExperts} onChangeText={(v) => set("localExperts", v)} />
-          <FormField label={te("project.budget")} value={form.budget} onChangeText={(v) => set("budget", v.replace(/[^0-9.]/g, ""))} keyboardType="numeric" placeholder={te("project.budgetPlaceholder")} />
+          <FormField ref={titleThRef} label={te("project.titleTh")} value={form.titleTh} onChangeText={(v) => set("titleTh", v)} required onSubmitEditing={() => titleEnRef.current?.focus()} />
+          <FormField ref={titleEnRef} label={te("project.titleEn")} value={form.titleEn} onChangeText={(v) => set("titleEn", v)} onSubmitEditing={() => keywordsRef.current?.focus()} />
+          <FormField ref={keywordsRef} label={te("project.keywords")} value={form.keywords} onChangeText={(v) => set("keywords", v)} placeholder={te("project.keywordsPlaceholder")} required onSubmitEditing={() => objectiveRef.current?.focus()} />
+          <FormField ref={objectiveRef} label={te("project.objective")} value={form.objective} onChangeText={(v) => set("objective", v)} multiline returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => abstractRef.current?.focus()} />
+          <FormField ref={abstractRef} label={te("project.abstract")} value={form.abstract} onChangeText={(v) => set("abstract", v)} multiline returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => contributorsRef.current?.focus()} />
+          <FormField ref={contributorsRef} label={te("project.contributors")} value={form.contributors} onChangeText={(v) => set("contributors", v)} onSubmitEditing={() => localExpertsRef.current?.focus()} />
+          <FormField ref={localExpertsRef} label={te("project.localExperts")} value={form.localExperts} onChangeText={(v) => set("localExperts", v)} onSubmitEditing={() => budgetRef.current?.focus()} />
+          <FormField ref={budgetRef} label={te("project.budget")} value={form.budget} onChangeText={(v) => set("budget", v.replace(/[^0-9.]/g, ""))} keyboardType="numeric" placeholder={te("project.budgetPlaceholder")} returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()} blurOnSubmit />
 
           <View className="flex-row gap-[10px] px-4 pt-2 pb-[18px]">
             <TouchableOpacity

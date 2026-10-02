@@ -65,6 +65,7 @@ module.exports = {
       "./plugins/withNotificationLargeIcon",
       "expo-local-authentication",
       "expo-secure-store",
+      "expo-font",
       [
         "expo-image-picker",
         {

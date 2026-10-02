@@ -7,9 +7,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -19,13 +19,17 @@ import AppHeader from "../../components/AppHeader";
 import StateView from "../../components/StateView";
 import { ANNOUNCE_PALETTES } from "../../constants/announcePalettes";
 import api from "../../services/api";
-import { colors, hitSlop, radius, shadows, typography } from "../../theme/tokens";
+import { colors, hitSlop, radius, typography } from "../../theme/tokens";
 import {
   getAnnouncementRecord,
+  getAnnouncementDetailPreviewSize,
   normalizeAnnouncement,
-  normalizeAnnouncements,
 } from "../../utils/announcement";
 import { normalizeOptionalUrl } from "../../utils/url";
+
+// Wider than this and the preview gets too short to read; narrower and the
+// side crop starts cutting into banner content.
+const DETAIL_FRAME_ASPECT_RATIO = 2.6;
 
 const getErrorKind = (error) => {
   const status = error?.response?.status;
@@ -74,7 +78,8 @@ const getAnnouncementUrl = (announcement) => {
 
 export default function AnnouncementDetail({ navigation, route }) {
   const { t, i18n } = useTranslation();
-  const { bottom } = useSafeAreaInsets();
+  const { top, bottom } = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const routeAnnouncement = route.params?.announcement ?? null;
   const announcementId = route.params?.announcementId
     ?? routeAnnouncement?.id
@@ -91,6 +96,7 @@ export default function AnnouncementDetail({ navigation, route }) {
   const [refreshError, setRefreshError] = useState(null);
   const [linkError, setLinkError] = useState(null);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [loadedImageSize, setLoadedImageSize] = useState(null);
   const requestId = useRef(0);
 
   const loadAnnouncement = useCallback(async () => {
@@ -110,11 +116,22 @@ export default function AnnouncementDetail({ navigation, route }) {
     setRefreshError(null);
 
     try {
-      // Use the existing list contract until the backend exposes a detail route.
-      // This also keeps Push navigation compatible with older deployments.
-      const response = await api.get("/announcements", { suppressErrorLog: true });
-      const records = normalizeAnnouncements(response.data, t("announce.defaultTitle"));
-      const record = records.find((item) => String(item.id) === String(announcementId));
+      const response = await api.get(
+        `/announcements/${encodeURIComponent(announcementId)}`,
+        { suppressErrorLog: true },
+      );
+      const recordPayload = response.data?.data ?? response.data;
+      const record = getAnnouncementRecord(recordPayload);
+      if (__DEV__) {
+        // Shape and identifiers only — the full record and the image URL can
+        // carry personal data or a signed URL, so neither is logged.
+        console.log("[announcements:detail] response", {
+          status: response.status,
+          announcementId,
+          hasRecord: Boolean(record),
+          hasImage: Boolean(record?.image_url || record?.thumbnail_url),
+        });
+      }
       if (isUnavailableAnnouncement(record)) {
         const emptyResponseError = new Error("Announcement detail is empty");
         emptyResponseError.response = { status: 404 };
@@ -165,9 +182,34 @@ export default function AnnouncementDetail({ navigation, route }) {
     : 0;
   const palette = announcement ? ANNOUNCE_PALETTES[paletteIndex] : ANNOUNCE_PALETTES[0];
   const imageUri = announcement?.imageUrl || announcement?.thumbnailUrl || null;
-  const imageRatio = announcement?.imageWidth && announcement?.imageHeight
-    ? Math.min(3.2, Math.max(0.35, announcement.imageWidth / announcement.imageHeight))
-    : 16 / 9;
+  useEffect(() => {
+    setLoadedImageSize(
+      announcement?.imageWidth && announcement?.imageHeight
+        ? { width: announcement.imageWidth, height: announcement.imageHeight }
+        : null,
+    );
+  }, [announcement?.id, announcement?.imageUrl, announcement?.thumbnailUrl, announcement?.imageWidth, announcement?.imageHeight]);
+  const imagePreview = getAnnouncementDetailPreviewSize({
+    windowWidth, windowHeight, topInset: top, bottomInset: bottom, headerHeight: 56,
+  });
+  // Banners here run ~3.2:1, which at full screen width leaves the preview
+  // only ~14% of the screen tall. The frame is held at a squarer ratio so
+  // the image reads larger, and cover trims the sides to fill it — a
+  // deliberate trade of ~19% of the banner's width for the extra height.
+  // Images taller than this ratio already fill the frame, so they keep
+  // their own ratio and are not stretched.
+  const imageAspectRatio = loadedImageSize?.width && loadedImageSize?.height
+    ? loadedImageSize.width / loadedImageSize.height
+    : null;
+  const frameAspectRatio = imageAspectRatio == null
+    ? DETAIL_FRAME_ASPECT_RATIO
+    : Math.min(imageAspectRatio, DETAIL_FRAME_ASPECT_RATIO);
+  // A frame at its natural ratio would overrun the screen for portrait
+  // images, so those stay bounded by the capped pixel height instead.
+  const frameHeight = windowWidth / frameAspectRatio;
+  const previewFrameStyle = frameHeight <= imagePreview.height
+    ? { width: "100%", aspectRatio: frameAspectRatio }
+    : { width: "100%", height: imagePreview.height };
   const sourceUrl = getAnnouncementUrl(announcement);
   const normalizedUrl = normalizeOptionalUrl(sourceUrl);
   const dateValue = announcement?.published_at
@@ -273,96 +315,106 @@ export default function AnnouncementDetail({ navigation, route }) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 16, paddingBottom: Math.max(bottom, 24) + 16 }}
+        contentContainerStyle={{ paddingTop: 0, paddingBottom: Math.max(bottom, 24) + 16 }}
       >
         {!!refreshError && (
-          <View style={styles.warning}>
+          <View style={[styles.warning, { marginHorizontal: 12 }]}>
             <Ionicons name="information-circle-outline" size={18} color={colors.brandYellowDark} />
             <Text style={styles.warningText}>{refreshError}</Text>
           </View>
         )}
 
-        <View style={[styles.content, shadows.card]}>
+        <View style={styles.content}>
           {imageUri ? (
             <TouchableOpacity
               onPress={() => setImageViewerVisible(true)}
               activeOpacity={0.92}
               accessibilityRole="button"
-              accessibilityLabel={announcement.imageAlt || title}
-              style={{ width: "100%", aspectRatio: imageRatio }}
+              accessibilityLabel={t("announce.openFullImage")}
+              accessibilityHint={announcement.imageAlt || title}
+              style={previewFrameStyle}
             >
               <AnnouncementImage
                 uri={imageUri}
+                fallbackUri={announcement.thumbnailUrl !== imageUri ? announcement.thumbnailUrl : null}
                 alt={announcement.imageAlt}
-                resizeMode="contain"
+                fallbackIcon={announcement.icon || palette.icon}
+                fallbackLabel={tag}
+                fallbackColor={colors.primary}
+                fallbackBackground={colors.primaryMuted}
+                resizeMode="cover"
+                placeholderUri={announcement.thumbnailUrl}
                 cacheKey={announcement.imageCacheKey}
-                style={{ width: "100%", height: "100%", borderRadius: radius.lg }}
+                cachePolicy="default"
+                onImageSize={({ width, height }) => setLoadedImageSize((current) => (
+                  current?.width === width && current?.height === height ? current : { width, height }
+                ))}
+                style={{ width: "100%", height: "100%", backgroundColor: colors.primaryMuted }}
               />
+              <View pointerEvents="none" style={styles.expandBadge}>
+                <Ionicons name="expand-outline" size={18} color="#fff" />
+              </View>
             </TouchableOpacity>
           ) : (
-            <LinearGradient
-              colors={announcement.colors ?? palette.colors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.categoryIcon}
-            >
-              <Ionicons
-                name={announcement.icon ?? palette.icon}
-                size={34}
-                color="rgba(255,255,255,0.96)"
-              />
-            </LinearGradient>
+            <View style={[styles.noImageCover, { backgroundColor: colors.primaryMuted }]}>
+              <View style={[styles.noImageIcon, { backgroundColor: colors.surface }]}>
+                <Ionicons name={announcement.icon ?? palette.icon} size={28} color={colors.primary} />
+              </View>
+              <Text style={styles.noImageLabel}>{tag}</Text>
+            </View>
           )}
 
-          <View style={styles.metaRow}>
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>{tag}</Text>
+          <View style={styles.detailsBody}>
+            <View style={styles.metaRow}>
+              <View style={styles.tag}>
+                <Text style={styles.tagText}>{tag}</Text>
+              </View>
+              {!!dateText && (
+                <View style={styles.dateRow}>
+                  <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+                  <Text style={styles.dateText}>{dateText}</Text>
+                </View>
+              )}
             </View>
-            {!!dateText && (
-              <View style={styles.dateRow}>
-                <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-                <Text style={styles.dateText}>{dateText}</Text>
+
+            <Text style={styles.title}>{title}</Text>
+            <View style={styles.divider} />
+            {body ? (
+              <Text style={styles.body}>{body}</Text>
+            ) : (
+              <View style={styles.emptyBody}>
+                <Ionicons name="newspaper-outline" size={30} color={colors.textSoft} />
+                <Text style={styles.emptyBodyTitle}>{t("announce.detailEmpty")}</Text>
+                <Text style={styles.emptyBodyText}>{t("announce.detailEmptySub")}</Text>
               </View>
             )}
-          </View>
 
-          <Text style={styles.title}>{title}</Text>
-          <View style={styles.divider} />
-          {body ? (
-            <Text style={styles.body}>{body}</Text>
-          ) : (
-            <View style={styles.emptyBody}>
-              <Ionicons name="newspaper-outline" size={30} color={colors.textSoft} />
-              <Text style={styles.emptyBodyTitle}>{t("announce.detailEmpty")}</Text>
-              <Text style={styles.emptyBodyText}>{t("announce.detailEmptySub")}</Text>
-            </View>
-          )}
+            {!!linkError && <Text style={styles.linkError}>{linkError}</Text>}
 
-          {!!linkError && <Text style={styles.linkError}>{linkError}</Text>}
-
-          <View style={styles.actions}>
-            {sourceUrl !== "" && (
+            <View style={styles.actions}>
+              {sourceUrl !== "" && (
+                <TouchableOpacity
+                  onPress={handleOpenUrl}
+                  activeOpacity={0.85}
+                  style={[styles.primaryAction, { flex: 1 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("announce.readMore")}
+                >
+                  <Ionicons name="open-outline" size={18} color="#fff" />
+                  <Text style={styles.primaryActionText}>{t("announce.readMore")}</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                onPress={handleOpenUrl}
+                onPress={handleShare}
                 activeOpacity={0.85}
-                style={[styles.primaryAction, { flex: 1 }]}
+                style={[styles.secondaryAction, sourceUrl === "" && { flex: 1 }]}
                 accessibilityRole="button"
-                accessibilityLabel={t("announce.readMore")}
+                accessibilityLabel={t("announce.share")}
               >
-                <Ionicons name="open-outline" size={18} color="#fff" />
-                <Text style={styles.primaryActionText}>{t("announce.readMore")}</Text>
+                <Ionicons name="share-social-outline" size={19} color={colors.primary} />
+                <Text style={styles.secondaryActionText}>{t("announce.share")}</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              onPress={handleShare}
-              activeOpacity={0.85}
-              style={[styles.secondaryAction, sourceUrl === "" && { flex: 1 }]}
-              accessibilityRole="button"
-              accessibilityLabel={t("announce.share")}
-            >
-              <Ionicons name="share-social-outline" size={19} color={colors.primary} />
-              <Text style={styles.secondaryActionText}>{t("announce.share")}</Text>
-            </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -370,9 +422,10 @@ export default function AnnouncementDetail({ navigation, route }) {
       <AnnouncementImageViewer
         visible={imageViewerVisible}
         uri={imageUri}
+        fallbackUri={announcement.thumbnailUrl !== imageUri ? announcement.thumbnailUrl : null}
         alt={announcement.imageAlt}
-        imageWidth={announcement.imageWidth}
-        imageHeight={announcement.imageHeight}
+        imageWidth={loadedImageSize?.width ?? announcement.imageWidth}
+        imageHeight={loadedImageSize?.height ?? announcement.imageHeight}
         cacheKey={announcement.imageCacheKey}
         onClose={() => setImageViewerVisible(false)}
       />
@@ -401,20 +454,46 @@ const styles = {
     fontWeight: "600",
   },
   content: {
-    padding: 16,
-    borderRadius: radius.xl,
+    padding: 0,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    overflow: "hidden",
+  },
+  detailsBody: {
+    padding: 16,
     gap: 14,
   },
-  categoryIcon: {
-    width: 76,
-    height: 76,
-    borderRadius: radius.lg,
+  expandBadge: {
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    width: 34,
+    height: 34,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "flex-start",
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  noImageCover: {
+    width: "100%",
+    height: 132,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  noImageIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noImageLabel: {
+    maxWidth: "65%",
+    color: colors.primary,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "700",
   },
   metaRow: {
     flexDirection: "row",

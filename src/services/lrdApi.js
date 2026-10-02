@@ -1,9 +1,11 @@
 import infoApi from "./infoApi";
+import { createLrdRequestId, getSafeLrdErrorDetails } from "../utils/lrdDiagnostics";
 
 const withLrdConfig = (config = {}) => ({
   ...config,
   timeout: config.timeout ?? 30000,
   suppressAuthRedirect: config.suppressAuthRedirect ?? true,
+  lrdRequestId: config.lrdRequestId ?? createLrdRequestId(),
 });
 
 export const LRD_ENDPOINTS = {
@@ -18,6 +20,10 @@ export const LRD_ENDPOINTS = {
   educations: "/info/lrd/researcher/me/educations",
   expertises: "/info/lrd/researcher/me/expertises",
 };
+
+// The search screens show every record visible to the authenticated user,
+// while the management screens continue to use `scope=mine`.
+export const LRD_VISIBLE_SCOPE = "all";
 
 export const getLrd = (path, config) => infoApi.get(path, withLrdConfig(config));
 export const postLrd = (path, data, config = {}) =>
@@ -34,7 +40,5 @@ export const deleteLrd = (path, config) => postLrd(path, { _method: "DELETE" }, 
 export const registerLrdResearcher = (config) => postLrd(LRD_ENDPOINTS.register, { x: 1 }, config);
 
 export const getLrdErrorMessage = (error, fallback = "เชื่อมต่อ LRD ไม่สำเร็จ") => {
-  const data = error?.response?.data;
-  const validationMessage = data?.errors && Object.values(data.errors).flat()[0];
-  return validationMessage || data?.message || error?.message || fallback;
+  return getSafeLrdErrorDetails(error).message || fallback;
 };

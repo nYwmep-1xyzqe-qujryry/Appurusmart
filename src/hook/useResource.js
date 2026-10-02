@@ -5,6 +5,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import infoApi from "../services/infoApi";
+import { notifyExpertChange } from "../services/expertChanges";
+import { readResourceCache, writeResourceCache } from "../services/resourceCache";
 
 const expertEndpoint = (endpoint) => `/info/expert${endpoint}`;
 
@@ -18,36 +20,66 @@ const useResource = (endpoint, options = {}) => {
   const [removing, setRemoving] = useState(false);
 
   const mounted = useRef(true);
+  const inFlight = useRef(null);
   const createLock = useRef(false);
   const updateLock = useRef(false);
   const removeLock = useRef(false);
+  const paramsKey = JSON.stringify(params);
+  const cacheKey = `expert:${endpoint}:${paramsKey}`;
 
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
 
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async ({ force = false } = {}) => {
     if (skip) return;
-    try {
-      if (mounted.current) { setLoading(true); setError(null); }
-      const res = await infoApi.get(expertEndpoint(endpoint), { params });
-      const result = res.data?.data ?? res.data;
-      const sorted = Array.isArray(result)
-        ? [...result].sort((a, b) => Number(a.id ?? 0) - Number(b.id ?? 0))
-        : [];
-      if (mounted.current) setItems(sorted);
-      if (__DEV__ && sorted.length > 0) console.log(`[useResource] GET ${endpoint} fields:`, Object.keys(sorted[0]));
-      if (__DEV__ && endpoint === "/researches") {
-        console.log("[useResource] GET /researches response sample:", JSON.stringify(sorted[0] ?? null));
+    if (inFlight.current) return inFlight.current;
+
+    const request = (async () => {
+      const cached = await readResourceCache(cacheKey);
+      if (cached && mounted.current) {
+        setItems(cached.data ?? []);
+        setError(null);
+        setLoading(false);
       }
-    } catch (err) {
-      if (__DEV__) console.warn(`[useResource] GET ${endpoint} ล้มเหลว:`, err?.response?.status, err.message);
-      if (mounted.current) setError(err.response?.data?.message ?? err.message ?? "โหลดข้อมูลไม่สำเร็จ");
+      if (!force && cached?.fresh) return cached.data ?? [];
+
+      try {
+        if (!cached && mounted.current) { setLoading(true); setError(null); }
+        const res = await infoApi.get(expertEndpoint(endpoint), { params });
+        const result = res.data?.data ?? res.data;
+        const sorted = Array.isArray(result)
+          ? [...result].sort((a, b) => Number(a.id ?? 0) - Number(b.id ?? 0))
+          : [];
+        await writeResourceCache(cacheKey, sorted);
+        if (mounted.current) {
+          setItems(sorted);
+          setError(null);
+        }
+        if (__DEV__ && sorted.length > 0) console.log(`[useResource] GET ${endpoint} fields:`, Object.keys(sorted[0]));
+        if (__DEV__ && endpoint === "/researches") {
+          console.log("[useResource] GET /researches response sample:", JSON.stringify(sorted[0] ?? null));
+        }
+        return sorted;
+      } catch (err) {
+        if (__DEV__) console.warn(`[useResource] GET ${endpoint} ล้มเหลว:`, err?.response?.status, err.message);
+        if (!cached && mounted.current) setError(err.response?.data?.message ?? err.message ?? "โหลดข้อมูลไม่สำเร็จ");
+        return cached?.data ?? [];
+      } finally {
+        if (mounted.current) setLoading(false);
+      }
+    })();
+
+    inFlight.current = request;
+    try {
+      return await request;
     } finally {
-      if (mounted.current) setLoading(false);
+      if (inFlight.current === request) {
+        inFlight.current = null;
+      }
     }
-  }, [endpoint, JSON.stringify(params), skip]);
+  }, [cacheKey, endpoint, paramsKey, skip]);
 
   useEffect(() => { refetch(); }, [refetch]);
 
@@ -75,7 +107,8 @@ const useResource = (endpoint, options = {}) => {
     setSaving(true);
     try {
       const res = await infoApi.post(expertEndpoint(endpoint), normalizePayload(data));
-      await refetch();
+      notifyExpertChange(endpoint);
+      await refetch({ force: true });
       return res.data?.data ?? res.data;
     } catch (err) {
       if (__DEV__) console.warn(`[useResource] POST ${endpoint} body:`, JSON.stringify(err.response?.data));
@@ -92,7 +125,8 @@ const useResource = (endpoint, options = {}) => {
     setSaving(true);
     try {
       const res = await infoApi.put(`${expertEndpoint(endpoint)}/${id}`, normalizePayload(data));
-      await refetch();
+      notifyExpertChange(endpoint);
+      await refetch({ force: true });
       return res.data?.data ?? res.data;
     } catch (err) {
       if (__DEV__) console.warn(`[useResource] PUT ${endpoint}/${id} body:`, JSON.stringify(err.response?.data));
@@ -109,7 +143,8 @@ const useResource = (endpoint, options = {}) => {
     setRemoving(true);
     try {
       await infoApi.delete(`${expertEndpoint(endpoint)}/${id}`);
-      await refetch();
+      notifyExpertChange(endpoint);
+      await refetch({ force: true });
     } catch (err) {
       throw new Error(extractMessage(err, "ลบไม่สำเร็จ"));
     } finally {

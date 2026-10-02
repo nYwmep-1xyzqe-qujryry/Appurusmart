@@ -5,11 +5,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import infoApi from "../services/infoApi";
+import { readResourceCache, writeResourceCache } from "../services/resourceCache";
 
 const cache = {};
 
 const fetchRef = async (path) => {
   if (cache[path]) return cache[path];
+  const cached = await readResourceCache(`expert:ref:${path}`);
+  if (cached) {
+    cache[path] = Array.isArray(cached.data) ? cached.data : [];
+    if (cached.fresh) return cache[path];
+  }
   const res = await infoApi.get(path);
   const data = res.data?.data ?? res.data ?? [];
   const arr = Array.isArray(data) ? data : [];
@@ -17,6 +23,7 @@ const fetchRef = async (path) => {
     console.warn(`[useRefs] ${path}: items มีไม่มี field 'id' — fields ที่มี:`, Object.keys(arr[0]));
   }
   cache[path] = arr;
+  await writeResourceCache(`expert:ref:${path}`, arr);
   return cache[path];
 };
 

@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { View, ScrollView, StatusBar, Platform, Text, TouchableOpacity } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RefreshControl, View, ScrollView, StatusBar, Platform, Text, TouchableOpacity } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -10,8 +10,10 @@ import AnnouncementCarousel from "../components/AnnouncementCarousel";
 import useCurrentUser from "../hook/useCurrentUser";
 import useFetch from "../hook/useFetch";
 import useExpertStats from "../hook/useExpertStats";
+import useServices from "../hook/useServices";
 import { colors, shadows } from "../theme/tokens";
 import { normalizeAnnouncements } from "../utils/announcement";
+import { settleRefreshTasks } from "../utils/refresh";
 
 const cardShadow = shadows.card;
 
@@ -47,11 +49,22 @@ const Homepage = ({ navigation }) => {
   const { t } = useTranslation();
   const { user, logout } = useCurrentUser(navigation);
   const { stats, loading: statsLoading, refetch: refetchStats } = useExpertStats();
+  const servicesState = useServices();
+  const mounted = useRef(true);
+  const refreshInFlight = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
-      refetchStats();
-    }, [refetchStats])
+      void settleRefreshTasks([
+        () => servicesState.refresh({ force: true }),
+        () => refetchStats({ force: true }),
+      ]);
+    }, [refetchStats, servicesState.refresh])
   );
 
   const STAT_CONFIG = useMemo(() => [
@@ -65,15 +78,35 @@ const Homepage = ({ navigation }) => {
     navigation.navigate(item.route, { item: null });
   };
 
-  const { data: announcements } = useFetch("/announcements", {
+  const { data: announcements, refetch: refetchAnnouncements } = useFetch("/announcements", {
     initialData: [],
     params: { limit: 5 },
+    debugLabel: "announcements:home",
   });
   const announcementItems = useMemo(
     () => normalizeAnnouncements(announcements, t("announce.defaultTitle")),
     [announcements, t],
   );
   const hasAnnouncements = announcementItems.length > 0;
+  const [homeRefreshing, setHomeRefreshing] = useState(false);
+  const [announcementRefreshKey, setAnnouncementRefreshKey] = useState(0);
+
+  const handleHomeRefresh = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    setAnnouncementRefreshKey((current) => current + 1);
+    setHomeRefreshing(true);
+    try {
+      await settleRefreshTasks([
+        () => servicesState.refresh({ force: true }),
+        () => refetchAnnouncements({ force: true }),
+        () => refetchStats({ force: true }),
+      ]);
+    } finally {
+      refreshInFlight.current = false;
+      if (mounted.current) setHomeRefreshing(false);
+    }
+  }, [refetchAnnouncements, refetchStats, servicesState.refresh]);
 
   return (
     <View className="flex-1" style={{ backgroundColor: "#eaf5ef" }}>
@@ -90,6 +123,14 @@ const Homepage = ({ navigation }) => {
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 18, gap: 14 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={(
+          <RefreshControl
+            refreshing={homeRefreshing}
+            onRefresh={handleHomeRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        )}
       >
         {/* Announcement Carousel */}
         <AnnouncementCarousel
@@ -101,6 +142,7 @@ const Homepage = ({ navigation }) => {
             announcementId: item.id,
             announcement: item,
           })}
+          imageRefreshKey={announcementRefreshKey}
           autoPlayMs={3500}
         />
 
@@ -118,7 +160,10 @@ const Homepage = ({ navigation }) => {
             </View>
           </LinearGradient>
           <View className="px-3 pt-3 pb-4">
-            <ServiceIconGrid navigation={navigation} />
+            <ServiceIconGrid
+              navigation={navigation}
+              {...servicesState}
+            />
           </View>
         </View>
 

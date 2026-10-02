@@ -32,6 +32,11 @@ import {
   shouldShowLock,
 } from "./src/services/lockService";
 import { getCurrentUserId } from "./src/services/userSecurityKeys";
+import { preloadBrandAssets } from "./src/assets/brandAssets";
+
+// Warm the bundled logo before navigation mounts so it does not appear late
+// when the user switches between screens.
+preloadBrandAssets();
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -42,7 +47,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      await initI18n();
+      await Promise.all([initI18n(), preloadBrandAssets()]);
       // Cold-start lock check — ต้องรู้ผลก่อน ready เป็น true เสมอ กัน Home/หน้า
       // protected แวบให้เห็นก่อน LockOverlay ทันเวลา — PIN เป็น per-account จึง
       // ต้อง resolve userId ก่อนเสมอ (isPinSet ไม่รับ device-level อีกต่อไป)

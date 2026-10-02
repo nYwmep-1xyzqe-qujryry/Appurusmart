@@ -33,6 +33,19 @@ const name = loadModule("src/utils/name.js");
 const inputSanitize = loadModule("src/utils/inputSanitize.js");
 const url = loadModule("src/utils/url.js");
 const announcement = loadModule("src/utils/announcement.js");
+const announcementCarousel = loadModule("src/utils/announcementCarousel.js");
+const announcementImageViewer = loadModule("src/utils/announcementImageViewer.js");
+const lrdResponse = loadModule("src/utils/lrdResponse.js");
+const lrdDiagnostics = loadModule("src/utils/lrdDiagnostics.js");
+const lrdResourceState = loadModule("src/utils/lrdResourceState.js");
+const responseCount = loadModule("src/utils/responseCount.js");
+const services = loadModule("src/utils/services.js");
+const refresh = loadModule("src/utils/refresh.js");
+const notificationInbox = loadModule("src/utils/notificationInbox.js");
+const announcementImageState = loadModule("src/utils/announcementImageState.js");
+const sessionLock = loadModule("src/utils/sessionLock.js");
+const inboxSync = loadModule("src/utils/inboxSync.js");
+const testLrdResource = require("./test-lrd-resource");
 
 const parsed = thaiDate.parseISOToDate("2024-10-26");
 assert.equal(parsed.getFullYear(), 2024);
@@ -52,6 +65,10 @@ assert.equal(
 );
 assert.equal(image.fixPhotoUrl("https://cdn.example.test/a.jpg"), "https://cdn.example.test/a.jpg");
 assert.equal(image.fixPhotoUrl(null), "");
+
+assert.equal(responseCount.extractResponseCount({ data: [{ id: 1 }, { id: 2 }], total: 125 }), 125);
+assert.equal(responseCount.extractResponseCount({ data: { data: [{ id: 1 }], total: 42 } }), 42);
+assert.equal(responseCount.extractResponseCount([{ id: 1 }, { id: 2 }]), 2);
 
 assert.equal(name.stripNamePrefix("นางสาว สมใจ ทดสอบ"), "สมใจ ทดสอบ");
 assert.equal(name.stripNamePrefix("นายธรานนท์ ไชยโสภา"), "ธรานนท์ ไชยโสภา");
@@ -129,6 +146,81 @@ assert.equal(normalizedAnnouncement.thumbnailUrl, "https://cdn.example.test/news
 assert.equal(normalizedAnnouncement.imageAlt, "ภาพข่าวทดสอบ");
 assert.equal(normalizedAnnouncement.imageWidth, 1200);
 assert.equal(normalizedAnnouncement.imageHeight, 675);
+// No image_version/updated_at from backend: imageCacheKey must be null,
+// NOT fall back to imageUrl — the URL is identical whether the image
+// changed or not (especially under an immutable Cache-Control), so using
+// it as a "version" signal can never detect a real change.
+assert.equal(normalizedAnnouncement.imageCacheKey, null);
+
+const versionedAnnouncement = announcement.normalizeAnnouncement({
+  announcement_id: 43,
+  title: "ข่าวมีเวอร์ชันรูป",
+  image_url: "https://cdn.example.test/news.jpg",
+  updated_at: "2026-09-01T00:00:00Z",
+});
+assert.equal(versionedAnnouncement.imageCacheKey, "2026-09-01T00:00:00Z");
+
+// Detail preview: near-full-bleed width, height a share of the height the
+// user can actually see (window minus safe-area insets and header), not of
+// the raw window height. This height is a ceiling only — the detail screen
+// shrinks the frame to what the image's aspect ratio needs, so wide banners
+// stay well under it.
+const previewLarge = announcement.getAnnouncementDetailPreviewSize({
+  windowWidth: 393,
+  windowHeight: 852,
+  bottomInset: 34,
+  headerHeight: 59 + 64,
+});
+assert.deepEqual(previewLarge, { width: 369, height: 209 });
+assert.equal(previewLarge.width, 393 - 24, "width leaves ~12 units on each side");
+
+const previewSmall = announcement.getAnnouncementDetailPreviewSize({
+  windowWidth: 360,
+  windowHeight: 640,
+  bottomInset: 0,
+  headerHeight: 24 + 64,
+});
+assert.deepEqual(previewSmall, { width: 336, height: 166 });
+
+// The share is taken from usable height: identical windows differing
+// only in chrome must produce different preview heights.
+const previewNoChrome = announcement.getAnnouncementDetailPreviewSize({
+  windowWidth: 393,
+  windowHeight: 852,
+});
+assert.ok(
+  previewNoChrome.height > previewLarge.height,
+  "removing header/inset chrome must grow the preview height",
+);
+
+// Degenerate geometry (chrome larger than the window) must not produce a
+// zero-height or negative preview box.
+const previewDegenerate = announcement.getAnnouncementDetailPreviewSize({
+  windowWidth: 360,
+  windowHeight: 200,
+  headerHeight: 400,
+});
+assert.equal(previewDegenerate.height, 160);
+assert.ok(previewDegenerate.width >= 0);
+
+// The detail frame is capped at a squarer ratio than a typical banner so
+// the preview reads larger; cover then trims the sides to fill it. Images
+// already squarer than the cap keep their own ratio and are never widened,
+// which would stretch them.
+const DETAIL_FRAME_ASPECT_RATIO = 2.6;
+const frameAspectRatio = (imageWidth, imageHeight) => Math.min(
+  imageWidth / imageHeight,
+  DETAIL_FRAME_ASPECT_RATIO,
+);
+// A 3.2:1 banner is held at 2.6:1, trading side crop for height.
+assert.equal(frameAspectRatio(5520, 1725), 2.6);
+// The frame is taller than the image's natural height at full width, which
+// is what makes the preview bigger: 430/3.2 = 134 before, 430/2.6 = 165 now.
+assert.ok(430 / frameAspectRatio(5520, 1725) > 430 / (5520 / 1725));
+// Square and portrait images are already squarer than the cap, so they keep
+// their own ratio rather than being stretched out to 2.6:1.
+assert.equal(frameAspectRatio(1200, 1200), 1);
+assert.ok(Math.abs(frameAspectRatio(1000, 1500) - 2 / 3) < 1e-9);
 
 const legacyAnnouncement = announcement.normalizeAnnouncement({
   name: "ข่าวเก่า",
@@ -138,7 +230,790 @@ assert.equal(legacyAnnouncement.title, "ข่าวเก่า");
 assert.equal(legacyAnnouncement.body, "ข่าวเดิมที่ไม่มีรูป");
 assert.equal(legacyAnnouncement.imageUrl, null);
 assert.equal(legacyAnnouncement.thumbnailUrl, null);
+assert.equal(
+  announcement.stripAnnouncementMarkup("<p>หัวข้อ&nbsp;&amp; รายละเอียด</p>"),
+  "หัวข้อ & รายละเอียด",
+);
+assert.equal(
+  announcement.normalizeAnnouncement({ title: "ข่าว", sub: "<b>สรุป</b>" }).sub,
+  "สรุป",
+);
 assert.equal(announcement.getAnnouncementRows({ data: { data: [{ id: 1 }] } }).length, 1);
+assert.equal(announcementCarousel.getAnnouncementCardWidth(360, 3), 308);
+assert.equal(announcementCarousel.getAnnouncementCardWidth(430, 3), 378);
+assert.equal(announcementCarousel.getAnnouncementCardWidth(360, 1), 328);
+// Card height must land inside the 220-250 band at fontScale 1 for every
+// phone viewport in the 360-430 range (card widths 308-378). The aspect
+// ratio alone cannot guarantee this — the width spread is larger than the
+// band — so the clamp is what actually enforces it. These assertions pin
+// both ends of the range plus the clamped interior.
+assert.equal(announcementCarousel.getAnnouncementCardHeight(308, 1), 176);
+assert.equal(announcementCarousel.getAnnouncementCardHeight(338, 1), 187);
+assert.equal(announcementCarousel.getAnnouncementCardHeight(362, 1), 200);
+assert.equal(announcementCarousel.getAnnouncementCardHeight(378, 1), 200);
+[308, 338, 362, 378].forEach((cardWidth) => {
+  const height = announcementCarousel.getAnnouncementCardHeight(cardWidth, 1);
+  assert.ok(
+    height >= 176 && height <= 200,
+    `cardWidth ${cardWidth}: height ${height} fell outside the 176-200 band`,
+  );
+});
+// The band is the previous 220-250 band reduced by 20%, so every card
+// width must land within rounding distance of 80% of its old height.
+[[308, 220], [338, 234], [362, 250], [378, 250]].forEach(([cardWidth, previousHeight]) => {
+  const height = announcementCarousel.getAnnouncementCardHeight(cardWidth, 1);
+  assert.ok(
+    Math.abs(height - previousHeight * 0.8) <= 1,
+    `cardWidth ${cardWidth}: height ${height} is not 80% of previous ${previousHeight}`,
+  );
+});
+// Accessibility font sizes grow the card so the text fallback keeps its
+// room; all cards in one viewport still share a single height.
+assert.equal(announcementCarousel.getAnnouncementCardHeight(308, 1.3), 182);
+assert.equal(announcementCarousel.getAnnouncementCardHeight(308, 2), 196);
+assert.ok(
+  announcementCarousel.getAnnouncementCardHeight(308, 2)
+    > announcementCarousel.getAnnouncementCardHeight(308, 1),
+);
+assert.equal(announcementCarousel.getAnnouncementSnapIndex(492, 320), 2);
+assert.deepEqual(
+  announcementCarousel.getAnnouncementLoopItems([{ id: 1 }, { id: 2 }, { id: 3 }]).map(({ id }) => id),
+  [3, 1, 2, 3, 1],
+);
+assert.deepEqual(announcementCarousel.getAnnouncementLoopItems([{ id: 1 }]), [{ id: 1 }]);
+assert.equal(announcementCarousel.getAnnouncementLoopIndex(0, 3), 3);
+assert.equal(announcementCarousel.getAnnouncementLoopIndex(1, 3), 1);
+assert.equal(announcementCarousel.getAnnouncementLoopIndex(4, 3), 1);
+assert.equal(announcementCarousel.getAnnouncementLoopIndex(7, 1), 0);
+assert.equal(announcementCarousel.getAnnouncementRealIndex(0, 3), 2);
+assert.equal(announcementCarousel.getAnnouncementRealIndex(1, 3), 0);
+assert.equal(announcementCarousel.getAnnouncementRealIndex(4, 3), 0);
+assert.deepEqual(
+  announcementCarousel.getAnnouncementHomeImageSource({
+    imageUrl: "https://cdn.example.test/full.jpg",
+    thumbnailUrl: "https://cdn.example.test/thumb.jpg",
+  }),
+  {
+    uri: "https://cdn.example.test/thumb.jpg",
+    fallbackUri: "https://cdn.example.test/full.jpg",
+  },
+);
+assert.deepEqual(
+  announcementCarousel.getAnnouncementHomeImageSource({ imageUrl: "https://cdn.example.test/full.jpg" }),
+  { uri: "https://cdn.example.test/full.jpg", fallbackUri: null },
+);
+// No dimension metadata from backend: cannot verify resolution, documented
+// fallback keeps preferring the thumbnail exactly as before this check.
+assert.deepEqual(
+  announcementCarousel.getAnnouncementHomeImageSource(
+    { imageUrl: "https://cdn.example.test/full.jpg", thumbnailUrl: "https://cdn.example.test/thumb.jpg" },
+    308 * 2, 164 * 2,
+  ),
+  { uri: "https://cdn.example.test/thumb.jpg", fallbackUri: "https://cdn.example.test/full.jpg" },
+);
+// Thumbnail dimensions known and sufficient: use it.
+assert.deepEqual(
+  announcementCarousel.getAnnouncementHomeImageSource(
+    {
+      imageUrl: "https://cdn.example.test/full.jpg",
+      thumbnailUrl: "https://cdn.example.test/thumb.jpg",
+      thumbnailWidth: 800,
+      thumbnailHeight: 500,
+    },
+    616, 328,
+  ),
+  { uri: "https://cdn.example.test/thumb.jpg", fallbackUri: "https://cdn.example.test/full.jpg" },
+);
+// Thumbnail dimensions known and insufficient for the required on-screen
+// pixel size: skip the thumbnail and go straight to the full image.
+assert.deepEqual(
+  announcementCarousel.getAnnouncementHomeImageSource(
+    {
+      imageUrl: "https://cdn.example.test/full.jpg",
+      thumbnailUrl: "https://cdn.example.test/thumb.jpg",
+      thumbnailWidth: 200,
+      thumbnailHeight: 120,
+    },
+    616, 328,
+  ),
+  { uri: "https://cdn.example.test/full.jpg", fallbackUri: "https://cdn.example.test/thumb.jpg" },
+);
+// With contain, a wide banner occupies only its contained box inside the
+// card, so the thumbnail bar is the contained size, not the full card.
+// A 3.2:1 banner in a 308x176 card contains to 308x96; at PixelRatio 2
+// that needs 616x192, which this thumbnail clears even though it is far
+// short of the full card's 308x176 at 2x (616x352).
+const containedBox = announcementCarousel.getContainedImageLayout(5520, 1725, 308, 176);
+assert.deepEqual(containedBox, { width: 308, height: 96 });
+assert.deepEqual(
+  announcementCarousel.getAnnouncementHomeImageSource(
+    {
+      imageUrl: "https://cdn.example.test/full.jpg",
+      thumbnailUrl: "https://cdn.example.test/thumb.jpg",
+      thumbnailWidth: 640,
+      thumbnailHeight: 200,
+    },
+    containedBox.width * 2,
+    containedBox.height * 2,
+  ),
+  { uri: "https://cdn.example.test/thumb.jpg", fallbackUri: "https://cdn.example.test/full.jpg" },
+  "a thumbnail that covers the contained box is accepted",
+);
+// The same thumbnail measured against the whole card would be rejected,
+// which is the over-strict behavior this sizing change avoids.
+assert.deepEqual(
+  announcementCarousel.getAnnouncementHomeImageSource(
+    {
+      imageUrl: "https://cdn.example.test/full.jpg",
+      thumbnailUrl: "https://cdn.example.test/thumb.jpg",
+      thumbnailWidth: 640,
+      thumbnailHeight: 200,
+    },
+    308 * 2,
+    176 * 2,
+  ),
+  { uri: "https://cdn.example.test/full.jpg", fallbackUri: "https://cdn.example.test/thumb.jpg" },
+);
+
+// thumbnailUrl identical to imageUrl: no fallback needed, no duplicate request.
+assert.deepEqual(
+  announcementCarousel.getAnnouncementHomeImageSource({
+    imageUrl: "https://cdn.example.test/same.jpg",
+    thumbnailUrl: "https://cdn.example.test/same.jpg",
+  }),
+  { uri: "https://cdn.example.test/same.jpg", fallbackUri: null },
+);
+assert.deepEqual(
+  announcementCarousel.getAnnouncementCardTone({ id: 21 }),
+  announcementCarousel.getAnnouncementCardTone({ id: 21 }),
+  "the same announcement keeps the same color",
+);
+assert.equal(
+  announcementCarousel.getAnnouncementCardTone({ tag: "ข่าวเตือนภัย" }).background,
+  "#FBEDEC",
+);
+assert.equal(
+  announcementCarousel.getAnnouncementCardTone({ category: "warning" }).background,
+  "#FBEDEC",
+);
+assert.equal(
+  announcementCarousel.getAnnouncementCategory({ tag: "ข่าวสาร", category: "announcement" }),
+  "ข่าวสาร",
+);
+assert.equal(
+  announcementCarousel.getAnnouncementIcon({ category: "กิจกรรม" }),
+  "calendar-outline",
+);
+assert.ok(announcementCarousel.formatAnnouncementDate({ date: "2026-09-21" }, "th-TH"));
+assert.notEqual(
+  announcementCarousel.getAnnouncementImageFailureKey({
+    id: 1,
+    imageUrl: "https://cdn.example.test/news.jpg",
+    imageCacheKey: "v1",
+  }),
+  announcementCarousel.getAnnouncementImageFailureKey({
+    id: 1,
+    imageUrl: "https://cdn.example.test/news.jpg",
+    imageCacheKey: "v2",
+  }),
+  "image version changes must reset image failure state",
+);
+// Every tone (including the alert tone) must carry a backdrop color — it
+// is what fills the letterbox strip behind a contained image on image-first
+// Home cards, so a missing backdrop would render a transparent/undefined
+// gap instead of an intentional frame.
+assert.ok(typeof announcementCarousel.getAnnouncementCardTone({ id: 1 }).backdrop === "string");
+assert.ok(typeof announcementCarousel.getAnnouncementCardTone({ tag: "ข่าวเตือนภัย" }).backdrop === "string");
+
+// Home cards are image-first: an item with either an image or a thumbnail
+// shows the image only; one with neither falls back to a text card.
+assert.equal(announcementCarousel.hasAnnouncementImage({ imageUrl: "https://cdn.example.test/a.jpg" }), true);
+assert.equal(announcementCarousel.hasAnnouncementImage({ thumbnailUrl: "https://cdn.example.test/a.jpg" }), true);
+assert.equal(announcementCarousel.hasAnnouncementImage({ imageUrl: null, thumbnailUrl: null }), false);
+assert.equal(announcementCarousel.hasAnnouncementImage({}), false);
+
+// getContainedImageLayout: "contain" fit inside a fixed box — full image,
+// centered, letterboxed on whichever axis has slack.
+// Wide banner (3.2:1, e.g. 5520x1725) inside a 308x247 box: width-limited,
+// height shrinks below the box, leaving vertical letterbox space.
+assert.deepEqual(
+  announcementCarousel.getContainedImageLayout(5520, 1725, 308, 247),
+  { width: 308, height: 96 },
+);
+// Box wider than the image's aspect ratio: height-limited instead.
+assert.deepEqual(
+  announcementCarousel.getContainedImageLayout(400, 400, 308, 247),
+  { width: 247, height: 247 },
+);
+// Unknown dimensions (e.g. onImageSize hasn't fired yet): fill the box
+// rather than collapsing to 0, so there's no flash of an empty card.
+assert.deepEqual(
+  announcementCarousel.getContainedImageLayout(null, null, 308, 247),
+  { width: 308, height: 247 },
+);
+assert.deepEqual(
+  announcementCarousel.getContainedImageLayout(0, 0, 308, 247),
+  { width: 308, height: 247 },
+);
+
+assert.equal(announcementCarousel.getAnnouncementSummary({ title: "ข่าวด่วน", body: "ข่าวด่วน" }), "");
+assert.equal(announcementCarousel.getAnnouncementSummary({ title: "ข่าวด่วน", sub: "รายละเอียดเพิ่มเติม" }), "รายละเอียดเพิ่มเติม");
+assert.equal(announcementCarousel.getAnnouncementSummary({ title: "ข่าวด่วน", sub: "ข่าวด่วน", body: "เนื้อหาข่าว" }), "เนื้อหาข่าว");
+
+// Trailing-copy snap target must land within the ScrollView's real max
+// offset (contentWidth - viewport). The loop grid (index * snapUnit) does
+// not account for the container's CARD_INSET padding on both edges, so
+// without clamping, the computed target for the trailing looped copy
+// overshoots what native can actually scroll to and the scroll-settle
+// handshake (onScrollAnimationEnd / finishScroll) never fires.
+function checkCarouselGeometry(viewportWidth, realCount) {
+  const cardWidth = announcementCarousel.getAnnouncementCardWidth(viewportWidth, realCount);
+  const snapUnit = cardWidth + 12; // CARD_GAP
+  const loopedCount = realCount + 2; // [last, ...items, first]
+  const contentWidth = announcementCarousel.getAnnouncementLoopContentWidth(cardWidth, loopedCount);
+  const maxOffset = announcementCarousel.getAnnouncementMaxScrollOffset(contentWidth, viewportWidth);
+  const trailingCopyIndex = realCount + 1;
+  const rawTarget = trailingCopyIndex * snapUnit;
+  const clampedTarget = announcementCarousel.clampAnnouncementScrollOffset(rawTarget, contentWidth, viewportWidth);
+  assert.ok(
+    clampedTarget <= maxOffset + 0.01,
+    `viewport ${viewportWidth}/${realCount} items: clamped target ${clampedTarget} exceeds reachable max ${maxOffset}`,
+  );
+  assert.ok(
+    rawTarget > maxOffset,
+    `viewport ${viewportWidth}/${realCount} items: expected the raw (unclamped) target to reproduce the original overshoot bug`,
+  );
+  return { cardWidth, snapUnit, contentWidth, maxOffset, rawTarget, clampedTarget };
+}
+
+const geom360 = checkCarouselGeometry(360, 3);
+assert.equal(geom360.rawTarget - geom360.maxOffset, 20, "reproduces the reported 20-unit shortfall at viewport 360");
+assert.equal(geom360.clampedTarget, geom360.maxOffset);
+
+const geom430 = checkCarouselGeometry(430, 3);
+assert.equal(geom430.rawTarget - geom430.maxOffset, 20, "reproduces the reported 20-unit shortfall at viewport 430");
+assert.equal(geom430.clampedTarget, geom430.maxOffset);
+
+// A mid-loop target (not the trailing copy) must stay unclamped — only the
+// edges of the loop are ever unreachable.
+const geomMid = checkCarouselGeometryOk = (() => {
+  const viewportWidth = 360;
+  const realCount = 3;
+  const cardWidth = announcementCarousel.getAnnouncementCardWidth(viewportWidth, realCount);
+  const snapUnit = cardWidth + 12;
+  const loopedCount = realCount + 2;
+  const contentWidth = announcementCarousel.getAnnouncementLoopContentWidth(cardWidth, loopedCount);
+  const midTarget = 2 * snapUnit; // second real item, well within bounds
+  const clamped = announcementCarousel.clampAnnouncementScrollOffset(midTarget, contentWidth, viewportWidth);
+  assert.equal(clamped, midTarget, "mid-loop snap targets are not altered by clamping");
+})();
+
+// Single-item and empty lists never need clamping (no loop copies exist).
+assert.equal(announcementCarousel.getAnnouncementMaxScrollOffset(0, 360), 0);
+assert.equal(announcementCarousel.clampAnnouncementScrollOffset(500, 0, 360), 0);
+const imageBounds = announcementImageViewer.getAnnouncementImageBounds(320, 500, 360, 780, 2);
+assert.deepEqual(imageBounds, { maxX: 140, maxY: 110 });
+assert.deepEqual(announcementImageViewer.clampAnnouncementImageTranslation(500, -500, imageBounds), { x: 140, y: -110 });
+assert.deepEqual(
+  announcementImageViewer.clampAnnouncementImageTranslation(35, -22,
+    announcementImageViewer.getAnnouncementImageBounds(320, 500, 360, 780, 1)),
+  { x: 0, y: 0 },
+  "returning to 1x centers the image and prevents stale translation",
+);
+const thumbnailFallbackAnnouncement = announcement.normalizeAnnouncement({
+  id: 43,
+  image_url: "https://cdn.example.test/news-full.jpg",
+  thumbnail_url: "/storage/news-missing-thumb.jpg",
+});
+assert.equal(thumbnailFallbackAnnouncement.imageUrl, "https://cdn.example.test/news-full.jpg");
+assert.equal(thumbnailFallbackAnnouncement.thumbnailUrl, "https://api.example.test/storage/news-missing-thumb.jpg");
+
+const paginatedLrdPayload = {
+  data: {
+    data: [{ id: 1 }, { id: 2 }],
+    total: 1207,
+    current_page: 2,
+    per_page: 20,
+    last_page: 61,
+  },
+};
+const projectFixture = Array.from({ length: 1207 }, (_, index) => ({
+  id: index + 1, researcher_id: index % 2 ? "B" : "A",
+}));
+const collectedProjects = [];
+for (let page = 1; page <= 61; page += 1) {
+  const parsed = lrdResourceState.resolveLrdApiState({
+    data: projectFixture.slice((page - 1) * 20, page * 20),
+    total: 1207, current_page: page, per_page: 20, last_page: 61,
+  });
+  assert.equal(parsed.total, 1207);
+  assert.equal(parsed.pagination.currentPage, page);
+  collectedProjects.push(...parsed.items);
+}
+assert.deepEqual(collectedProjects, projectFixture, "parser preserves all API rows across pages and owners");
+assert.deepEqual(lrdResponse.getLrdRows(paginatedLrdPayload), [{ id: 1 }, { id: 2 }]);
+assert.deepEqual(lrdResponse.getLrdPagination(paginatedLrdPayload), {
+  total: 1207,
+  currentPage: 2,
+  perPage: 20,
+  lastPage: 61,
+});
+assert.equal(
+  lrdResponse.getLrdTotal({ data: [{ id: 1 }, { id: 2 }], total: null }),
+  2,
+  "null total falls back to the current rows instead of zero",
+);
+assert.throws(
+  () => lrdResponse.getLrdRows({ html: "<html>login</html>" }),
+  /Invalid LRD collection response/,
+);
+assert.throws(
+  () => lrdResponse.getLrdRows({ data: [null] }),
+  /Invalid LRD collection response/,
+);
+assert.deepEqual(lrdResponse.getLrdRows({ data: [] }), [], "a valid empty page stays empty");
+assert.deepEqual(lrdResponse.orderLrdRowsByCreation([
+  { id: 3 }, { id: 1 }, { id: 2 },
+]).map((row) => row.id), [1, 2, 3], "new projects append after older numeric IDs");
+assert.deepEqual(lrdResponse.orderLrdRowsByCreation([
+  { id: 9, created_at: "2026-03-03T00:00:00Z" },
+  { id: 4, created_at: "2026-03-01T00:00:00Z" },
+  { id: 7, created_at: "2026-03-02T00:00:00Z" },
+]).map((row) => row.id), [4, 7, 9], "creation time defines append order when available");
+assert.deepEqual(lrdResponse.orderLrdRowsByCreation([
+  { id: "opaque-b" }, { id: "opaque-a" },
+]), [{ id: "opaque-b" }, { id: "opaque-a" }], "unknown IDs retain API order");
+assert.deepEqual(lrdResourceState.resolveLrdApiState({
+  data: [{ id: "new" }, { id: "other" }],
+  total: 2,
+  current_page: 1,
+  per_page: 20,
+  last_page: 1,
+}), {
+  items: [{ id: "new" }, { id: "other" }],
+  total: 2,
+  pagination: { total: 2, currentPage: 1, perPage: 20, lastPage: 1 },
+  source: "api",
+  stale: false,
+  error: null,
+}, "API data replaces the previous collection in server order");
+assert.deepEqual(lrdResourceState.resolveLrdApiState({ data: [], total: 0, current_page: 2, per_page: 20, last_page: 2 }).items, []);
+assert.deepEqual(lrdResourceState.resolveLrdFailureState(
+  { items: [{ id: "cached" }], total: 99 },
+  "422 validation failed",
+), {
+  items: [{ id: "cached" }],
+  total: 99,
+  pagination: null,
+  source: "cache",
+  stale: true,
+  error: "422 validation failed",
+}, "a failed refresh keeps cache but marks it stale");
+assert.deepEqual(lrdResourceState.resolveLrdFailureState(null, "offline"), {
+  items: [],
+  total: 0,
+  pagination: null,
+  source: "none",
+  stale: false,
+  error: "offline",
+});
+assert.deepEqual(lrdDiagnostics.summarizeLrdParams({ scope: "all", page: 3, per_page: 20, q: "private title" }), {
+  scope: "all",
+  page: 3,
+  perPage: 20,
+  hasQuery: true,
+}, "diagnostics record query presence without the query value");
+assert.deepEqual(lrdDiagnostics.summarizeLrdOwnership([
+  { researcher_id: 7 },
+  { researcher_id: "8" },
+  { researcher_id: null },
+], 7), {
+  ownedByAccount: 1,
+  ownedByOthers: 1,
+  unknownOwner: 1,
+}, "ownership diagnostics report aggregate counts without identifiers");
+assert.equal(lrdDiagnostics.summarizeLrdOwnership([{ researcher_id: 7 }], null), null);
+const safe422 = lrdDiagnostics.getSafeLrdErrorDetails({
+  response: {
+    status: 422,
+    data: {
+      message: "The scope field is invalid",
+      errors: {
+        scope: ["The selected scope is invalid"],
+        researcher_id: ["do not log this"],
+      },
+    },
+  },
+});
+assert.equal(safe422.status, 422);
+assert.deepEqual(safe422.fields, ["scope"], "sensitive validation field names are omitted");
+assert.equal(JSON.stringify(safe422).includes("researcher_id"), false);
+assert.equal(lrdDiagnostics.getLrdCacheAgeMs(1000, 1500), 500);
+
+const notificationCurrent = [
+  { id: "1", serverId: "1", receivedAt: "2026-09-23T10:00:00Z" },
+  { id: "2", serverId: "2", receivedAt: "2026-09-23T09:00:00Z" },
+  { id: "local", receivedAt: "2026-09-23T08:00:00Z" },
+];
+const notificationMerged = notificationInbox.mergeNotificationInbox(
+  notificationCurrent,
+  [{ id: "1", receivedAt: "2026-09-23T10:00:00Z" }, { id: "3", receivedAt: "2026-09-23T11:00:00Z" }],
+);
+assert.deepEqual(notificationMerged.map((item) => item.id), ["3", "1", "local"]);
+assert.equal(notificationInbox.getAnnouncementId({ data: { announcement_id: 42 } }), "42");
+
+// An announcement notification must survive even when its announcement is no
+// longer in GET /announcements. That list is paginated (Home requests limit=5),
+// so an older announcement falls out of it while the detail endpoint still
+// serves the record — filtering on list membership silently hid valid
+// notifications. Membership in the authenticated inbox is what counts.
+const oldAnnouncementNotification = [
+  { id: "900", serverId: "900", receivedAt: "2026-01-01T00:00:00Z", data: { announcement_id: 900 } },
+];
+assert.deepEqual(
+  notificationInbox
+    .mergeNotificationInbox([], oldAnnouncementNotification)
+    .map((item) => item.id),
+  ["900"],
+  "a notification for an announcement outside the list page is kept",
+);
+
+// Dismissal is local-only, so a dismissed row must stay out of the inbox even
+// though the server keeps returning it on every sync.
+const dismissedOnce = new Set(["2"]);
+assert.deepEqual(
+  notificationInbox
+    .mergeNotificationInbox(
+      notificationCurrent,
+      [
+        { id: "1", receivedAt: "2026-09-23T10:00:00Z" },
+        { id: "2", receivedAt: "2026-09-23T09:00:00Z" },
+      ],
+      dismissedOnce,
+    )
+    .map((item) => item.id),
+  ["1", "local"],
+  "a dismissed notification does not come back on the next sync",
+);
+
+// Badge correction — exercises the production implementation that
+// notificationService calls, so breaking it fails here. The correction is
+// derived from the live server rows, never from a flag stored at dismissal
+// time: that stored flag could not be reconciled once the server's own count
+// changed for the row, which made later notifications show no badge.
+const badgeRows = [
+  { id: "1", serverId: "1", read: false },
+  { id: "2", serverId: "2", read: false },
+  { id: "3", serverId: "3", read: false },
+];
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: 3,
+    serverRows: badgeRows,
+  }),
+  3,
+);
+// A dismissed row the server still reports unread is subtracted, so hiding it
+// drops the badge immediately.
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: 3,
+    serverRows: badgeRows,
+    dismissedIds: new Set(["2"]),
+  }),
+  2,
+  "dismissing one unread notification lowers the badge",
+);
+// Once the server reports that row read — marked from another device — the
+// server count has already dropped, so no further correction is owed.
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: 2,
+    serverRows: [
+      { id: "1", serverId: "1", read: false },
+      { id: "2", serverId: "2", read: true },
+      { id: "3", serverId: "3", read: false },
+    ],
+    dismissedIds: new Set(["2"]),
+  }),
+  2,
+  "a dismissed row read elsewhere is not subtracted twice",
+);
+// Read-all clears every row, then a new unread B arrives. The stale dismissal
+// of A must not eat B's badge.
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: 1,
+    serverRows: [
+      { id: "A", serverId: "A", read: true },
+      { id: "B", serverId: "B", read: false },
+    ],
+    dismissedIds: new Set(["A"]),
+  }),
+  1,
+  "a new notification keeps its badge after an earlier dismissal was read",
+);
+// The server deleted the dismissed row entirely; a new unread B still counts.
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: 1,
+    serverRows: [{ id: "B", serverId: "B", read: false }],
+    dismissedIds: new Set(["A"]),
+  }),
+  1,
+  "a deleted dismissed row does not keep reducing the badge",
+);
+// Dismissing an already-read row changes nothing, since the server never
+// counted it.
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: 3,
+    serverRows: [...badgeRows.slice(0, 2), { id: "3", serverId: "3", read: true }],
+    dismissedIds: new Set(["3"]),
+  }),
+  3,
+);
+// Several dismissals accumulate while the server still reports them unread.
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: 5,
+    serverRows: badgeRows,
+    dismissedIds: new Set(["1", "2"]),
+  }),
+  3,
+);
+// A row both dismissed and pending-read is subtracted once, not twice.
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: 3,
+    serverRows: badgeRows,
+    dismissedIds: new Set(["1"]),
+    pendingReadIds: new Set(["1"]),
+  }),
+  2,
+);
+// Pending-read and dismissed corrections are independent otherwise.
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: 3,
+    serverRows: badgeRows,
+    dismissedIds: new Set(["1"]),
+    pendingReadIds: new Set(["2"]),
+  }),
+  1,
+);
+// The badge never goes negative when the counts disagree.
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: 1,
+    serverRows: badgeRows,
+    dismissedIds: new Set(["1", "2"]),
+  }),
+  0,
+);
+// No server count means unknown — callers must not substitute a row count.
+assert.equal(
+  notificationInbox.getCorrectedUnreadCount({
+    serverUnreadCount: null,
+    serverRows: badgeRows,
+  }),
+  null,
+);
+
+// Stale image callbacks — the guard AnnouncementImage actually calls.
+assert.equal(announcementImageState.isCurrentImageCallback("b.jpg", "b.jpg"), true);
+assert.equal(
+  announcementImageState.isCurrentImageCallback("b.jpg", "a.jpg"),
+  false,
+  "a late callback from a previous image must not update the current one",
+);
+// Falling back from thumbnail to original retargets the active URI, so only
+// the new source's callback counts.
+assert.equal(announcementImageState.isCurrentImageCallback("original.jpg", "thumb.jpg"), false);
+assert.equal(announcementImageState.isCurrentImageCallback("original.jpg", "original.jpg"), true);
+assert.equal(announcementImageState.isCurrentImageCallback(null, null), false);
+
+// Cache-only placeholder gating — the helper AnnouncementImage calls.
+assert.equal(
+  announcementImageState.shouldShowCachedPlaceholder({
+    placeholderUri: "thumb.jpg",
+    currentUri: "original.jpg",
+    platformOS: "ios",
+  }),
+  true,
+);
+// Android ignores the cache policy, so showing a placeholder there would start
+// a real download.
+assert.equal(
+  announcementImageState.shouldShowCachedPlaceholder({
+    placeholderUri: "thumb.jpg",
+    currentUri: "original.jpg",
+    platformOS: "android",
+  }),
+  false,
+  "no placeholder on platforms that ignore the cache-only policy",
+);
+// An evicted entry fails the cache-only load; the placeholder is dropped
+// rather than refetched.
+assert.equal(
+  announcementImageState.shouldShowCachedPlaceholder({
+    placeholderUri: "thumb.jpg",
+    currentUri: "original.jpg",
+    platformOS: "ios",
+    placeholderMissed: true,
+  }),
+  false,
+  "a cache miss drops the placeholder instead of hitting the network",
+);
+// Nothing to overlay when the placeholder is the image already being shown.
+assert.equal(
+  announcementImageState.shouldShowCachedPlaceholder({
+    placeholderUri: "same.jpg",
+    currentUri: "same.jpg",
+    platformOS: "ios",
+  }),
+  false,
+);
+assert.equal(
+  announcementImageState.shouldShowCachedPlaceholder({
+    placeholderUri: null,
+    currentUri: "original.jpg",
+    platformOS: "ios",
+  }),
+  false,
+);
+
+const normalizedServices = services.normalizeServices({ data: [
+  {
+    id: 2,
+    service_key: "e_research",
+    name_th: " e-Research ",
+    name_en: "e-Research",
+    action_type: "internal_route",
+    route_key: "e_research",
+    sort_order: 20,
+    is_active: true,
+    icon_name: "journal-outline",
+    icon_color: "#07865F",
+    background_color: "#E8F4EF",
+  },
+  {
+    id: 1,
+    service_key: "lms",
+    name_th: "LMS",
+    name_en: "LMS",
+    action_type: "external_url",
+    url: "https://lms.uru.ac.th",
+    sort_order: 10,
+    is_active: true,
+    icon_name: "book-outline",
+  },
+  { id: 3, service_key: "hidden", is_active: false, sort_order: 1 },
+] });
+assert.equal(normalizedServices.length, 2);
+assert.equal(normalizedServices[0].serviceKey, "e_research");
+assert.equal(normalizedServices[1].serviceKey, "lms");
+assert.equal(services.getServiceRoute(normalizedServices[0]), "EResearch");
+assert.equal(services.isServiceUrlValid(normalizedServices[1]), true);
+assert.equal(services.isServiceUrlValid({ actionType: "external_url", url: "javascript:alert(1)" }), false);
+assert.equal(services.getServiceLabel(normalizedServices[0], "en"), "e-Research");
+assert.equal(services.normalizeService({ service_key: "broken", icon_name: "not-real" }).iconName, "grid-outline");
+const cachedService = services.normalizeServices(normalizedServices);
+assert.equal(cachedService[0].serviceKey, "e_research");
+assert.equal(cachedService[1].actionType, "external_url");
+assert.equal(services.getServiceRoute({ actionType: "internal_route", routeKey: "constructor" }), null);
+assert.equal(services.getServiceRoute({ actionType: "internal_route", serviceKey: "other", routeKey: "expert" }), null);
+const mismatchedNativeServices = services.normalizeServices({ data: [
+  {
+    id: 15,
+    service_key: "expert",
+    name_th: "Expert",
+    action_type: "external_url",
+    route_key: null,
+    url: "https://expert.uru.ac.th",
+    sort_order: 10,
+    is_active: true,
+  },
+  {
+    id: 20,
+    service_key: "lms",
+    name_th: "LMS",
+    action_type: "external_url",
+    url: "https://lms.uru.ac.th",
+    sort_order: 20,
+    is_active: true,
+  },
+] }, { strict: true });
+assert.equal(mismatchedNativeServices.length, 2);
+assert.equal(services.isNativeServiceMisconfigured(mismatchedNativeServices[0]), true);
+assert.equal(services.isServiceUrlValid(mismatchedNativeServices[0]), true);
+assert.equal(services.isNativeServiceMisconfigured(mismatchedNativeServices[1]), false);
+assert.throws(
+  () => services.normalizeServices({ html: "<html>login</html>" }, { strict: true }),
+  /Invalid services response/,
+);
+assert.throws(
+  () => services.normalizeServices({ data: [
+    { id: 1, service_key: "one", name_th: "One", action_type: "external_url", url: "https://one.test", sort_order: 1, is_active: true },
+    { id: 1, service_key: "two", name_th: "Two", action_type: "external_url", url: "https://two.test", sort_order: 2, is_active: true },
+  ] }, { strict: true }),
+  /Duplicate service id/,
+);
+assert.equal(services.getServiceError({ response: { status: 403, data: { message: { error: "forbidden" } } } }).kind, "forbidden");
+assert.equal(services.getServiceError({ response: { status: 403, data: { message: { error: "forbidden" } } } }).message, "ไม่สามารถโหลดบริการได้");
+const setupError = services.getServiceError({
+  response: { status: 503, data: { code: "SERVICE_SETUP_REQUIRED", message: "Service catalog is not ready." } },
+});
+assert.equal(setupError.kind, "setup");
+assert.equal(setupError.code, "SERVICE_SETUP_REQUIRED");
+
+const serviceFixture = { id: 2, service_key: "expert", name_th: "Thai name", name_en: null,
+  action_type: "internal_route", route_key: "expert", sort_order: 10, is_active: true };
+const oneLanguage = services.normalizeService(serviceFixture, 0, { strict: true });
+assert.equal(services.getServiceLabel(oneLanguage, "en"), "Thai name");
+assert.deepEqual(services.normalizeServices({ data: [
+  {
+    ...serviceFixture,
+    id: 10,
+    service_key: "other",
+    action_type: "external_url",
+    route_key: null,
+    url: "https://other.uru.ac.th",
+  },
+  serviceFixture,
+] }, { strict: true }).map(row => row.id), [10, 2]);
+for (const change of [{ is_active: "false" }, { sort_order: null }, { id: {} }, { name_th: {}, name_en: null }]) {
+  assert.throws(() => services.normalizeService({ ...serviceFixture, ...change }, 0, { strict: true }));
+}
+assert.deepEqual(services.normalizeServices({ data: [] }, { strict: true }), []);
+assert.throws(() => services.normalizeServices({ data: [null] }, { strict: true }));
+const signedIcon = "https://cdn.example.test/icon.png?signature=abc%2B123";
+assert.equal(services.normalizeService({ ...serviceFixture, icon_url: signedIcon, updated_at: "2026-09-21" }).iconUrl, signedIcon);
+assert.equal(services.getServiceRoute({ actionType: "internal_route", routeKey: "__proto__" }), null);
+assert.equal(services.normalizeServices({ data: [
+  { ...serviceFixture, id: 99, service_key: "future_route", route_key: "future_route" },
+] }, { strict: true }).length, 0);
+
+async function testRefreshTaskSettlement() {
+  let resolveSlow;
+  let finished = false;
+  const slowTask = new Promise((resolve) => { resolveSlow = resolve; });
+  const aggregate = refresh.settleRefreshTasks([
+    () => slowTask,
+    () => Promise.reject(new Error("stats unavailable")),
+    () => Promise.resolve("announcements loaded"),
+  ]).then((result) => {
+    finished = true;
+    return result;
+  });
+
+  await Promise.resolve();
+  assert.equal(finished, false, "Home refresh waits for the slowest request");
+  resolveSlow("services loaded");
+  const result = await aggregate;
+  assert.deepEqual(result.map((item) => item.status), ["fulfilled", "rejected", "fulfilled"]);
+  assert.equal(finished, true, "Home refresh settles after every request completes");
+}
 
 async function testForegroundRefresh() {
   const { startForegroundRefresh } = loadModule("src/utils/foregroundRefresh.js");
@@ -203,7 +1078,358 @@ async function testForegroundRefresh() {
   stopFailure();
 }
 
-testForegroundRefresh().then(() => console.log("Tests OK")).catch((error) => {
+// Drives the real lock used by notificationService with deferred promises, so
+// the interleavings these tests describe are the ones production takes.
+async function testInboxLockOrdering() {
+  const deferred = () => {
+    let resolve;
+    let reject;
+    const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  };
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+  // A sync that started first must commit before a dismissal that arrives
+  // mid-flight, so the dismissal is never overwritten by the stale snapshot.
+  {
+    const withLock = sessionLock.createSessionLock();
+    const order = [];
+    const syncGate = deferred();
+    const syncDone = withLock("user:1", async () => {
+      order.push("sync:start");
+      await syncGate.promise;
+      order.push("sync:commit");
+    });
+    await flush();
+    const dismissDone = withLock("user:1", async () => {
+      order.push("dismiss:commit");
+    });
+    await flush();
+    assert.deepEqual(order, ["sync:start"], "a later mutation waits for the in-flight commit");
+    syncGate.resolve();
+    await Promise.all([syncDone, dismissDone]);
+    assert.deepEqual(
+      order,
+      ["sync:start", "sync:commit", "dismiss:commit"],
+      "the dismissal commits after the sync, never interleaved with it",
+    );
+  }
+
+  // A failing task must not poison the queue, and must not surface as an
+  // unhandled rejection for the next waiter.
+  {
+    const withLock = sessionLock.createSessionLock();
+    const unhandled = [];
+    const onUnhandled = (reason) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+
+    // Queue the follow-up BEFORE the failure settles, so it genuinely chains
+    // onto a rejected promise rather than onto an already-cleared queue.
+    const failing = withLock("user:1", async () => { throw new Error("sync failed"); });
+    const after = withLock("user:1", async () => "ran anyway");
+    const settled = await Promise.allSettled([failing, after]);
+
+    assert.equal(settled[0].status, "rejected");
+    assert.match(String(settled[0].reason?.message), /sync failed/);
+    assert.equal(
+      settled[1].status,
+      "fulfilled",
+      "a task queued behind a failing one must not inherit its rejection",
+    );
+    assert.equal(settled[1].value, "ran anyway");
+
+    // Let any escaped rejection surface before asserting none did.
+    await flush();
+    await flush();
+    process.off("unhandledRejection", onUnhandled);
+    assert.deepEqual(
+      unhandled.map((reason) => String(reason?.message ?? reason)),
+      [],
+      "a failing task must not produce an unhandled rejection from the queue",
+    );
+  }
+
+  // Different accounts must not block each other.
+  {
+    const withLock = sessionLock.createSessionLock();
+    const order = [];
+    const blocked = deferred();
+    const first = withLock("user:1", async () => {
+      order.push("a:start");
+      await blocked.promise;
+      order.push("a:end");
+    });
+    await flush();
+    const other = withLock("user:2", async () => { order.push("b:ran"); });
+    await other;
+    assert.deepEqual(order, ["a:start", "b:ran"], "a second account runs while the first is held");
+    blocked.resolve();
+    await first;
+  }
+
+  // The queue must be emptied once work settles, on both paths — comparing the
+  // wrong promise during cleanup leaks an entry per key.
+  {
+    const withLock = sessionLock.createSessionLock();
+    await withLock("user:1", async () => "ok");
+    await flush();
+    assert.deepEqual(withLock.pendingKeys(), [], "queue is cleaned up after success");
+
+    await assert.rejects(withLock("user:2", async () => { throw new Error("nope"); }), /nope/);
+    await flush();
+    assert.deepEqual(withLock.pendingKeys(), [], "queue is cleaned up after failure");
+  }
+}
+
+// Inbox mutation ordering, driven through the real lock and the real
+// sequencing helpers that notificationService calls. Storage is a fake Map and
+// the API is deferred promises, so each mandated interleaving is reproduced
+// exactly. Network calls stay OUTSIDE the lock here because production keeps
+// them outside it.
+async function testInboxMutationOrdering() {
+  const deferred = () => {
+    let resolve;
+    let reject;
+    const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  };
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+  // Minimal stand-in for the service's storage + locked helpers, composed from
+  // the same primitives production uses.
+  const makeHarnessFor = (session = "user:1") => {
+    const store = new Map([["pending", []], ["inbox", []]]);
+    const withLock = sessionLock.createSessionLock();
+    let revision = 0;
+    const readPending = async () => new Set(store.get("pending").map(String));
+    const writePending = async (ids) => store.set("pending", [...ids].map(String));
+    return {
+      session,
+      withLock,
+      getRevision: () => revision,
+      bumpRevision: () => { revision += 1; return revision; },
+      readPending,
+      writePending,
+      readInbox: async () => store.get("inbox"),
+      writeInbox: async (rows) => store.set("inbox", rows),
+      addPendingLocked: async (serverId) => {
+        const ids = await readPending();
+        ids.add(String(serverId));
+        await writePending(ids);
+        return ids;
+      },
+    };
+  };
+
+  // A sync must not slip between the local inbox write and the pending
+  // enqueue: that gap leaves the row read with nothing queued for the server.
+  {
+    const h = makeHarnessFor();
+    const order = [];
+    const inboxWritten = deferred();
+    const markRead = h.withLock(h.session, async () => {
+      order.push("mark:write-inbox");
+      await h.writeInbox([{ id: "1", serverId: "1", read: true }]);
+      await inboxWritten.promise;
+      await h.addPendingLocked("1");
+      h.bumpRevision();
+      order.push("mark:enqueue-pending");
+    });
+    await flush();
+    const sync = h.withLock(h.session, async () => { order.push("sync:commit"); });
+    await flush();
+    assert.deepEqual(order, ["mark:write-inbox"], "the sync waits for the whole mark-read step");
+    inboxWritten.resolve();
+    await Promise.all([markRead, sync]);
+    assert.deepEqual(
+      order,
+      ["mark:write-inbox", "mark:enqueue-pending", "sync:commit"],
+      "inbox write and pending enqueue are one atomic step",
+    );
+    assert.deepEqual([...await h.readPending()], ["1"]);
+  }
+
+  // Clearing pending A while B is being queued must keep B.
+  {
+    const h = makeHarnessFor();
+    await h.addPendingLocked("A");
+    const clearA = h.withLock(h.session, async () => {
+      const ids = inboxSync.removeConfirmedPendingIds(await h.readPending(), ["A"]);
+      await h.writePending(ids);
+    });
+    const addB = h.withLock(h.session, () => h.addPendingLocked("B"));
+    await Promise.all([clearA, addB]);
+    assert.deepEqual(
+      [...await h.readPending()].sort(),
+      ["B"],
+      "clearing A does not drop a concurrently queued B",
+    );
+  }
+
+  // A successful read-all must clear only what it confirmed. C was queued while
+  // the request was in flight and has never been sent, so it must survive.
+  {
+    const h = makeHarnessFor();
+    await h.addPendingLocked("A");
+    await h.addPendingLocked("B");
+    const covered = [...await h.readPending()];
+    const readAllCall = deferred();
+    const readAll = (async () => {
+      await readAllCall.promise;
+      return h.withLock(h.session, async () => {
+        const ids = inboxSync.removeConfirmedPendingIds(await h.readPending(), covered);
+        await h.writePending(ids);
+      });
+    })();
+    await h.withLock(h.session, () => h.addPendingLocked("C"));
+    readAllCall.resolve();
+    await readAll;
+    assert.deepEqual(
+      [...await h.readPending()],
+      ["C"],
+      "a read-all keeps pending ids queued after it started",
+    );
+  }
+
+  // A GET that started before a mark-read returns after the PATCH succeeded and
+  // the pending id was cleared. The pending set can no longer protect the row,
+  // so the revision check is what stops the stale body resurrecting it.
+  {
+    const h = makeHarnessFor();
+    await h.writeInbox([{ id: "1", serverId: "1", read: false }]);
+    const revisionAtStart = h.getRevision();
+    const getResponse = deferred();
+
+    const sync = (async () => {
+      const staleRows = await getResponse.promise; // GET body, pre-mutation
+      return h.withLock(h.session, async () => {
+        if (inboxSync.isInboxResponseStale(revisionAtStart, h.getRevision())) {
+          return { applied: false, rows: await h.readInbox() };
+        }
+        await h.writeInbox(staleRows);
+        return { applied: true, rows: staleRows };
+      });
+    })();
+
+    // mark-read commits, then its PATCH succeeds and clears the pending id.
+    await h.withLock(h.session, async () => {
+      await h.writeInbox([{ id: "1", serverId: "1", read: true }]);
+      await h.addPendingLocked("1");
+      h.bumpRevision();
+    });
+    await h.withLock(h.session, async () => {
+      const ids = inboxSync.removeConfirmedPendingIds(await h.readPending(), ["1"]);
+      await h.writePending(ids);
+    });
+    assert.deepEqual([...await h.readPending()], [], "the PATCH cleared the pending id");
+
+    getResponse.resolve([{ id: "1", serverId: "1", read: false }]);
+    const result = await sync;
+    assert.equal(result.applied, false, "a stale GET body is not applied");
+    assert.deepEqual(
+      (await h.readInbox()).map((row) => row.read),
+      [true],
+      "the row stays read even though the pending id was already cleared",
+    );
+  }
+
+  // Switching accounts mid-request: each session has its own lock key and
+  // revision, so the second account is never blocked by the first.
+  {
+    const a = makeHarnessFor("user:1");
+    const b = makeHarnessFor("user:2");
+    const order = [];
+    const held = deferred();
+    const first = a.withLock(a.session, async () => {
+      order.push("a:start");
+      await held.promise;
+      order.push("a:end");
+    });
+    await flush();
+    await b.withLock(b.session, async () => { order.push("b:ran"); });
+    assert.deepEqual(order, ["a:start", "b:ran"], "a second account is not blocked");
+    held.resolve();
+    await first;
+  }
+
+  // A storage failure must not wedge the queue for the session.
+  {
+    const h = makeHarnessFor();
+    const failing = h.withLock(h.session, async () => { throw new Error("storage down"); });
+    const after = h.withLock(h.session, () => h.addPendingLocked("Z"));
+    const settled = await Promise.allSettled([failing, after]);
+    assert.equal(settled[0].status, "rejected");
+    assert.equal(settled[1].status, "fulfilled", "a storage failure does not wedge later work");
+    assert.deepEqual([...await h.readPending()], ["Z"]);
+  }
+
+  // A push arriving during a local mutation must still reach the tap handler.
+  // The tap syncs, then looks for its own row; discarding the whole stale
+  // response would hide the new row and send the user to the inbox list
+  // instead of the announcement.
+  {
+    const localRows = [{ id: "OLD", serverId: "OLD", read: false }];
+    const serverRows = [
+      { id: "OLD", serverId: "OLD", read: true },
+      { id: "NEW", serverId: "NEW", read: false },
+    ];
+    // The user dismissed/read OLD while the GET was in flight, so only OLD is
+    // protected from the stale body.
+    const merged = inboxSync.mergeStaleInboxResponse(localRows, serverRows, new Set(["OLD"]));
+    assert.ok(
+      merged.some((row) => String(row.serverId) === "NEW"),
+      "a push that arrived during a mutation is still delivered to the inbox",
+    );
+    assert.equal(
+      merged.find((row) => String(row.id) === "OLD").read,
+      false,
+      "the stale body does not undo the local mutation",
+    );
+  }
+
+  // A row dismissed locally and absent from the stale body must not reappear.
+  {
+    const localRows = [];
+    const serverRows = [{ id: "GONE", serverId: "GONE", read: false }];
+    const merged = inboxSync.mergeStaleInboxResponse(localRows, serverRows, new Set(["GONE"]));
+    assert.deepEqual(merged, [], "a dismissed row is not resurrected by a stale body");
+  }
+
+  // With nothing mutated, the server response is taken as-is.
+  {
+    const serverRows = [{ id: "A", serverId: "A", read: true }];
+    assert.deepEqual(
+      inboxSync.mergeStaleInboxResponse([{ id: "A", serverId: "A", read: false }], serverRows, new Set()),
+      serverRows,
+    );
+  }
+
+  // applyPendingReads keeps a queued read from flickering back to unread.
+  {
+    const rows = [
+      { id: "1", serverId: "1", read: false },
+      { id: "2", serverId: "2", read: false },
+    ];
+    assert.deepEqual(
+      inboxSync.applyPendingReads(rows, new Set(["1"])).map((row) => row.read),
+      [true, false],
+      "a row with a queued mark-read renders as read",
+    );
+    assert.deepEqual(
+      inboxSync.applyPendingReads(rows, new Set()).map((row) => row.read),
+      [false, false],
+    );
+  }
+}
+
+Promise.resolve()
+  .then(testRefreshTaskSettlement)
+  .then(testForegroundRefresh)
+  .then(testLrdResource)
+  .then(testInboxLockOrdering)
+  .then(testInboxMutationOrdering)
+  .then(() => console.log("Tests OK"))
+  .catch((error) => {
   console.error(error);
   process.exitCode = 1;
-});
+  });

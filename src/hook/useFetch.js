@@ -3,33 +3,121 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../services/api";
+import { readResourceCache, writeResourceCache } from "../services/resourceCache";
 
 const useFetch = (endpoint, options = {}) => {
-  const { params = {}, initialData = null, skip = false } = options;
+  const {
+    params = {},
+    initialData = null,
+    skip = false,
+    debugLabel = null,
+  } = options;
 
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(!skip);
   const [error, setError] = useState(null);
 
   const mounted = useRef(true);
+  const inFlight = useRef(null);
+  const queuedForce = useRef(null);
+  const paramsKey = JSON.stringify(params);
+  const cacheKey = `api:${endpoint}:${paramsKey}`;
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; };
+    return () => {
+      mounted.current = false;
+      queuedForce.current = null;
+    };
   }, []);
 
-  const fetchData = useCallback(async () => {
-    if (skip) return;
-    try {
-      if (mounted.current) { setLoading(true); setError(null); }
-      const res = await api.get(endpoint, { params });
-      const result = res.data?.data ?? res.data;
-      if (mounted.current) setData(result);
-    } catch (err) {
-      if (mounted.current) setError(err.response?.data?.message ?? err.message ?? "เกิดข้อผิดพลาด");
-    } finally {
-      if (mounted.current) setLoading(false);
+  const fetchData = useCallback(async ({ force = false } = {}) => {
+    if (skip || !mounted.current) return null;
+    if (inFlight.current) {
+      if (!force || inFlight.current.force) return inFlight.current.promise;
+      if (!queuedForce.current) {
+        queuedForce.current = inFlight.current.promise.then(
+          () => {
+            if (!mounted.current) return null;
+            queuedForce.current = null;
+            return fetchData({ force: true });
+          },
+          () => {
+            if (!mounted.current) return null;
+            queuedForce.current = null;
+            return fetchData({ force: true });
+          },
+        );
+      }
+      return queuedForce.current;
     }
-  }, [endpoint, JSON.stringify(params), skip]);
+
+    const request = (async () => {
+      const cached = await readResourceCache(cacheKey);
+      if (cached && mounted.current) {
+        setData(cached.data);
+        setError(null);
+        setLoading(false);
+      }
+      if (!force && cached?.fresh) return cached.data;
+
+      try {
+        if (!cached && mounted.current) { setLoading(true); setError(null); }
+        const requestStartedAt = Date.now();
+        const isAnnouncementRequest = debugLabel?.startsWith("announcements:");
+        if (__DEV__ && isAnnouncementRequest) {
+          console.log(`[${debugLabel}] request start`);
+        }
+        const res = await api.get(endpoint, { params });
+        const result = res.data?.data ?? res.data;
+        if (__DEV__ && debugLabel) {
+          const firstItem = Array.isArray(result)
+            ? result[0]
+            : result?.data?.[0] ?? result?.items?.[0] ?? result;
+          if (isAnnouncementRequest) {
+            const rows = Array.isArray(result)
+              ? result
+              : result?.data ?? result?.items ?? result?.results ?? [];
+            console.log(`[${debugLabel}] response`, {
+              status: res.status,
+              elapsedMs: Date.now() - requestStartedAt,
+              rows: Array.isArray(rows) ? rows.length : 0,
+              hasImage: Boolean(firstItem?.image_url || firstItem?.imageUrl),
+              hasThumbnail: Boolean(firstItem?.thumbnail_url || firstItem?.thumbnailUrl),
+              imageWidth: Number(firstItem?.image_width || firstItem?.imageWidth) || null,
+              imageHeight: Number(firstItem?.image_height || firstItem?.imageHeight) || null,
+              thumbnailWidth: Number(firstItem?.thumbnail_width || firstItem?.thumbnailWidth) || null,
+              thumbnailHeight: Number(firstItem?.thumbnail_height || firstItem?.thumbnailHeight) || null,
+            });
+          } else {
+            console.log(`[${debugLabel}] response`, { status: res.status });
+          }
+        }
+        await writeResourceCache(cacheKey, result);
+        if (mounted.current) {
+          setData(result);
+          setError(null);
+        }
+        return result;
+      } catch (err) {
+        if (!cached && mounted.current) {
+          setError(err.response?.data?.message ?? err.message ?? "เกิดข้อผิดพลาด");
+        }
+        return cached?.data ?? null;
+      } finally {
+        if (mounted.current) setLoading(false);
+      }
+    })();
+
+    const tracked = request.finally(() => {
+      if (inFlight.current?.promise === tracked) inFlight.current = null;
+    });
+    inFlight.current = { promise: tracked, force };
+    try {
+      return await tracked;
+    } finally {
+      if (queuedForce.current && !mounted.current) queuedForce.current = null;
+    }
+  }, [cacheKey, debugLabel, endpoint, paramsKey, skip]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

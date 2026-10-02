@@ -8,12 +8,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import HeaderBar from "../components/HeaderBar";
 import useCurrentUser from "../hook/useCurrentUser";
-import api from "../services/api";
+import useFetch from "../hook/useFetch";
 import { stripNamePrefix } from "../utils/name";
 import { fixPhotoUrl } from "../utils/image";
 import { colors, radius, shadows, typography } from "../theme/tokens";
-
-const logo = require("../assets/urusmartlogo.png");
+import { URUSMART_LOGO } from "../assets/brandAssets";
 
 const str = (v) => (typeof v === "string" && v.trim() ? v.trim() : "");
 
@@ -87,10 +86,9 @@ export default function Cardpage({ navigation }) {
   const { user, logout } = useCurrentUser(navigation);
   const [photoFailed, setPhotoFailed] = useState(false);
 
-  // แสดงข้อมูล user ทันที ไม่รอ API
-  const [teacher, setTeacher] = useState(null);
-  const [apiLoading, setApiLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // แสดงข้อมูลจาก cache ทันที แล้วค่อยอัปเดตจาก API เบื้องหลัง
+  const { data: teacherData, loading: apiLoading, error } = useFetch("/me", { initialData: null });
+  const teacher = teacherData ? normalize(teacherData) : null;
 
   // Animation เริ่มทันที ไม่รอ API
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -115,22 +113,12 @@ export default function Cardpage({ navigation }) {
     );
     pulse.start();
 
-    // fetch API in background
-    let cancelled = false;
-    (async () => {
-      try {
-        setApiLoading(true);
-        const res = await api.get("/me");
-        if (!cancelled) setTeacher(normalize(res.data?.data ?? res.data));
-      } catch (e) {
-        if (!cancelled) { setError(e.message); setTeacher(normalize({})); }
-      } finally {
-        if (!cancelled) { setApiLoading(false); pulse.stop(); }
-      }
-    })();
-
-    return () => { cancelled = true; pulse.stop(); };
+    return () => pulse.stop();
   }, []);
+
+  useEffect(() => {
+    if (!apiLoading) pulseAnim.stopAnimation();
+  }, [apiLoading, pulseAnim]);
 
   // merge: API data > cached user > empty (ไม่ fallback ชื่อปลอม)
   const raw = teacher ?? {};
@@ -216,7 +204,7 @@ export default function Cardpage({ navigation }) {
                       justifyContent: "center",
                     }}
                   >
-                    <Image source={logo} style={{ width: 48, height: 48 }} resizeMode="contain" />
+                    <Image source={URUSMART_LOGO} style={{ width: 48, height: 48 }} resizeMode="contain" fadeDuration={0} />
                   </View>
                   <View className="flex-row items-center gap-[5px] bg-white/20 border border-white/30 rounded-full px-3 py-[5px]">
                     <View className="w-[7px] h-[7px] rounded-full" style={{ backgroundColor: colors.brandYellow }} />

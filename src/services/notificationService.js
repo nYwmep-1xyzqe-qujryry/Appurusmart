@@ -9,6 +9,18 @@ import i18n from "../i18n/i18n";
 import api from "./api";
 import { getAuthToken, captureAuthSession, runWithSession, isAuthSessionCurrent, subscribeAuthSession } from "./authStorage";
 import { colors } from "../theme/tokens";
+import {
+  getAnnouncementId,
+  getCorrectedUnreadCount,
+  mergeNotificationInbox,
+} from "../utils/notificationInbox";
+import { createSessionLock } from "../utils/sessionLock";
+import {
+  applyPendingReads,
+  isInboxResponseStale,
+  mergeStaleInboxResponse,
+  removeConfirmedPendingIds,
+} from "../utils/inboxSync";
 
 const NOTIFICATION_INBOX_LIMIT = 100;
 const inboxListeners = new Set();
@@ -208,6 +220,7 @@ const extractUnreadCount = (responseData) => {
 };
 
 const inboxKey = (session) => `${STORAGE_KEYS.NOTIFICATION_INBOX}:user:${encodeURIComponent(session.userId)}`;
+const dismissedNotificationKey = (session) => `${inboxKey(session)}:dismissed`;
 const pendingReadKey = (session) => `${inboxKey(session)}:pending-read`;
 const pushTokenKey = (session) => `${STORAGE_KEYS.PUSH_TOKEN}:user:${encodeURIComponent(session.userId)}`;
 const notificationSettingsKey = (session) => `${STORAGE_KEYS.NOTIF_SETTINGS}:user:${encodeURIComponent(session.userId)}`;
@@ -218,8 +231,72 @@ const readInbox = async (session) => {
     return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 };
+
+// Stores which notifications the user hid locally — nothing more. An earlier
+// version also stored each row's unread state at dismissal time and subtracted
+// it from the badge forever, which went wrong as soon as the server's own count
+// changed for that row (read elsewhere, read-all, deleted). The badge
+// correction is now derived from the live server rows instead, so only the ids
+// need to persist. Both the id-array and the { id: wasUnread } map are read so
+// an upgrade keeps the user's hidden rows hidden.
+const readDismissedNotificationIds = async (session) => {
+  try {
+    const raw = await AsyncStorage.getItem(dismissedNotificationKey(session));
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(parsed)) return new Set(parsed.map(String));
+    if (parsed && typeof parsed === "object") return new Set(Object.keys(parsed));
+    return new Set();
+  } catch (_) {
+    return new Set();
+  }
+};
+
+const writeDismissedNotificationIds = async (session, ids) => {
+  await AsyncStorage.setItem(dismissedNotificationKey(session), JSON.stringify([...ids]));
+};
+
+// Sync, dismiss, mark-read and read-all all read-modify-write the same stored
+// state, so they share one lock per session. Keyed by session so switching
+// accounts never blocks the new one behind the old one's work.
+const inboxLock = createSessionLock();
+const withInboxLock = (session, task) => inboxLock(getInboxSessionKey(session), task);
+
+// Monotonic per-session counter, bumped by every local mutation. A GET that
+// started before a mutation and returns after it carries pre-mutation rows, so
+// comparing the revision captured at request start against the one at commit
+// tells us the response is stale. Clearing the pending id is not enough on its
+// own: once the PATCH succeeds the id is gone, and the stale body would then
+// look authoritative and resurrect the row as unread.
+const inboxRevisions = new Map();
+// Ids touched by local mutations since the last sync committed. A stale
+// response may still carry rows this session has not mutated — notably a push
+// that has just arrived — so only these ids are protected from it.
+const mutatedInboxIds = new Map();
+
+const getInboxRevision = (session) => inboxRevisions.get(getInboxSessionKey(session)) ?? 0;
+
+const getMutatedInboxIds = (session) => mutatedInboxIds.get(getInboxSessionKey(session)) ?? new Set();
+
+const bumpInboxRevision = (session, mutatedId = null) => {
+  const key = getInboxSessionKey(session);
+  const next = (inboxRevisions.get(key) ?? 0) + 1;
+  inboxRevisions.set(key, next);
+  if (mutatedId != null) {
+    const ids = mutatedInboxIds.get(key) ?? new Set();
+    ids.add(String(mutatedId));
+    mutatedInboxIds.set(key, ids);
+  }
+  return next;
+};
+
+// Called once a sync has committed the server's view, which already reflects
+// the mutations the server knows about.
+const clearMutatedInboxIds = (session) => mutatedInboxIds.delete(getInboxSessionKey(session));
 subscribeAuthSession(() => {
   backendInboxUnavailableUntil = 0;
+  // Revisions are keyed per session, so a new account already starts fresh;
+  // clearing here just stops the map growing across account switches.
+  inboxRevisions.clear();
   emitInbox([]);
 });
 
@@ -237,17 +314,39 @@ const writePendingIds = async (session, ids) => {
   await AsyncStorage.setItem(pendingReadKey(session), JSON.stringify([...ids]));
 };
 
-const queuePendingRead = async (serverId, session) => {
+// Serialized for the same reason as the dismissal set: concurrent callers each
+// reading the set, adding one id and writing it back would drop all but the
+// last, losing pending reads that were never sent to the server.
+// Every read-modify-write of the pending set goes through these. A caller that
+// already holds the lock must use addPendingReadLocked directly, or it would
+// deadlock waiting on a lock its own session already owns.
+const addPendingReadLocked = async (serverId, session) => {
   const ids = await readPendingIds(session);
   ids.add(String(serverId));
   await writePendingIds(session, ids);
+  return ids;
 };
 
-const clearPendingRead = async (serverId, session) => {
+const queuePendingRead = (serverId, session) => withInboxLock(
+  session,
+  () => addPendingReadLocked(serverId, session),
+);
+
+const clearPendingRead = (serverId, session) => withInboxLock(session, async () => {
   const ids = await readPendingIds(session);
   ids.delete(String(serverId));
   await writePendingIds(session, ids);
-};
+  return ids;
+});
+
+// Removes only the ids this request actually confirmed. Clearing the whole set
+// would discard reads queued while the request was in flight, losing them
+// silently — they would never reach the server.
+const clearConfirmedPendingReads = (confirmedIds, session) => withInboxLock(session, async () => {
+  const ids = removeConfirmedPendingIds(await readPendingIds(session), confirmedIds);
+  await writePendingIds(session, ids);
+  return ids;
+});
 
 const flushPendingReads = async (session) => {
   const key = getInboxSessionKey(session);
@@ -331,6 +430,9 @@ export async function syncNotificationInboxFromBackend() {
 
 async function fetchNotificationInbox(session) {
   try {
+    // Captured before the request so a mutation that commits while it is in
+    // flight can be detected at commit time.
+    const revisionAtStart = getInboxRevision(session);
     const response = await api.get("/notifications", {
       authSession: session,
       params: { page: 1, per_page: NOTIFICATION_INBOX_LIMIT },
@@ -338,34 +440,61 @@ async function fetchNotificationInbox(session) {
       suppressErrorLog: true,
       suppressAuthRedirect: true,
     });
-    const serverItems = extractServerNotifications(response.data)
+    let serverItems = extractServerNotifications(response.data)
       .map(normalizeServerNotification)
       .filter(Boolean);
-    const pendingIds = await readPendingIds(session);
+    // The notification record from the authenticated inbox is the source of
+    // truth for whether a notification belongs to this user. Cross-checking it
+    // against GET /announcements hid valid notifications, because that list is
+    // paginated (Home requests limit=5) and an older announcement simply is not
+    // in it — the detail endpoint still serves it. Deleted or unpublished
+    // announcements are handled by the detail screen's 403/404/410 responses.
     const serverUnreadCount = extractUnreadCount(response.data);
-    const pendingUnreadCount = serverItems.filter(
-      (item) => pendingIds.has(String(item.serverId)) && !item.read,
-    ).length;
-    const unreadCount = serverUnreadCount == null
-      ? null
-      : Math.max(0, serverUnreadCount - pendingUnreadCount);
-    const metadata = unreadCount == null ? null : { unreadCount };
-    if (metadata) inboxMetadata.set(getInboxSessionKey(session), metadata);
 
-    const items = await updateNotificationInbox((current) => {
-      const serverIds = new Set(serverItems.map((item) => item.id));
-      const normalizedServerItems = serverItems.map((item) =>
-        pendingIds.has(String(item.serverId)) ? { ...item, read: true } : item,
+    // Both the dismissal set and the pending reads are read inside the lock:
+    // a mutation that lands while this request is in flight must not be
+    // overwritten by the stale snapshot this response was built from.
+    const items = await withInboxLock(session, async () => {
+      // A mutation committed while this GET was in flight means the response
+      // predates it. Applying it would undo that mutation — and the pending id
+      // may already have been cleared by a successful PATCH, so the pending
+      // set alone cannot protect the row. Keep the local state instead; the
+      // next sync fetches rows that include the mutation.
+      const stale = isInboxResponseStale(revisionAtStart, getInboxRevision(session));
+      const mutatedIds = stale ? getMutatedInboxIds(session) : new Set();
+      // A response that predates nothing already reflects every local mutation
+      // the server knows about, so the protection set can be reset.
+      if (!stale) clearMutatedInboxIds(session);
+      const dismissedIds = await readDismissedNotificationIds(session);
+      const pendingIds = await readPendingIds(session);
+      // The correction uses every row in the page, dismissed rows included, so
+      // a dismissed row is only subtracted while the server still reports it
+      // unread. See getCorrectedUnreadCount for why a stored flag is not used.
+      const unreadCount = getCorrectedUnreadCount({
+        serverUnreadCount,
+        serverRows: serverItems,
+        dismissedIds,
+        pendingReadIds: pendingIds,
+      });
+      const metadata = unreadCount == null ? null : { unreadCount };
+      if (metadata) inboxMetadata.set(getInboxSessionKey(session), metadata);
+
+      const visibleItems = serverItems.filter((item) => !dismissedIds.has(String(item.id)));
+      return updateNotificationInbox(
+        (current) => {
+          const incoming = applyPendingReads(visibleItems, pendingIds);
+          // A stale body must not undo rows this session just mutated, but it
+          // may still carry rows the mutation never touched — including a push
+          // that just arrived, which the tap handler needs to find.
+          const reconciled = stale
+            ? mergeStaleInboxResponse(current, incoming, mutatedIds)
+            : incoming;
+          return mergeNotificationInbox(current, reconciled, dismissedIds);
+        },
+        session,
+        metadata,
       );
-      const localOnly = current.filter((item) => !serverIds.has(item.id));
-      return [...normalizedServerItems, ...localOnly]
-        .sort(
-          (a, b) =>
-            new Date(b.receivedAt).getTime() -
-            new Date(a.receivedAt).getTime(),
-        )
-        .slice(0, NOTIFICATION_INBOX_LIMIT);
-    }, session, metadata);
+    });
     await flushPendingReads(session);
     return items;
 
@@ -430,35 +559,92 @@ const schedulePushInboxRetry = (serverId) => {
 export async function markNotificationRead(id) {
   const session = await captureAuthSession();
   if (!session?.userId) return [];
-  let serverId = null;
-  const currentItems = await readInbox(session);
-  const currentItem = currentItems.find((item) => item.id === id);
-  const wasUnread = Boolean(currentItem && !currentItem.read);
-  serverId = currentItem?.serverId ?? null;
-  const knownMetadata = inboxMetadata.get(getInboxSessionKey(session));
-  const items = await updateNotificationInbox((current) => current.map((item) => {
-    if (item.id !== id) return item;
-    return { ...item, read: true };
-  }), session, knownMetadata && wasUnread
-    ? { unreadCount: Math.max(0, knownMetadata.unreadCount - 1) }
-    : knownMetadata);
+  // Reading the row and committing the change share the lock, so an in-flight
+  // sync cannot land between them and overwrite this read with stale state.
+  const { items, serverId } = await withInboxLock(session, async () => {
+    const currentItems = await readInbox(session);
+    const currentItem = currentItems.find((item) => item.id === id);
+    const wasUnread = Boolean(currentItem && !currentItem.read);
+    const knownMetadata = inboxMetadata.get(getInboxSessionKey(session));
+    const updated = await updateNotificationInbox((current) => current.map((item) => {
+      if (item.id !== id) return item;
+      return { ...item, read: true };
+    }), session, knownMetadata && wasUnread
+      ? { unreadCount: Math.max(0, knownMetadata.unreadCount - 1) }
+      : knownMetadata);
+    // Enqueued in the same critical section as the inbox write: releasing the
+    // lock in between leaves a window where the row reads as read but nothing
+    // is queued for the server, and a sync landing there would resurrect it as
+    // unread. addPendingReadLocked is used because this already holds the lock.
+    const pendingServerId = currentItem?.serverId ?? null;
+    if (pendingServerId) await addPendingReadLocked(pendingServerId, session);
+    bumpInboxRevision(session, id);
+    return { items: updated, serverId: pendingServerId };
+  });
+  // The network call stays outside the lock so a slow request cannot block
+  // other mutations for this session.
   if (serverId && await isAuthSessionCurrent(session)) {
-    await queuePendingRead(serverId, session);
     await flushPendingReads(session);
   }
   return items;
 }
 
+export async function dismissNotification(id) {
+  const session = await captureAuthSession();
+  if (!session?.userId) return [];
+  // The read state is resolved inside the lock: a sync running concurrently
+  // can flip the row to read, and deciding from a snapshot taken outside the
+  // lock would decrement the badge for a row the server already stopped
+  // counting.
+  return withInboxLock(session, async () => {
+    const currentItems = await readInbox(session);
+    const currentItem = currentItems.find((item) => String(item.id) === String(id));
+    const wasUnread = Boolean(currentItem && !currentItem.read);
+    const dismissedIds = await readDismissedNotificationIds(session);
+    const alreadyDismissed = dismissedIds.has(String(id));
+    dismissedIds.add(String(id));
+    await writeDismissedNotificationIds(session, dismissedIds);
+
+    // This is an optimistic local adjustment so the badge reacts immediately.
+    // The next sync recomputes it from the server rows, which is what keeps it
+    // correct once the server's own count changes for this row.
+    const knownMetadata = inboxMetadata.get(getInboxSessionKey(session));
+    bumpInboxRevision(session, id);
+    return updateNotificationInbox(
+      (current) => current.filter((item) => String(item.id) !== String(id)),
+      session,
+      knownMetadata && wasUnread && !alreadyDismissed
+        ? { unreadCount: Math.max(0, knownMetadata.unreadCount - 1) }
+        : knownMetadata,
+    );
+  });
+}
+
 export async function markAllNotificationsRead() {
   const session = await captureAuthSession();
   if (!session?.userId) return [];
-  const items = await updateNotificationInbox(
-    (current) => current.map((item) => ({ ...item, read: true })),
-    session,
-    { unreadCount: 0 },
-  );
-  const serverIds = items.map((item) => item.serverId).filter(Boolean);
-  for (const serverId of serverIds) await queuePendingRead(serverId, session);
+  // The inbox update and the pending-read queueing happen in one locked step,
+  // so a sync cannot commit between them and resurrect an unread state for
+  // rows this call already marked read.
+  const { items, coveredIds } = await withInboxLock(session, async () => {
+    const updated = await updateNotificationInbox(
+      (current) => current.map((item) => ({ ...item, read: true })),
+      session,
+      { unreadCount: 0 },
+    );
+    const pendingIds = await readPendingIds(session);
+    updated.forEach((item) => {
+      if (item.serverId) pendingIds.add(String(item.serverId));
+    });
+    await writePendingIds(session, pendingIds);
+    // Snapshot of exactly what this read-all covers. Anything queued after
+    // this point belongs to a later mutation and must survive.
+    // Always bump, even for an empty list, so an in-flight GET is still
+    // recognised as predating this read-all.
+    bumpInboxRevision(session);
+    updated.forEach((item) => bumpInboxRevision(session, item.id));
+    return { items: updated, coveredIds: [...pendingIds] };
+  });
   if (!isBackendInboxUnavailable() && await isAuthSessionCurrent(session)) {
     try {
       await api.post("/notifications/read-all", null, {
@@ -466,7 +652,9 @@ export async function markAllNotificationsRead() {
         suppressAuthRedirect: true,
         suppressErrorLog: true,
       });
-      await writePendingIds(session, new Set());
+      // Clear only the snapshot the server confirmed. Wiping the whole set
+      // would silently drop reads queued while this request was in flight.
+      await clearConfirmedPendingReads(coveredIds, session);
     } catch {
       await flushPendingReads(session);
     }

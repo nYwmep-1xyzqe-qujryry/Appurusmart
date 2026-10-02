@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, RefreshControl, StatusBar, Text, TouchableOpacity, View } from "react-native";
+import { Alert, FlatList, RefreshControl, StatusBar, Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInRight, FadeInDown } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,12 +9,13 @@ import {
   loadNotificationInbox,
   markAllNotificationsRead,
   markNotificationRead,
+  dismissNotification,
   subscribeNotificationInbox,
   syncNotificationInboxFromBackend,
 } from "../../services/notificationService";
 import { colors, radius, shadows, typography } from "../../theme/tokens";
 
-const NotifItem = ({ item, onPress, index }) => (
+const NotifItem = ({ item, onPress, onDelete, index }) => (
   <Animated.View entering={FadeInRight.delay(index * 50).springify().damping(16)}>
     <TouchableOpacity
       className="rounded-[18px] p-[14px] flex-row gap-3 mb-2 overflow-hidden"
@@ -59,6 +60,16 @@ const NotifItem = ({ item, onPress, index }) => (
         <Text className="text-[13px] leading-[20px]" style={{ color: colors.secondaryText, fontWeight: "400", letterSpacing: 0 }} numberOfLines={2}>{item.body}</Text>
         <Text className="text-[12px] mt-[2px]" style={{ color: colors.textSoft, fontWeight: "400", lineHeight: 18, letterSpacing: 0 }}>{item.time}</Text>
       </View>
+      <TouchableOpacity
+        className="w-9 h-9 rounded-xl items-center justify-center self-center"
+        style={{ backgroundColor: colors.surfaceMuted }}
+        onPress={onDelete}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="ลบการแจ้งเตือน"
+      >
+        <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+      </TouchableOpacity>
     </TouchableOpacity>
   </Animated.View>
 );
@@ -98,6 +109,20 @@ export default function NotificationsScreen({ navigation }) {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const markAllRead = () => markAllNotificationsRead();
+  const deleteNotification = useCallback((item) => {
+    Alert.alert(
+      t("notifications.deleteTitle"),
+      t("notifications.deleteConfirm"),
+      [
+        { text: t("notifications.deleteCancel"), style: "cancel" },
+        {
+          text: t("notifications.deleteAction"),
+          style: "destructive",
+          onPress: () => dismissNotification(item.id),
+        },
+      ],
+    );
+  }, [t]);
   const openNotification = (item) => {
     markNotificationRead(item.id);
     if (item.data?.type === "announcement" && item.data?.announcement_id != null) {
@@ -216,7 +241,7 @@ export default function NotificationsScreen({ navigation }) {
               </Text>
             );
           }
-          return <NotifItem item={item} onPress={() => openNotification(item)} index={index} />;
+          return <NotifItem item={item} onPress={() => openNotification(item)} onDelete={() => deleteNotification(item)} index={index} />;
         }}
       />
     </View>

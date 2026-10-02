@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { ActivityIndicator, Alert, Image, ScrollView, StatusBar, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AppHeader from "../../components/AppHeader";
@@ -6,7 +7,8 @@ import useLrdResource from "../../hook/useLrdResource";
 import useLrdSession from "../../hook/useLrdSession";
 import useCurrentUser from "../../hook/useCurrentUser";
 import { DEGREE_OPTIONS, DEPARTMENT_OPTIONS, FACULTY_OPTIONS, getLabel } from "./mockOptions";
-import { getLrd, LRD_ENDPOINTS } from "../../services/lrdApi";
+import { getLrd, LRD_ENDPOINTS, LRD_VISIBLE_SCOPE } from "../../services/lrdApi";
+import { subscribeLrdChange } from "../../services/lrdChanges";
 import { useEResearchText } from "./i18n";
 
 const DetailRow = ({ icon, label, value }) => {
@@ -183,10 +185,28 @@ export default function EResearch({ navigation }) {
   const [profileLoading, setProfileLoading] = useState(false);
   const { items: education, loading: educationLoading, refetch: refetchEducation } = useLrdResource(LRD_ENDPOINTS.educations, { skip: !canLoadLrd, loadOnFocus: false });
   const { items: expertise, loading: expertiseLoading, refetch: refetchExpertise } = useLrdResource(LRD_ENDPOINTS.expertises, { skip: !canLoadLrd, loadOnFocus: false });
-  const { total: projectsTotal, loading: projectsLoading, refetch: refetchProjects } = useLrdResource(LRD_ENDPOINTS.projects, { params: { scope: "mine" }, skip: !canLoadLrd, loadOnFocus: false });
-  const { total: articlesTotal, loading: articlesLoading, refetch: refetchArticles } = useLrdResource(LRD_ENDPOINTS.papers, { params: { scope: "mine" }, skip: !canLoadLrd, loadOnFocus: false });
-  const { total: otherProjectsTotal, loading: otherProjectsLoading, error: otherProjectsError, refetch: refetchOtherProjects } = useLrdResource(LRD_ENDPOINTS.projects, { params: { scope: "others" }, skip: !canLoadLrd, loadOnFocus: false });
-  const { total: otherArticlesTotal, loading: otherArticlesLoading, error: otherArticlesError, refetch: refetchOtherArticles } = useLrdResource(LRD_ENDPOINTS.papers, { params: { scope: "others" }, skip: !canLoadLrd, loadOnFocus: false });
+  const counterParams = { page: 1, per_page: 1 };
+  const { total: projectsTotal, loading: projectsLoading, error: projectsError, refetch: refetchProjects } = useLrdResource(LRD_ENDPOINTS.projects, { params: { ...counterParams, scope: "mine" }, skip: !canLoadLrd, loadOnFocus: false });
+  const { total: articlesTotal, loading: articlesLoading, error: articlesError, refetch: refetchArticles } = useLrdResource(LRD_ENDPOINTS.papers, { params: { ...counterParams, scope: "mine" }, skip: !canLoadLrd, loadOnFocus: false });
+  const { total: otherProjectsTotal, loading: otherProjectsLoading, error: otherProjectsError, refetch: refetchOtherProjects } = useLrdResource(LRD_ENDPOINTS.projects, { params: { ...counterParams, scope: LRD_VISIBLE_SCOPE }, skip: !canLoadLrd, loadOnFocus: false });
+  const { total: otherArticlesTotal, loading: otherArticlesLoading, error: otherArticlesError, refetch: refetchOtherArticles } = useLrdResource(LRD_ENDPOINTS.papers, { params: { ...counterParams, scope: LRD_VISIBLE_SCOPE }, skip: !canLoadLrd, loadOnFocus: false });
+
+  useEffect(() => {
+    if (!canLoadLrd) return undefined;
+    return subscribeLrdChange((endpoint) => {
+      if (endpoint === LRD_ENDPOINTS.projects) {
+        void Promise.allSettled([
+          refetchProjects({ force: true }),
+          refetchOtherProjects({ force: true }),
+        ]);
+      } else if (endpoint === LRD_ENDPOINTS.papers) {
+        void Promise.allSettled([
+          refetchArticles({ force: true }),
+          refetchOtherArticles({ force: true }),
+        ]);
+      }
+    });
+  }, [canLoadLrd, refetchArticles, refetchOtherArticles, refetchOtherProjects, refetchProjects]);
 
   const refetchProfile = useCallback(async () => {
     if (!canLoadLrd) return;
@@ -211,18 +231,27 @@ export default function EResearch({ navigation }) {
     finally { setProfileLoading(false); }
   }, [canLoadLrd]);
 
-  useEffect(() => {
-    if (!canLoadLrd || !researcherId || loadedResearcherRef.current === String(researcherId)) return;
-    loadedResearcherRef.current = String(researcherId);
-    Promise.all([
-      refetchProfile(),
-      refetchEducation(),
-      refetchExpertise(),
-      refetchProjects(),
-      refetchArticles(),
-      refetchOtherProjects(),
-      refetchOtherArticles(),
-    ]).catch(() => {});
+  useFocusEffect(useCallback(() => {
+    if (!canLoadLrd || !researcherId) return undefined;
+    const researcherKey = String(researcherId);
+    const isFirstLoadForResearcher = loadedResearcherRef.current !== researcherKey;
+    loadedResearcherRef.current = researcherKey;
+    const counterRefreshes = [
+      refetchProjects({ force: true }),
+      refetchArticles({ force: true }),
+      refetchOtherProjects({ force: true }),
+      refetchOtherArticles({ force: true }),
+    ];
+    const requests = isFirstLoadForResearcher
+      ? [
+          refetchProfile(),
+          refetchEducation({ force: true }),
+          refetchExpertise({ force: true }),
+          ...counterRefreshes,
+        ]
+      : counterRefreshes;
+    Promise.allSettled(requests).catch(() => {});
+    return undefined;
   }, [
     canLoadLrd,
     researcherId,
@@ -233,7 +262,7 @@ export default function EResearch({ navigation }) {
     refetchArticles,
     refetchOtherProjects,
     refetchOtherArticles,
-  ]);
+  ]));
 
   const loading = sessionLoading || (canLoadLrd && (profileLoading || educationLoading || expertiseLoading));
   const hasProfile = Boolean(profile.firstName?.trim() || profile.lastName?.trim());
@@ -340,8 +369,8 @@ export default function EResearch({ navigation }) {
         ) : !sessionError && connected ? (
           <>
             <MenuCard icon="person-outline" color="#07865F" background="#e3f3eb" title={te("home.profileTitle")} description={te("home.profileDescription")} onPress={() => navigation.navigate("ResearcherForm")} />
-            <MenuCard icon="folder-open-outline" color="#185fa5" background="#e8f0fb" title={te("home.projectsTitle")} description={te("home.projectsDescription")} count={projectsLoading ? undefined : projectsTotal} onPress={() => navigation.navigate("ProjectList")} />
-            <MenuCard icon="document-text-outline" color="#b56a18" background="#fff3df" title={te("home.articlesTitle")} description={te("home.articlesDescription")} count={articlesLoading ? undefined : articlesTotal} onPress={() => navigation.navigate("ArticleList")} />
+            <MenuCard icon="folder-open-outline" color="#185fa5" background="#e8f0fb" title={te("home.projectsTitle")} description={te("home.projectsDescription")} count={projectsLoading || projectsError ? undefined : projectsTotal} onPress={() => navigation.navigate("ProjectList")} />
+            <MenuCard icon="document-text-outline" color="#b56a18" background="#fff3df" title={te("home.articlesTitle")} description={te("home.articlesDescription")} count={articlesLoading || articlesError ? undefined : articlesTotal} onPress={() => navigation.navigate("ArticleList")} />
             <MenuCard icon="print-outline" color="#6b3fa0" background="#f1e9fa" title={te("home.printTitle")} description={te("home.printDescription")} onPress={() => navigation.navigate("ProfilePrint")} />
             <Text className="text-[13px] font-extrabold text-[#5F7069] uppercase mt-2 mb-3">{te("home.searchData")}</Text>
             <MenuCard icon="search-outline" color="#0F7A55" background="#E7F4ED" title={te("home.searchProjectsTitle")} description={te("home.searchProjectsDescription")} count={otherProjectsLoading || otherProjectsError ? undefined : otherProjectsTotal} onPress={() => navigation.navigate("ProjectSearch", { mode: "search" })} />

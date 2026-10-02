@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  useWindowDimensions,
 } from "react-native";
 import ReAnimated, { FadeInDown } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
@@ -25,7 +26,13 @@ import { ANNOUNCE_PALETTES } from "../../constants/announcePalettes";
 import AnnouncementImage from "../../components/AnnouncementImage";
 import AnnouncementImageViewer from "../../components/AnnouncementImageViewer";
 import useFetch from "../../hook/useFetch";
-import { getAnnouncementRows, normalizeAnnouncement, normalizeAnnouncements } from "../../utils/announcement";
+import {
+  getAnnouncementDetailPreviewSize,
+  getAnnouncementRows,
+  normalizeAnnouncement,
+  normalizeAnnouncements,
+} from "../../utils/announcement";
+import { getAnnouncementSummary } from "../../utils/announcementCarousel";
 import { normalizeOptionalUrl } from "../../utils/url";
 import { colors as themeColors, radius, shadows, typography } from "../../theme/tokens";
 
@@ -33,10 +40,11 @@ const SHEET_H = Dimensions.get("window").height * 0.72;
 
 // ── List card ─────────────────────────────────────────────
 const AnnouncementItem = ({ item, index, highlighted, defaultTag, defaultTitle, onPress }) => {
+  const { fontScale } = useWindowDimensions();
   const announcement = normalizeAnnouncement(item, defaultTitle);
   const palette = ANNOUNCE_PALETTES[index % ANNOUNCE_PALETTES.length];
   const title = announcement.title || defaultTitle;
-  const summary = announcement.sub || announcement.body;
+  const summary = getAnnouncementSummary({ ...announcement, title });
   const imageUri = announcement.thumbnailUrl || announcement.imageUrl;
 
   return (
@@ -76,34 +84,27 @@ const AnnouncementItem = ({ item, index, highlighted, defaultTag, defaultTitle, 
                 </Text>
               )}
             </View>
-            <Text style={{ ...typography.body, fontSize: 16, lineHeight: 22, fontWeight: "600" }} numberOfLines={2}>
+            <Text style={{ ...typography.body, fontSize: 16, lineHeight: 22, fontWeight: "600", minHeight: 44 * Math.max(1, fontScale) }} numberOfLines={2}>
               {title}
             </Text>
-            {!!summary && (
-              <Text style={{ ...typography.secondary, marginTop: 4 }} numberOfLines={2}>
-                {summary}
+              <Text style={{ ...typography.secondary, marginTop: 4, lineHeight: 20, minHeight: 40 * Math.max(1, fontScale) }} numberOfLines={2}>
+                {summary || " "}
               </Text>
-            )}
             </View>
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              {imageUri ? (
-                <AnnouncementImage
-                  uri={imageUri}
-                  alt={announcement.imageAlt}
-                  cacheKey={announcement.imageCacheKey}
-                  style={{ width: 88, height: 66, borderRadius: radius.md }}
-                />
-              ) : (
-                <LinearGradient
-                  colors={announcement.colors ?? palette.colors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{ width: 48, height: 48, borderRadius: radius.md, alignItems: "center", justifyContent: "center" }}
-                >
-                  <Ionicons name={announcement.icon ?? palette.icon} size={22} color="rgba(255,255,255,0.95)" />
-                </LinearGradient>
-              )}
+              <AnnouncementImage
+                uri={imageUri}
+                fallbackUri={announcement.imageUrl !== imageUri ? announcement.imageUrl : null}
+                alt={announcement.imageAlt}
+                cacheKey={announcement.imageCacheKey}
+                fallbackIcon={announcement.icon ?? palette.icon}
+                fallbackLabel={announcement.tag ?? defaultTag}
+                fallbackColor={themeColors.primary}
+                fallbackBackground={palette.colors[1]}
+                fallbackVariant="compact"
+                style={{ width: 88, height: 66, borderRadius: radius.md }}
+              />
               <Ionicons name="chevron-forward" size={16} color={themeColors.borderStrong} />
             </View>
           </View>
@@ -122,11 +123,13 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
   const backdrop = useRef(new Animated.Value(0)).current;
   const onCloseRef = useRef(onClose);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [loadedImageSize, setLoadedImageSize] = useState(null);
   const [linkError, setLinkError] = useState(null);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => {
     setImageViewerVisible(false);
     setLinkError(null);
+    setLoadedImageSize(null);
   }, [item]);
 
   // Open animation each time a new item is selected
@@ -173,12 +176,26 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
   const title = announcement.title || defaultTitle;
   const body = announcement.body;
   const tag = announcement.tag ?? defaultTag;
-  const icon = announcement.icon ?? ANNOUNCE_PALETTES[0].icon;
-  const colors = announcement.colors ?? ANNOUNCE_PALETTES[0].colors;
+  const itemId = Number(announcement.id);
+  const paletteIndex = Number.isFinite(itemId)
+    ? Math.abs(itemId) % ANNOUNCE_PALETTES.length
+    : 0;
+  const palette = ANNOUNCE_PALETTES[paletteIndex];
+  const icon = announcement.icon ?? palette.icon;
+  const announcementColors = Array.isArray(announcement.colors) && announcement.colors.length >= 2
+    ? announcement.colors
+    : palette.colors;
   const imageUri = announcement.imageUrl || announcement.thumbnailUrl;
-  const imageRatio = announcement.imageWidth && announcement.imageHeight
-    ? Math.min(2.2, Math.max(0.7, announcement.imageWidth / announcement.imageHeight))
-    : 16 / 9;
+  const imageWidth = loadedImageSize?.width ?? announcement.imageWidth;
+  const imageHeight = loadedImageSize?.height ?? announcement.imageHeight;
+  // The sheet is SHEET_H tall rather than full-screen, so the preview
+  // takes its 40% share of the sheet's own height — same intent as the
+  // full detail screen, scaled to this container.
+  const previewHeight = getAnnouncementDetailPreviewSize({
+    windowWidth: Dimensions.get("window").width,
+    windowHeight: SHEET_H,
+    bottomInset: bottom,
+  }).height;
   const sourceUrl = typeof announcement.url === "string" ? announcement.url.trim() : "";
   const hasUrl = sourceUrl !== "";
   const normalizedUrl = normalizeOptionalUrl(sourceUrl);
@@ -263,7 +280,7 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
             contentContainerStyle={{ paddingBottom: 8 }}
           >
             {/* ── Hero ── */}
-            <View style={{ alignItems: "center", paddingHorizontal: 24, paddingTop: 4, paddingBottom: 22, gap: 14 }}>
+            <View style={{ alignItems: "center", paddingHorizontal: 8, paddingTop: 4, paddingBottom: 18, gap: 12 }}>
               {imageUri ? (
                 <TouchableOpacity
                   activeOpacity={0.92}
@@ -274,15 +291,32 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
                 >
                   <AnnouncementImage
                     uri={imageUri}
+                    fallbackUri={announcement.thumbnailUrl !== imageUri ? announcement.thumbnailUrl : null}
                     alt={announcement.imageAlt}
+                    fallbackIcon={icon}
+                    fallbackLabel={announcement.tag || defaultTag}
+                    fallbackColor={themeColors.primary}
+                    fallbackBackground={palette.colors[1]}
                     resizeMode="contain"
                     cacheKey={announcement.imageCacheKey}
-                    style={{ width: "100%", aspectRatio: imageRatio, maxHeight: 190, borderRadius: 18 }}
+                    cachePolicy="default"
+                    onImageSize={({ width, height }) => setLoadedImageSize((current) => (
+                      current?.width === width && current?.height === height ? current : { width, height }
+                    ))}
+                    // The frame keeps its size; contain fits the whole
+                    // image inside it, so this background fills the
+                    // letterbox space.
+                    style={{
+                      width: "100%",
+                      height: previewHeight,
+                      borderRadius: 8,
+                      backgroundColor: themeColors.primaryMuted,
+                    }}
                   />
                 </TouchableOpacity>
               ) : (
                 <LinearGradient
-                  colors={colors}
+                  colors={announcementColors}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={{
@@ -292,7 +326,7 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
                     alignItems: "center",
                     justifyContent: "center",
                     elevation: 4,
-                    shadowColor: colors[1],
+                    shadowColor: announcementColors[1],
                     shadowOpacity: 0.35,
                     shadowRadius: 12,
                     shadowOffset: { width: 0, height: 4 },
@@ -434,9 +468,10 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
       <AnnouncementImageViewer
         visible={imageViewerVisible}
         uri={imageUri}
+        fallbackUri={announcement.thumbnailUrl !== imageUri ? announcement.thumbnailUrl : null}
         alt={announcement.imageAlt}
-        imageWidth={announcement.imageWidth}
-        imageHeight={announcement.imageHeight}
+        imageWidth={imageWidth}
+        imageHeight={imageHeight}
         cacheKey={announcement.imageCacheKey}
         onClose={() => setImageViewerVisible(false)}
       />
@@ -448,7 +483,10 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
 export default function AnnouncementsScreen({ navigation, route }) {
   const { t } = useTranslation();
   const { top } = useSafeAreaInsets();
-  const { data: fetched, loading } = useFetch("/announcements", { initialData: [] });
+  const { data: fetched, loading } = useFetch("/announcements", {
+    initialData: [],
+    debugLabel: "announcements:list",
+  });
   const fetchedItems = getAnnouncementRows(fetched);
   const seedItems = getAnnouncementRows(route.params?.items);
   const items = normalizeAnnouncements(

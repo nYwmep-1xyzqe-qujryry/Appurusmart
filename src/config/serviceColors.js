@@ -1,0 +1,15 @@
+export const serviceColors = {
+  expert: { iconColor: "#1A6B3C", backgroundColor: "#E8F5EE" },
+  research: { iconColor: "#0F7A55", backgroundColor: "#D6F0E3" },
+  lms: { iconColor: "#1A6B3C", backgroundColor: "#E8F5EE" },
+  meeting: { iconColor: "#185FA5", backgroundColor: "#E8F0FB" },
+  hrms: { iconColor: "#E65100", backgroundColor: "#FFF3E0" },
+  document: { iconColor: "#C62828", backgroundColor: "#FCE4EC" },
+  advisor: { iconColor: "#7B1FA2", backgroundColor: "#F3E5F5" },
+  workload: { iconColor: "#00838F", backgroundColor: "#E0F7FA" },
+  schedule: { iconColor: "#F57F17", backgroundColor: "#FFF8E1" },
+  classroom: { iconColor: "#2E7D32", backgroundColor: "#E8F5E9" },
+  academic: { iconColor: "#BF360C", backgroundColor: "#FBE9E7" },
+  quality: { iconColor: "#4527A0", backgroundColor: "#EDE7F6" },
+  vehicle: { iconColor: "#1565C0", backgroundColor: "#E3F2FD" },
+};

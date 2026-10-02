@@ -7,8 +7,7 @@ import {
   loadNotificationInbox,
   subscribeNotificationInbox,
 } from "../services/notificationService";
-
-const logo = require("../assets/urusmartlogo.png");
+import { URUSMART_LOGO } from "../assets/brandAssets";
 
 const HeaderBar = ({ name, photoUrl, onNotification, onLogout }) => {
   const { top } = useSafeAreaInsets();
@@ -79,7 +78,7 @@ const HeaderBar = ({ name, photoUrl, onNotification, onLogout }) => {
               justifyContent: "center",
             }}
           >
-            <Image source={logo} style={{ width: 42, height: 42 }} resizeMode="contain" />
+            <Image source={URUSMART_LOGO} style={{ width: 42, height: 42 }} resizeMode="contain" fadeDuration={0} />
           </View>
         </View>
 

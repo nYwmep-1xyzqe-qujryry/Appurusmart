@@ -5,30 +5,35 @@ import AppHeader from "../../components/AppHeader";
 import useLrdResource from "../../hook/useLrdResource";
 import useLrdSession from "../../hook/useLrdSession";
 import useConfirm from "../../hook/useConfirm";
-import { LRD_ENDPOINTS } from "../../services/lrdApi";
+import { LRD_ENDPOINTS, LRD_VISIBLE_SCOPE } from "../../services/lrdApi";
 import { sanitizeAcademicText } from "../../utils/inputSanitize";
 import { useEResearchText } from "./i18n";
 
 export default function ArticleList({ navigation, route }) {
   const { te } = useEResearchText();
-  const searchMode = route?.params?.mode === "search";
+  // The registered route is authoritative so a stale/missing navigation
+  // param cannot make the search screen request the owner's list.
+  const searchMode = route?.params?.mode === "search" || route?.name === "ArticleSearch";
   const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState("");
   const [query, setQuery] = useState("");
   const scrollRef = useRef(null);
   const perPage = 20;
   const { researcherId, loading: sessionLoading } = useLrdSession();
-  const { items, total, loading, error, remove, refetch } = useLrdResource(LRD_ENDPOINTS.papers, {
-    // โหมดจัดการเป็นของฉัน ส่วนโหมดสืบค้นเป็นผลงานของผู้ใช้อื่น
-    params: { scope: searchMode ? "others" : "mine", page, per_page: perPage, ...(query ? { q: query } : {}) },
+  const { items, total, loading, error, cacheInfo, remove, refetch } = useLrdResource(LRD_ENDPOINTS.papers, {
+    // โหมดจัดการเป็นของฉัน ส่วนโหมดสืบค้นเป็นข้อมูลที่บัญชีนี้มีสิทธิ์เห็น
+    params: { scope: searchMode ? LRD_VISIBLE_SCOPE : "mine", page, per_page: perPage, ...(query ? { q: query } : {}) },
     skip: sessionLoading,
+    forceRefreshOnFocus: true,
+    diagnosticOwnerId: researcherId,
   });
   const { confirm, ConfirmDialog } = useConfirm();
+  const hasStaleCache = cacheInfo.source === "cache" && cacheInfo.stale;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+    if (cacheInfo.source === "api" && !loading && !error && page > totalPages) setPage(totalPages);
+  }, [cacheInfo.source, loading, error, page, totalPages]);
 
   const changePage = (nextPage) => {
     if (nextPage < 1 || nextPage > totalPages || nextPage === page) return;
@@ -78,7 +83,25 @@ export default function ArticleList({ navigation, route }) {
             <Text className="text-white text-[14px] font-bold">{te("common.search")}</Text>
           </TouchableOpacity>
         </View>
-        {searchMode && !loading && !error && (
+        {hasStaleCache && (
+          <View className="bg-[#FFF8E6] border border-[#E8D18A] rounded-xl px-4 py-3 mb-4 flex-row items-center">
+            <Ionicons name="cloud-offline-outline" size={20} color="#8A6412" />
+            <View className="flex-1 ml-2 pr-2">
+              <Text className="text-[14px] font-bold text-[#6F5312]">{te("common.cachedData")}</Text>
+              <Text className="text-[13px] text-[#6F5312] mt-1">{te("common.cachedRefreshFailed")}</Text>
+            </View>
+            <TouchableOpacity
+              className="min-h-[40px] px-3 rounded-lg bg-[#07865F] flex-row items-center justify-center"
+              onPress={() => refetch({ force: true })}
+              accessibilityRole="button"
+              accessibilityLabel={te("common.retry")}
+            >
+              <Ionicons name="refresh-outline" size={16} color="#fff" />
+              <Text className="text-white text-[13px] font-bold ml-1">{te("common.retry")}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {searchMode && !loading && !error && !hasStaleCache && (
           <View className="bg-[#FFF8E6] rounded-xl px-4 py-3 mb-4 flex-row items-center">
             <Ionicons name="library-outline" size={19} color="#8A6412" />
             <Text className="text-[14px] font-bold text-[#6F5312] ml-2">
@@ -99,12 +122,12 @@ export default function ArticleList({ navigation, route }) {
               <ActivityIndicator size="small" color="#07865F" />
               <Text className="text-[14px] text-[#5F7069]">{te("common.loading")}</Text>
             </View>
-          ) : error ? (
+          ) : error && !hasStaleCache ? (
             <View className="items-center py-9 px-5">
               <Ionicons name="cloud-offline-outline" size={42} color="#c45b5b" />
               <Text className="text-[15px] font-bold text-[#8b2f2f] mt-[10px] text-center">{te("article.loadFailed")}</Text>
-              <Text className="text-[13px] text-[#5F7069] mt-1 text-center">{error}</Text>
-              <TouchableOpacity className="bg-[#07865F] rounded-lg px-4 py-2 mt-3" onPress={refetch}>
+              <Text className="text-[13px] text-[#5F7069] mt-1 text-center">{te("common.requestFailed")}</Text>
+              <TouchableOpacity className="bg-[#07865F] rounded-lg px-4 py-2 mt-3" onPress={() => refetch({ force: true })}>
                 <Text className="text-white text-[13px] font-bold">{te("common.retry")}</Text>
               </TouchableOpacity>
             </View>
@@ -165,7 +188,7 @@ export default function ArticleList({ navigation, route }) {
           )}
         </View>
 
-        {totalPages > 1 && (
+        {totalPages > 1 && !hasStaleCache && (
           <View className="bg-white rounded-2xl p-3 mb-4 flex-row items-center" style={{ elevation: 1 }}>
             <TouchableOpacity
               className="min-h-[44px] flex-1 rounded-xl flex-row items-center justify-center bg-[#edf5f1]"

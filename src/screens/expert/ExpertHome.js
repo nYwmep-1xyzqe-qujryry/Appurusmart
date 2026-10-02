@@ -291,7 +291,7 @@ const MenuItem = ({ item, onPress, isLast, count, countLoading }) => (
       <View className="w-[38px] h-[38px] rounded-xl items-center justify-center" style={{ backgroundColor: item.bg }}>
         <Ionicons name={item.icon} size={19} color={item.color} />
       </View>
-      <Text className="text-[14px] font-semibold text-[#1a1a2e] flex-1 leading-5">{item.label}</Text>
+      <Text className="text-[15px] font-semibold text-[#1a1a2e] flex-1 leading-5">{item.label}</Text>
     </View>
     <View className="flex-row items-center">
       {count !== undefined && (
@@ -311,7 +311,7 @@ const SectionCard = ({ title, sectionIcon, gradColors, items, onPress, counts, c
         <View className="w-7 h-7 rounded-[9px] bg-white/30 items-center justify-center">
           <Ionicons name={sectionIcon} size={15} color="#fff" />
         </View>
-        <Text className="text-[14px] font-bold text-white">{title}</Text>
+        <Text className="text-[15px] font-bold text-white">{title}</Text>
         <View className="ml-auto bg-white/25 rounded-full px-2 py-[2px]">
           <Text className="text-white text-[12px] font-bold">{items.length}</Text>
         </View>
@@ -369,7 +369,8 @@ const ExpertHome = ({ navigation }) => {
 
   useFocusEffect(
     useCallback(() => {
-      refetchCounts();
+      // Always sync menu badges after returning from a create/edit/delete screen.
+      refetchCounts({ force: true });
     }, [refetchCounts]),
   );
 

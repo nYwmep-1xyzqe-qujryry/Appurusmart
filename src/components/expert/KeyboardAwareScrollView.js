@@ -6,14 +6,22 @@ import React, {
 import { findNodeHandle, Platform, ScrollView } from "react-native";
 
 const KeyboardAwareScrollView = forwardRef(
-  ({ onFocusCapture, keyboardOffset = 160, ...props }, forwardedRef) => {
+  (
+    {
+      onFocusCapture,
+      keyboardOffset = 160,
+      scrollOnFocus = Platform.OS === "ios",
+      ...props
+    },
+    forwardedRef,
+  ) => {
     const scrollRef = useRef(null);
 
     useImperativeHandle(forwardedRef, () => scrollRef.current);
 
     const handleFocusCapture = (event) => {
       onFocusCapture?.(event);
-      if (Platform.OS !== "ios") return;
+      if (!scrollOnFocus) return;
 
       const target = event.nativeEvent?.target;
       const nodeHandle =

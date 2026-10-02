@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -111,6 +112,15 @@ const PersonalInfoCard = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_PROFILE);
+  const prefixRef = useRef(null);
+  const firstNameRef = useRef(null);
+  const lastNameRef = useRef(null);
+  const positionRef = useRef(null);
+  const addressRef = useRef(null);
+  const phoneRef = useRef(null);
+  const emailRef = useRef(null);
+  const lineIdRef = useRef(null);
+  const idCardRef = useRef(null);
   const { items: faculties } = useLrdResource(LRD_ENDPOINTS.faculties);
   const { items: branches } = useLrdResource(LRD_ENDPOINTS.branches, {
     params: form.faculty ? { faculty_id: form.faculty } : {},
@@ -208,19 +218,19 @@ const PersonalInfoCard = () => {
       </View>
       <Divider />
 
-      <FormField label={te("researcher.prefix")} value={form.prefix} onChangeText={(v) => set("prefix", v)} />
+      <FormField ref={prefixRef} label={te("researcher.prefix")} value={form.prefix} onChangeText={(v) => set("prefix", v)} onSubmitEditing={() => firstNameRef.current?.focus()} />
       <Divider />
-      <FormField label={te("researcher.firstName")} value={form.firstName} onChangeText={(v) => set("firstName", v)} required />
+      <FormField ref={firstNameRef} label={te("researcher.firstName")} value={form.firstName} onChangeText={(v) => set("firstName", v)} required onSubmitEditing={() => lastNameRef.current?.focus()} />
       <Divider />
-      <FormField label={te("researcher.lastName")} value={form.lastName} onChangeText={(v) => set("lastName", v)} required />
+      <FormField ref={lastNameRef} label={te("researcher.lastName")} value={form.lastName} onChangeText={(v) => set("lastName", v)} required returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()} blurOnSubmit />
       <Divider />
       <InlineDropdown label={te("researcher.faculty")} value={form.faculty} options={facultyOptions} onSelect={(v) => { set("faculty", v); set("department", ""); }} searchable />
       <Divider />
       <InlineDropdown label={te("researcher.department")} value={form.department} options={departmentOptions} onSelect={(v) => set("department", v)} searchable />
       <Divider />
-      <FormField label={te("researcher.position")} value={form.position} onChangeText={(v) => set("position", v)} />
+      <FormField ref={positionRef} label={te("researcher.position")} value={form.position} onChangeText={(v) => set("position", v)} onSubmitEditing={() => addressRef.current?.focus()} />
       <Divider />
-      <FormField label={te("researcher.address")} value={form.address} onChangeText={(v) => set("address", v)} multiline />
+      <FormField ref={addressRef} label={te("researcher.address")} value={form.address} onChangeText={(v) => set("address", v)} multiline returnKeyType="done" submitBehavior="blurAndSubmit" onSubmitEditing={() => Keyboard.dismiss()} />
       <Divider />
 
       <ThaiDateField
@@ -232,13 +242,13 @@ const PersonalInfoCard = () => {
         emptyDefaultDate={new Date(new Date().getFullYear() - 30, 0, 1)}
       />
 
-      <FormField label={te("researcher.phone")} value={form.phone} onChangeText={(v) => set("phone", v)} keyboardType="phone-pad" />
+      <FormField ref={phoneRef} label={te("researcher.phone")} value={form.phone} onChangeText={(v) => set("phone", v)} keyboardType="phone-pad" onSubmitEditing={() => emailRef.current?.focus()} />
       <Divider />
-      <FormField label={te("researcher.email")} value={form.email} onChangeText={(v) => set("email", v)} keyboardType="email-address" />
+      <FormField ref={emailRef} label={te("researcher.email")} value={form.email} onChangeText={(v) => set("email", v)} keyboardType="email-address" onSubmitEditing={() => lineIdRef.current?.focus()} />
       <Divider />
-      <FormField label="Line ID" value={form.lineId} onChangeText={(v) => set("lineId", v)} />
+      <FormField ref={lineIdRef} label="Line ID" value={form.lineId} onChangeText={(v) => set("lineId", v)} onSubmitEditing={() => idCardRef.current?.focus()} />
       <Divider />
-      <FormField label={te("researcher.idCard")} value={form.idCard} onChangeText={(v) => set("idCard", v.replace(/[^0-9]/g, "").slice(0, 13))} keyboardType="numeric" placeholder={te("researcher.idCardPlaceholder")} />
+      <FormField ref={idCardRef} label={te("researcher.idCard")} value={form.idCard} onChangeText={(v) => set("idCard", v.replace(/[^0-9]/g, "").slice(0, 13))} keyboardType="numeric" placeholder={te("researcher.idCardPlaceholder")} returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()} blurOnSubmit />
 
       <View className="px-[14px] pt-2 pb-[14px]">
         <TouchableOpacity
@@ -265,6 +275,9 @@ const EducationSection = () => {
   const [editingItem, setEditingItem] = useState(null);
   const emptyEducation = { year: "", degree: "", qualification: "", major: "", university: "" };
   const [form, setForm] = useState(emptyEducation);
+  const qualificationRef = useRef(null);
+  const majorRef = useRef(null);
+  const universityRef = useRef(null);
 
   const setField = (key, val) => setForm((p) => ({ ...p, [key]: val }));
   const openNew = () => { setEditingItem(null); setForm(emptyEducation); };
@@ -361,9 +374,9 @@ const EducationSection = () => {
         <Text className="text-[14px] font-extrabold text-[#33483f] mb-1">{editingItem ? te("researcher.educationEdit") : te("researcher.educationAdd")}</Text>
       </View>
       <InlineDropdown label={te("researcher.degree")} value={form.degree} options={DEGREE_OPTIONS} onSelect={(v) => setField("degree", v)} placeholder={te("researcher.degreePlaceholder")} />
-      <FormField label={te("researcher.qualification")} value={form.qualification} onChangeText={(v) => setField("qualification", v)} />
-      <FormField label={te("researcher.major")} value={form.major} onChangeText={(v) => setField("major", v)} />
-      <FormField label={te("researcher.university")} value={form.university} onChangeText={(v) => setField("university", v)} />
+      <FormField ref={qualificationRef} label={te("researcher.qualification")} value={form.qualification} onChangeText={(v) => setField("qualification", v)} onSubmitEditing={() => majorRef.current?.focus()} />
+      <FormField ref={majorRef} label={te("researcher.major")} value={form.major} onChangeText={(v) => setField("major", v)} onSubmitEditing={() => universityRef.current?.focus()} />
+      <FormField ref={universityRef} label={te("researcher.university")} value={form.university} onChangeText={(v) => setField("university", v)} returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()} blurOnSubmit />
       <InlineDropdown label={te("researcher.gradYear")} value={form.year} options={YEAR_OPTIONS} onSelect={(v) => setField("year", v)} searchable />
       <View className="flex-row gap-[10px] px-[14px] pt-2 pb-[14px]">
         <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-2 bg-[#07865F] rounded-xl py-3" style={{ opacity: saving ? 0.6 : 1 }} onPress={handleSave} disabled={saving}>
@@ -393,6 +406,8 @@ const ExpertiseSection = ({ scrollRef }) => {
   const [editingItem, setEditingItem] = useState(null);
   const [form, setForm] = useState({ nameTh: "", nameEn: "", group: "", field: "" });
   const formRef = useRef(null);
+  const nameThRef = useRef(null);
+  const nameEnRef = useRef(null);
 
   const setField = (key, val) => setForm((p) => ({ ...p, [key]: val }));
   const openNew = () => { setEditingItem(null); setForm({ nameTh: "", nameEn: "", group: "", field: "" }); };
@@ -495,8 +510,8 @@ const ExpertiseSection = ({ scrollRef }) => {
       </View>
       <InlineDropdown label={te("researcher.group")} value={form.group} options={EXPERTISE_GROUP_OPTIONS} onSelect={(v) => setField("group", v)} required placeholder={te("researcher.groupPlaceholder")} />
       <InlineDropdown label={te("researcher.field")} value={form.field} options={RESEARCH_FIELD_OPTIONS} onSelect={(v) => setField("field", v)} required placeholder={te("researcher.fieldPlaceholder")} />
-      <FormField label={te("researcher.nameTh")} value={form.nameTh} onChangeText={(v) => setField("nameTh", v)} required />
-      <FormField label={te("researcher.nameEn")} value={form.nameEn} onChangeText={(v) => setField("nameEn", v)} />
+      <FormField ref={nameThRef} label={te("researcher.nameTh")} value={form.nameTh} onChangeText={(v) => setField("nameTh", v)} required onSubmitEditing={() => nameEnRef.current?.focus()} />
+      <FormField ref={nameEnRef} label={te("researcher.nameEn")} value={form.nameEn} onChangeText={(v) => setField("nameEn", v)} returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()} blurOnSubmit />
       <View className="flex-row gap-[10px] px-[14px] pt-2 pb-[14px]">
         <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-2 rounded-xl py-3" style={{ backgroundColor: FORM_COLORS.primary, opacity: saving ? 0.6 : 1 }} onPress={handleSave} disabled={saving}>
           {saving ? <ActivityIndicator size="small" color="#fff" /> : (
@@ -529,6 +544,7 @@ export default function ResearcherForm({ navigation }) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        scrollOnFocus
       >
         <PersonalInfoCard />
         <EducationSection />

@@ -1,60 +1,138 @@
-import React, { useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Image, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { colors, hitSlop, radius, serviceColors } from "../theme/tokens";
-
-const SERVICES = [
-  { icon: "document-text-outline", ...serviceColors.expert, label: "Expert", url: null },
-  { icon: "journal-outline", ...serviceColors.research, label: "e-Research", url: null },
-  { icon: "book-outline", ...serviceColors.lms, label: "LMS", url: "https://lms.uru.ac.th" },
-  { icon: "videocam-outline", ...serviceColors.meeting, label: "E-Meeting", url: "https://meeting.uru.ac.th" },
-  { icon: "people-outline", ...serviceColors.hrms, label: "HRMS", url: "https://hrms.uru.ac.th" },
-  { icon: "document-outline", ...serviceColors.document, label: "e-Doc", url: "https://edoc.uru.ac.th" },
-  { icon: "school-outline", ...serviceColors.advisor, label: "Advisor", url: "https://advisor.uru.ac.th" },
-  { icon: "bar-chart-outline", ...serviceColors.workload, label: "Workload", url: "https://workload.uru.ac.th" },
-  { icon: "calendar-number-outline", ...serviceColors.schedule, label: "ตารางสอน", url: "https://academic.uru.ac.th/addteacherNew/show_timetable_teacher.php" },
-  { icon: "map-outline", ...serviceColors.classroom, label: "ห้องเรียน", url: "https://academic.uru.ac.th/appl/admin/check_room.asp" },
-  { icon: "reader-outline", ...serviceColors.academic, label: "ACD", url: "https://academic.uru.ac.th" },
-  { icon: "star-outline", ...serviceColors.quality, label: "AUN-QA", url: "http://aunqa.uru.ac.th" },
-  { icon: "car-outline", ...serviceColors.vehicle, label: "จองรถ", url: "http://202.29.52.231/reserve/public/login" },
-];
+import StateView from "./StateView";
+import { colors, hitSlop, radius } from "../theme/tokens";
+import {
+  getServiceLabel,
+  getServiceRoute,
+  isNativeServiceMisconfigured,
+  isServiceUrlValid,
+} from "../utils/services";
 
 const ITEMS_PER_PAGE = 8;
-const TRANSLATED_LABELS = {
-  จองรถ: "services.bookCar",
-  ตารางสอน: "services.schedule",
-  ห้องเรียน: "services.classroom",
-};
-
 const webOutline = Platform.OS === "web" ? { outlineStyle: "none" } : {};
 
-const ServiceIconGrid = ({ navigation }) => {
-  const { t } = useTranslation();
+const ServiceIcon = ({ service }) => {
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => setImageFailed(false), [service.iconUrl]);
+
+  if (service.iconUrl && !imageFailed) {
+    return (
+      <Image
+        source={{ uri: service.iconUrl }}
+        onError={() => setImageFailed(true)}
+        resizeMode="contain"
+        style={{ width: 27, height: 27 }}
+      />
+    );
+  }
+
+  return <Ionicons name={service.iconName} size={24} color={service.iconColor} />;
+};
+
+const ServiceIconGrid = ({
+  navigation,
+  services,
+  loading,
+  refreshing,
+  error,
+  usingCache,
+  apiEnabled,
+  refresh,
+}) => {
+  const { t, i18n } = useTranslation();
   const [currentPage, setCurrentPage] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);
+  const scrollRef = useRef(null);
+  const lastPressAt = useRef(0);
 
-  const getLabel = (item) =>
-    TRANSLATED_LABELS[item.label] ? t(TRANSLATED_LABELS[item.label]) : item.label;
-
-  const handlePress = (item) => {
-    if (item.label === "e-Research") {
-      navigation?.navigate("EResearch");
-    } else if (item.label === "Expert") {
-      navigation?.navigate("Research");
-    } else if (item.url) {
-      navigation?.navigate("InAppBrowser", {
-        url: item.url,
-        title: getLabel(item),
-      });
+  const pages = useMemo(() => {
+    const result = [];
+    for (let i = 0; i < services.length; i += ITEMS_PER_PAGE) {
+      const chunk = [...services.slice(i, i + ITEMS_PER_PAGE)];
+      while (chunk.length < ITEMS_PER_PAGE) chunk.push({ spacer: true });
+      result.push(chunk);
     }
+    return result;
+  }, [services]);
+
+  useEffect(() => {
+    const nextPage = Math.min(currentPage, Math.max(0, pages.length - 1));
+    if (nextPage !== currentPage) setCurrentPage(nextPage);
+    scrollRef.current?.scrollTo({ x: nextPage * containerWidth, animated: false });
+  }, [containerWidth, pages.length, currentPage]);
+
+  const handlePress = (service) => {
+    const now = Date.now();
+    if (now - lastPressAt.current < 500) return;
+    lastPressAt.current = now;
+
+    const route = getServiceRoute(service);
+    if (route) {
+      navigation?.navigate(route);
+      return;
+    }
+
+    if (isNativeServiceMisconfigured(service)) {
+      Alert.alert(t("home.serviceUnavailableTitle"), t("home.serviceUnavailable"));
+      return;
+    }
+
+    if (service.actionType === "internal_route") {
+      Alert.alert(t("home.serviceUnavailableTitle"), t("home.serviceUnavailable"));
+      return;
+    }
+
+    if (isServiceUrlValid(service)) {
+      navigation?.navigate("InAppBrowser", {
+        url: service.url,
+        title: getServiceLabel(service, i18n.language),
+      });
+      return;
+    }
+
+    Alert.alert(t("home.serviceUnavailableTitle"), t("home.serviceInvalidUrl"));
   };
 
-  const pages = [];
-  for (let i = 0; i < SERVICES.length; i += ITEMS_PER_PAGE) {
-    const chunk = [...SERVICES.slice(i, i + ITEMS_PER_PAGE)];
-    while (chunk.length < ITEMS_PER_PAGE) chunk.push({ spacer: true });
-    pages.push(chunk);
+  if (!apiEnabled) {
+    return (
+      <StateView
+        type="empty"
+        compact
+        title={t("home.servicesApiDisabled")}
+        message={t("home.servicesApiDisabledSub")}
+      />
+    );
+  }
+
+  if (loading && !services.length) {
+    return <StateView type="loading" compact title={t("home.servicesLoading")} />;
+  }
+
+  if (!services.length) {
+    const forbidden = error?.kind === "forbidden";
+    const authBlocked = error?.kind === "auth";
+    const setupRequired = error?.kind === "setup";
+    const errorMessage = forbidden
+      ? t("home.servicesForbiddenSub")
+      : authBlocked ? t("home.servicesAuthRequiredSub")
+        : setupRequired ? t("home.servicesSetupRequiredSub")
+          : error ? t("home.servicesLoadFailedSub") : undefined;
+    return (
+      <StateView
+        type={error ? "error" : "empty"}
+        compact
+        title={forbidden ? t("home.servicesForbidden")
+          : authBlocked ? t("home.servicesAuthRequired")
+            : setupRequired ? t("home.servicesSetupRequired")
+              : error ? t("home.servicesLoadFailed") : t("home.servicesEmpty")}
+        message={errorMessage}
+        actionLabel={error && !forbidden && !authBlocked ? t("home.servicesRetry") : undefined}
+        onAction={error && !forbidden && !authBlocked ? () => refresh({ force: true }) : undefined}
+      />
+    );
   }
 
   return (
@@ -62,14 +140,31 @@ const ServiceIconGrid = ({ navigation }) => {
       className="pt-[4px] px-[2px]"
       onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
     >
+      {error && (
+        <TouchableOpacity
+          onPress={() => refresh({ force: true })}
+          activeOpacity={0.8}
+          hitSlop={hitSlop}
+          className="flex-row items-center justify-center mb-[8px]"
+        >
+          <Ionicons name="cloud-offline-outline" size={15} color={colors.warning} />
+          <Text className="text-[11px] font-semibold ml-[5px]" style={{ color: colors.warning }}>
+            {error.kind === "setup"
+              ? usingCache ? `${t("home.servicesSetupCached")} · ${t("home.servicesRetry")}` : `${t("home.servicesSetupRequiredSub")} · ${t("home.servicesRetry")}`
+              : usingCache ? `${t("home.servicesCached")} · ${t("home.servicesRetry")}` : t("home.servicesRetry")}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {containerWidth > 0 && (
         <>
           <ScrollView
+            ref={scrollRef}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             scrollEventThrottle={16}
-            onScroll={(e) => {
+            onMomentumScrollEnd={(e) => {
               const page = Math.round(e.nativeEvent.contentOffset.x / containerWidth);
               setCurrentPage(page);
             }}
@@ -85,42 +180,39 @@ const ServiceIconGrid = ({ navigation }) => {
                       className="flex-row"
                       style={rowIndex < rows.length - 1 ? { marginBottom: 16 } : {}}
                     >
-                      {row.map((item, colIndex) =>
-                        item.spacer ? (
-                          <View key={colIndex} className="flex-1" />
-                        ) : (
-                          <TouchableOpacity
-                            key={colIndex}
-                            className="flex-1 items-center"
-                            style={[{ minHeight: 86 }, webOutline]}
-                            onPress={() => handlePress(item)}
-                            activeOpacity={0.78}
-                            hitSlop={hitSlop}
+                      {row.map((service, colIndex) => service.spacer ? (
+                        <View key={colIndex} className="flex-1" />
+                      ) : (
+                        <TouchableOpacity
+                          key={service.serviceKey}
+                          className="flex-1 items-center"
+                          style={[{ minHeight: 86 }, webOutline]}
+                          onPress={() => handlePress(service)}
+                          activeOpacity={0.78}
+                          hitSlop={hitSlop}
+                          accessibilityRole="button"
+                          accessibilityLabel={getServiceLabel(service, i18n.language)}
+                        >
+                          <View
+                            className="w-[56px] h-[56px] items-center justify-center mb-[7px]"
+                            style={[{
+                              backgroundColor: service.backgroundColor,
+                              borderRadius: radius.md,
+                              borderWidth: 1,
+                              borderColor: "rgba(15,122,85,0.08)",
+                            }, webOutline]}
                           >
-                            <View
-                              className="w-[56px] h-[56px] items-center justify-center mb-[7px]"
-                              style={[
-                                {
-                                  backgroundColor: item.backgroundColor,
-                                  borderRadius: radius.md,
-                                  borderWidth: 1,
-                                  borderColor: "rgba(15,122,85,0.08)",
-                                },
-                                webOutline,
-                              ]}
-                            >
-                              <Ionicons name={item.icon} size={24} color={item.iconColor} />
-                            </View>
-                            <Text
-                              className="text-[11px] text-center leading-[15px]"
-                              style={{ color: colors.text, fontWeight: "700" }}
-                              numberOfLines={2}
-                            >
-                              {getLabel(item)}
-                            </Text>
-                          </TouchableOpacity>
-                        )
-                      )}
+                            <ServiceIcon service={service} />
+                          </View>
+                          <Text
+                            className="text-[12px] text-center leading-[16px]"
+                            style={{ color: colors.text, fontWeight: "700" }}
+                            numberOfLines={2}
+                          >
+                            {getServiceLabel(service, i18n.language)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
                     </View>
                   ))}
                 </View>
@@ -144,6 +236,7 @@ const ServiceIconGrid = ({ navigation }) => {
           )}
         </>
       )}
+      {refreshing && <Text className="text-[10px] text-center mt-[5px]" style={{ color: colors.textMuted }}>{t("home.servicesRefreshing")}</Text>}
     </View>
   );
 };

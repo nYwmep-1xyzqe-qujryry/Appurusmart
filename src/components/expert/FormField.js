@@ -28,6 +28,8 @@ const FormField = React.forwardRef(
       placeholder,
       returnKeyType,
       onSubmitEditing,
+      blurOnSubmit,
+      submitBehavior,
       onLayout,
       onFocus,
       onBlur,
@@ -42,6 +44,9 @@ const FormField = React.forwardRef(
       multiline && styles.inputMultiline,
     ];
     const sanitizer = getSanitizer(keyboardType);
+    const resolvedSubmitBehavior = submitBehavior ?? (
+      onSubmitEditing && blurOnSubmit !== true ? "submit" : undefined
+    );
     const handleChangeText = (text) =>
       onChangeText?.(sanitizer ? sanitizer(text) : text);
 
@@ -77,7 +82,8 @@ const FormField = React.forwardRef(
               multiline ? "off" : Platform.OS === "ios" ? undefined : "off"
             }
             autoCapitalize="none"
-            returnKeyType={multiline ? "default" : (returnKeyType ?? "next")}
+            returnKeyType={returnKeyType ?? (multiline ? "default" : "next")}
+            submitBehavior={resolvedSubmitBehavior}
             onSubmitEditing={onSubmitEditing}
             onFocus={(event) => {
               setFocused(true);
@@ -87,7 +93,7 @@ const FormField = React.forwardRef(
               setFocused(false);
               onBlur?.(event);
             }}
-            blurOnSubmit={!onSubmitEditing}
+            blurOnSubmit={resolvedSubmitBehavior ? undefined : blurOnSubmit ?? !onSubmitEditing}
           />
         ) : (
           <View style={styles.disabledBox}>

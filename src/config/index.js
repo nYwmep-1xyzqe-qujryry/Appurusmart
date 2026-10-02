@@ -11,6 +11,8 @@ export const INFO_API_BASE_URL = normalizedInfoApiBaseUrl.endsWith("/api")
 // Base host kept for LRD document/file URLs (which may already include their own path).
 export const LRD_API_BASE_URL = normalizedInfoApiBaseUrl.replace(/\/api\/?$/, "");
 export const EXPO_PROJECT_ID = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+// Production Build/OTA must provide EXPO_PUBLIC_SERVICES_API_ENABLED=true.
+export const SERVICES_API_ENABLED = process.env.EXPO_PUBLIC_SERVICES_API_ENABLED === "true";
 
 // AsyncStorage keys — รวมไว้ที่นี่เพื่อป้องกัน typo
 export const STORAGE_KEYS = {

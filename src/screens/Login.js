@@ -34,6 +34,7 @@ import { isPinSet } from "../services/pinService";
 import { resolveUserId } from "../services/userSecurityKeys";
 import { ensureExpertProfile } from "../services/infoApi";
 import { colors, typography } from "../theme/tokens";
+import { URUSMART_LOGO } from "../assets/brandAssets";
 
 const API_URL = API_BASE_URL;
 const SSO_BASE_URL =
@@ -540,7 +541,7 @@ const Login = ({ navigation, route }) => {
 
       {/* Background */}
       <LinearGradient
-        colors={[colors.appBg, colors.primaryMuted, colors.appBg]}
+        colors={["#F7FBF8", colors.appBg, "#EDF7F2"]}
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
       />
 
@@ -560,44 +561,46 @@ const Login = ({ navigation, route }) => {
         bounces={false}
       >
         {/* Logo */}
-        <Animated.View className="items-center mb-5" style={logoStyle}>
+        <Animated.View className="items-center mb-4" style={logoStyle}>
           <View
-            className="w-[148px] h-[148px] rounded-full items-center justify-center"
+            className="w-[144px] h-[144px] rounded-full items-center justify-center"
             style={{
-              backgroundColor: "rgba(255,255,255,0.7)",
-              elevation: 8,
+              backgroundColor: "#FFFFFF",
+              borderWidth: 1,
+              borderColor: "rgba(7,134,95,0.18)",
+              elevation: 7,
               shadowColor: colors.primaryDark,
-              shadowOpacity: 0.15,
+              shadowOpacity: 0.12,
               shadowRadius: 20,
               shadowOffset: { width: 0, height: 8 },
             }}
           >
-            <LinearGradient
-              colors={[colors.surface, colors.primarySoft]}
+            <View
               style={{
-                width: 128,
-                height: 128,
-                borderRadius: 64,
-                alignItems: "center",
-                justifyContent: "center",
+                width: 122,
+                height: 122,
+                borderRadius: 61,
                 overflow: "hidden",
+                backgroundColor: "#EEF8F2",
               }}
             >
               <Image
-                source={require("../assets/urusmartlogo.png")}
-                style={{ width: 104, height: 104 }}
-                resizeMode="contain"
+                source={URUSMART_LOGO}
+                style={{ width: 122, height: 122, borderRadius: 61 }}
+                resizeMode="cover"
+                fadeDuration={0}
               />
-            </LinearGradient>
+            </View>
           </View>
         </Animated.View>
 
         {/* Title */}
-        <Animated.View className="items-center mb-7" style={textStyle}>
-          <Text style={{ ...typography.pageTitle, fontSize: 25, lineHeight: 32, color: colors.primaryDark, textAlign: "center" }}>
+        <Animated.View className="items-center mb-6" style={textStyle}>
+          <Text style={{ ...typography.pageTitle, fontSize: 25, lineHeight: 33, color: colors.primaryDark, textAlign: "center" }}>
             {t("login.title")}
           </Text>
-          <Text style={{ ...typography.secondary, textAlign: "center", marginTop: 6 }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.brandYellow, marginTop: 11, marginBottom: 9 }} />
+          <Text style={{ ...typography.secondary, textAlign: "center", marginTop: 0 }}>
             {t("login.subtitle")}
           </Text>
         </Animated.View>
@@ -605,21 +608,23 @@ const Login = ({ navigation, route }) => {
         {/* Card */}
         <Animated.View className="w-full" style={cardStyle}>
           <View
-            className="bg-white rounded-[26px] p-6"
+            className="bg-white rounded-[24px] p-3"
             style={{
               borderWidth: 1,
-              borderColor: colors.border,
-              elevation: 10,
+              borderColor: "#D7E9E0",
+              elevation: 7,
               shadowColor: colors.primaryDark,
-              shadowOpacity: 0.12,
-              shadowRadius: 24,
-              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.1,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 8 },
             }}
           >
             <TouchableOpacity
               onPress={openSsoLogin}
               disabled={loading || ssoLoading}
               activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel={t("login.ssoSignIn")}
             >
               <LinearGradient
                 colors={
@@ -630,11 +635,13 @@ const Login = ({ navigation, route }) => {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={{
-                  height: 58,
-                  borderRadius: 18,
+                  height: 60,
+                  borderRadius: 17,
                   alignItems: "center",
                   justifyContent: "center",
                   elevation: 4,
+                  borderWidth: 1,
+                  borderColor: "rgba(213,167,44,0.32)",
                 }}
               >
                 {ssoLoading ? (

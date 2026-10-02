@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from "react-native";
+import React, { useRef, useState } from "react";
+import { ActivityIndicator, Alert, Keyboard, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AppHeader from "../../components/AppHeader";
 import FormContainer from "../../components/expert/FormContainer";
@@ -36,6 +36,15 @@ export default function ArticleForm({ navigation, route }) {
     loadOnFocus: false,
     refetchAfterMutation: false,
   });
+  const titleThRef = useRef(null);
+  const titleEnRef = useRef(null);
+  const abstractRef = useRef(null);
+  const keywordsRef = useRef(null);
+  const contributorsRef = useRef(null);
+  const journalRef = useRef(null);
+  const publishYearRef = useRef(null);
+  const urlRef = useRef(null);
+  const referenceRef = useRef(null);
   const { items: paperIndexes, loading: paperIndexesLoading } = useLrdResource(LRD_ENDPOINTS.paperIndexes);
   const fundingSourceOptions = withPlaceholder(FUNDING_SOURCE_OPTIONS, te("article.fundingPlaceholder"));
   const paperIndexOptions = paperIndexes.length > 0
@@ -102,7 +111,10 @@ export default function ArticleForm({ navigation, route }) {
         ...(form.reference.trim() ? { reference: form.reference.trim() } : {}),
       };
       const payload = values;
-      editingItem ? await update(editingItem.id, payload) : await create(payload);
+      const mutationResult = editingItem
+        ? await update(editingItem.id, payload)
+        : await create(payload);
+      if (mutationResult === null) return;
       Alert.alert(editingItem ? te("common.editSuccess") : te("common.saveSuccess"), te("article.saveMessage"), [
         { text: te("common.ok"), onPress: () => navigation.goBack() },
       ]);
@@ -119,6 +131,7 @@ export default function ArticleForm({ navigation, route }) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        scrollOnFocus
       >
         <View className="bg-white border border-[#eef1f4] rounded-2xl overflow-hidden mb-4" style={{ elevation: 1 }}>
           <View className="flex-row items-center gap-2 bg-[#e6f4ef] border-b border-[#eef1f4] px-[14px] py-[11px]">
@@ -130,27 +143,31 @@ export default function ArticleForm({ navigation, route }) {
 
           <InlineDropdown label={te("article.documentType")} value={form.documentType} options={paperIndexOptions} onSelect={(v) => set("documentType", v)} required loading={paperIndexesLoading && paperIndexes.length === 0} />
           <InlineDropdown label={te("article.funding")} value={form.fundingSource} options={fundingSourceOptions} onSelect={(v) => set("fundingSource", v)} searchable compact />
-          <FormField label={te("article.titleTh")} value={form.titleTh} onChangeText={(v) => set("titleTh", v)} required />
-          <FormField label={te("article.titleEn")} value={form.titleEn} onChangeText={(v) => set("titleEn", v)} />
-          <FormField label={te("article.abstract")} value={form.abstract} onChangeText={(v) => set("abstract", v)} multiline />
-          <FormField label={te("article.keywords")} value={form.keywords} onChangeText={(v) => set("keywords", v)} placeholder={te("article.keywordsPlaceholder")} />
-          <FormField label={te("article.contributors")} value={form.contributors} onChangeText={(v) => set("contributors", v)} />
-          <FormField label={te("article.journal")} value={form.journal} onChangeText={(v) => set("journal", v)} />
+          <FormField ref={titleThRef} label={te("article.titleTh")} value={form.titleTh} onChangeText={(v) => set("titleTh", v)} required onSubmitEditing={() => titleEnRef.current?.focus()} />
+          <FormField ref={titleEnRef} label={te("article.titleEn")} value={form.titleEn} onChangeText={(v) => set("titleEn", v)} onSubmitEditing={() => abstractRef.current?.focus()} />
+          <FormField ref={abstractRef} label={te("article.abstract")} value={form.abstract} onChangeText={(v) => set("abstract", v)} multiline returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => keywordsRef.current?.focus()} />
+          <FormField ref={keywordsRef} label={te("article.keywords")} value={form.keywords} onChangeText={(v) => set("keywords", v)} placeholder={te("article.keywordsPlaceholder")} onSubmitEditing={() => contributorsRef.current?.focus()} />
+          <FormField ref={contributorsRef} label={te("article.contributors")} value={form.contributors} onChangeText={(v) => set("contributors", v)} onSubmitEditing={() => journalRef.current?.focus()} />
+          <FormField ref={journalRef} label={te("article.journal")} value={form.journal} onChangeText={(v) => set("journal", v)} onSubmitEditing={() => publishYearRef.current?.focus()} />
           <FormField
+            ref={publishYearRef}
             label={te("article.publishYear")}
             value={form.publishYear}
             onChangeText={(value) => set("publishYear", value.replace(/[^0-9]/g, "").slice(0, 4))}
             keyboardType="numeric"
             placeholder={te("article.publishYearPlaceholder")}
+            onSubmitEditing={() => urlRef.current?.focus()}
           />
           <FormField
+            ref={urlRef}
             label={te("article.url")}
             value={form.url}
             onChangeText={(v) => set("url", v)}
             placeholder={te("article.urlPlaceholder")}
             keyboardType="url"
+            onSubmitEditing={() => referenceRef.current?.focus()}
           />
-          <FormField label={te("article.reference")} value={form.reference} onChangeText={(v) => set("reference", v)} />
+          <FormField ref={referenceRef} label={te("article.reference")} value={form.reference} onChangeText={(v) => set("reference", v)} returnKeyType="done" onSubmitEditing={() => Keyboard.dismiss()} blurOnSubmit />
 
           <View className="flex-row gap-[10px] px-4 pt-2 pb-[18px]">
             <TouchableOpacity
