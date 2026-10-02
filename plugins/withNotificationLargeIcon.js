@@ -16,7 +16,15 @@ function withNotificationLargeIcon(config) {
       "src",
       "main",
       "res",
-      "drawable",
+      // Android treats a density-less `drawable/` as mdpi and upscales the
+      // bitmap by the screen's density factor, so a large asset here is
+      // decoded at many times its real size. On a xxxhdpi device that is a 4x
+      // scale, which was enough to fail BitmapFactory.decodeResource with an
+      // OutOfMemoryError — and because that is an Error rather than an
+      // Exception, expo-notifications' catch could not swallow it and the
+      // whole notification failed to post. Declaring the bucket keeps the
+      // bitmap at its authored size.
+      "drawable-xxxhdpi",
       `${RESOURCE_NAME}.png`
     );
 
