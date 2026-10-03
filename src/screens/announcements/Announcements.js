@@ -18,6 +18,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import ReAnimated, { FadeInDown } from "react-native-reanimated";
+import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -483,14 +484,31 @@ const AnnouncementDetailModal = ({ item, defaultTag, defaultTitle, onClose }) =>
 export default function AnnouncementsScreen({ navigation, route }) {
   const { t } = useTranslation();
   const { top } = useSafeAreaInsets();
-  const { data: fetched, loading } = useFetch("/announcements", {
+  const { data: fetched, loading, refetch: refetchAnnouncements } = useFetch("/announcements", {
     initialData: [],
     debugLabel: "announcements:list",
   });
+
+  // The cached list is up to five minutes old, so an announcement edited in the
+  // meantime still showed its previous title and image here — and this screen
+  // seeds the detail screen through route params, which carried the stale copy
+  // with it. Home already forces a refetch on focus; this screen needs the same.
+  useFocusEffect(
+    useCallback(() => {
+      refetchAnnouncements({ force: true });
+    }, [refetchAnnouncements]),
+  );
   const fetchedItems = getAnnouncementRows(fetched);
+  // route.params carries a snapshot taken on Home when "view all" was pressed.
+  // It exists only so the list is not blank during the first load — it is never
+  // refreshed, so once this screen has its own data the snapshot must stop
+  // being used, otherwise an edited announcement keeps showing its old title
+  // and image here and in the detail screen seeded from this list.
   const seedItems = getAnnouncementRows(route.params?.items);
+  const hasLoadedOnce = useRef(false);
+  if (fetchedItems.length) hasLoadedOnce.current = true;
   const items = normalizeAnnouncements(
-    fetchedItems.length ? fetchedItems : seedItems,
+    fetchedItems.length || hasLoadedOnce.current ? fetchedItems : seedItems,
     t("announce.defaultTitle"),
   );
   const highlightId = route.params?.highlightId ?? null;

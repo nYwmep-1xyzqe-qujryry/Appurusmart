@@ -148,7 +148,6 @@ export default function EResearch({ navigation }) {
   // This root screen remains mounted while child e-Research screens are open.
   // Keep its data in memory instead of replacing the UI with a loading state on
   // every Back navigation. A different researcher session still gets one load.
-  const loadedResearcherRef = useRef(null);
 
   useEffect(() => () => {
     if (autoConnectRetryTimerRef.current) {
@@ -204,9 +203,24 @@ export default function EResearch({ navigation }) {
           refetchArticles({ force: true }),
           refetchOtherArticles({ force: true }),
         ]);
+      } else if (endpoint === LRD_ENDPOINTS.educations) {
+        // The focus refresh below only reloads education on the first visit for
+        // a researcher, so without this an edit made later kept showing the old
+        // qualification until the screen was remounted.
+        void refetchEducation({ force: true });
+      } else if (endpoint === LRD_ENDPOINTS.expertises) {
+        void refetchExpertise({ force: true });
       }
     });
-  }, [canLoadLrd, refetchArticles, refetchOtherArticles, refetchOtherProjects, refetchProjects]);
+  }, [
+    canLoadLrd,
+    refetchArticles,
+    refetchEducation,
+    refetchExpertise,
+    refetchOtherArticles,
+    refetchOtherProjects,
+    refetchProjects,
+  ]);
 
   const refetchProfile = useCallback(async () => {
     if (!canLoadLrd) return;
@@ -233,23 +247,22 @@ export default function EResearch({ navigation }) {
 
   useFocusEffect(useCallback(() => {
     if (!canLoadLrd || !researcherId) return undefined;
-    const researcherKey = String(researcherId);
-    const isFirstLoadForResearcher = loadedResearcherRef.current !== researcherKey;
-    loadedResearcherRef.current = researcherKey;
     const counterRefreshes = [
       refetchProjects({ force: true }),
       refetchArticles({ force: true }),
       refetchOtherProjects({ force: true }),
       refetchOtherArticles({ force: true }),
     ];
-    const requests = isFirstLoadForResearcher
-      ? [
-          refetchProfile(),
-          refetchEducation({ force: true }),
-          refetchExpertise({ force: true }),
-          ...counterRefreshes,
-        ]
-      : counterRefreshes;
+    // Profile, education and expertise are refreshed on every focus, not only
+    // the first visit for a researcher. Limiting them to the first visit meant
+    // an edit made afterwards kept showing the previous values when returning
+    // to this screen.
+    const requests = [
+      refetchProfile(),
+      refetchEducation({ force: true }),
+      refetchExpertise({ force: true }),
+      ...counterRefreshes,
+    ];
     Promise.allSettled(requests).catch(() => {});
     return undefined;
   }, [
