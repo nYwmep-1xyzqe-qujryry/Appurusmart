@@ -14,6 +14,7 @@ import {
   handlePushTokenChange,
   onLoginSuccess,
   saveNotificationToInbox,
+  startPushPermissionWatcher,
   syncNotificationInboxFromBackend,
 } from "./src/services/notificationService";
 import { initI18n } from "./src/i18n/i18n";
@@ -104,6 +105,14 @@ export default function App() {
       }
     });
   }, [ready, locked]);
+
+  useEffect(() => {
+    // Enabling notifications in system Settings does not reach the permission
+    // prompt that sent the user there, so registration is retried once the app
+    // comes back to the foreground with the permission actually granted.
+    if (!ready) return undefined;
+    return startPushPermissionWatcher();
+  }, [ready]);
 
   useEffect(() => {
     if (!ready) return;

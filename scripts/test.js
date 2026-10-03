@@ -44,6 +44,8 @@ const refresh = loadModule("src/utils/refresh.js");
 const notificationInbox = loadModule("src/utils/notificationInbox.js");
 const announcementImageState = loadModule("src/utils/announcementImageState.js");
 const sessionLock = loadModule("src/utils/sessionLock.js");
+const pushRetry = loadModule("src/utils/pushRegistrationRetry.js");
+const pushRecovery = loadModule("src/services/pushRegistrationRecovery.js");
 const inboxSync = loadModule("src/utils/inboxSync.js");
 const testLrdResource = require("./test-lrd-resource");
 
@@ -1422,12 +1424,649 @@ async function testInboxMutationOrdering() {
   }
 }
 
+// Push registration recovery — drives the same orchestrator that
+// notificationService constructs, with fake I/O. Asserting only against the
+// pure decision function would not cover the lifecycle these cases describe.
+async function testPushRegistrationRecovery() {
+  const makeHarness = (overrides = {}) => {
+    const calls = { backend: 0 };
+    const store = new Map();
+    const env = {
+      session: { userId: "u1" },
+      status: "denied",
+      token: "ExponentPushToken[aaa]",
+      // Default: backend accepts and echoes back the token it received, the
+      // way ensurePushTokenRegistered resolves with the accepted token.
+      backend: async (session, token) => token ?? env.token,
+      ...overrides,
+    };
+    const recovery = pushRecovery.createPushRegistrationRecovery({
+      getSession: async () => env.session,
+      getPermissionStatus: async () => env.status,
+      getExpoToken: async () => env.token,
+      registerWithBackend: async (session, token, devicePushToken) => {
+        calls.backend += 1;
+        return env.backend(session, token, devicePushToken);
+      },
+      isRetryableError: (error) => error?.retryable !== false,
+      readConfirmation: async (session) => store.get(`c:${session.userId}`) ?? null,
+      writeConfirmation: async (session, c) => store.set(`c:${session.userId}`, c),
+      getPlatform: () => "android",
+      getProjectId: () => "proj-1",
+    });
+    return { recovery, env, calls, store };
+  };
+
+  // denied -> granted, backend accepts.
+  {
+    const h = makeHarness();
+    assert.equal((await h.recovery.run()).action, "skip", "stays idle while denied");
+    h.env.status = "granted";
+    const result = await h.recovery.run();
+    assert.equal(result.action, "confirmed", "registers once permission is granted");
+    assert.equal(h.calls.backend, 1);
+  }
+
+  // Expo token exists locally but the backend call fails: must NOT be treated
+  // as registered. This is the false "already registered" bug.
+  {
+    const h = makeHarness({
+      status: "granted",
+      backend: async () => { throw Object.assign(new Error("boom"), { retryable: true }); },
+    });
+    const first = await h.recovery.run();
+    assert.equal(first.action, "failed");
+    assert.equal(first.retryable, true);
+    assert.equal(
+      h.recovery.getState().confirmation,
+      null,
+      "a stored Expo token alone is never treated as backend confirmation",
+    );
+    // A later foreground retries rather than skipping.
+    h.env.backend = async (session, token) => token ?? h.env.token;
+    const second = await h.recovery.run();
+    assert.equal(second.action, "confirmed", "a retryable failure retries on the next foreground");
+    assert.equal(h.calls.backend, 2);
+  }
+
+  // A retryable failure keeps the attempt pending, which is what preserves the
+  // bounded-retry budget. Without it the state machine would rely on the
+  // unconfirmed-identity fallback and lose the distinction.
+  {
+    const failed = pushRetry.onRegistrationFailed(
+      pushRetry.onRegistrationStarted(pushRetry.createRegistrationState(), "granted"),
+      { retryable: true },
+    );
+    assert.equal(failed.pending, true, "a retryable failure stays pending");
+    assert.equal(failed.permanentlyFailed, false);
+    assert.equal(
+      pushRetry.nextRegistrationAction(failed, {
+        currentStatus: "granted",
+        hasSession: true,
+        identity: "id-1",
+      }).reason,
+      "retry-pending",
+      "a pending retry is the reason to register, not an identity fallback",
+    );
+  }
+
+  // Non-retryable 4xx stops retrying.
+  {
+    const h = makeHarness({
+      status: "granted",
+      backend: async () => { throw Object.assign(new Error("bad request"), { retryable: false }); },
+    });
+    assert.equal((await h.recovery.run()).action, "failed");
+    const after = await h.recovery.run();
+    assert.equal(after.action, "skip");
+    assert.equal(after.reason, "permanent-failure", "a permanent failure does not keep retrying");
+    assert.equal(h.calls.backend, 1);
+  }
+
+  // Bounded attempts for repeated retryable failures.
+  {
+    const h = makeHarness({
+      status: "granted",
+      backend: async () => { throw Object.assign(new Error("flaky"), { retryable: true }); },
+    });
+    for (let i = 0; i < 6; i += 1) await h.recovery.run();
+    assert.equal(
+      h.calls.backend,
+      pushRetry.MAX_REGISTRATION_ATTEMPTS,
+      "retries stop at the configured maximum",
+    );
+    assert.equal((await h.recovery.run()).reason, "max-attempts");
+  }
+
+  // A confirmed registration does not call the backend again.
+  {
+    const h = makeHarness({ status: "granted" });
+    await h.recovery.run();
+    await h.recovery.run();
+    await h.recovery.run();
+    assert.equal(h.calls.backend, 1, "a confirmed registration avoids redundant requests");
+    assert.equal((await h.recovery.run()).reason, "already-confirmed");
+  }
+
+  // Token rotation invalidates the old confirmation.
+  {
+    const h = makeHarness({ status: "granted" });
+    await h.recovery.run();
+    assert.equal(h.calls.backend, 1);
+    h.env.token = "ExponentPushToken[bbb]";
+    const rotated = await h.recovery.run();
+    assert.equal(rotated.action, "confirmed", "a rotated token re-registers");
+    assert.equal(h.calls.backend, 2);
+  }
+
+  // Account switch while the request is in flight: the response must not be
+  // recorded against the new account.
+  {
+    const h = makeHarness({ status: "granted" });
+    h.env.backend = async (session, token) => { h.env.session = { userId: "u2" }; return token ?? h.env.token; };
+    const result = await h.recovery.run();
+    assert.equal(result.action, "discarded");
+    assert.equal(result.reason, "session-changed");
+    assert.equal(
+      h.recovery.getState().confirmation,
+      null,
+      "a confirmation is never recorded for a switched account",
+    );
+  }
+
+  // Logout before completion.
+  {
+    const h = makeHarness({ status: "granted" });
+    h.env.backend = async (session, token) => { h.env.session = null; return token ?? h.env.token; };
+    const result = await h.recovery.run();
+    assert.equal(result.action, "discarded", "a logout mid-flight discards the result");
+    const after = await h.recovery.run();
+    assert.equal(after.reason, "no-session", "no registration without a session");
+  }
+
+  // Confirmation persisted by a previous process is reused.
+  {
+    const h = makeHarness({ status: "granted" });
+    await h.recovery.run();
+    assert.equal(h.calls.backend, 1);
+    const identity = h.store.get("c:u1").identity;
+    const h2 = makeHarness({ status: "granted" });
+    h2.store.set("c:u1", { identity });
+    const reused = await h2.recovery.run();
+    assert.equal(reused.reason, "already-confirmed", "a stored confirmation survives a restart");
+    assert.equal(h2.calls.backend, 0);
+  }
+
+  // Repeated foreground events with no change do nothing.
+  {
+    const h = makeHarness({ status: "granted" });
+    await h.recovery.run();
+    const before = h.calls.backend;
+    for (let i = 0; i < 5; i += 1) await h.recovery.run();
+    assert.equal(h.calls.backend, before, "repeated foregrounds do not re-register");
+  }
+
+  // reset() clears state so a restarted watcher behaves like a fresh process.
+  {
+    const h = makeHarness({ status: "granted" });
+    await h.recovery.run();
+    h.recovery.reset();
+    assert.equal(h.recovery.getState().confirmation, null, "reset clears in-memory confirmation");
+  }
+
+  // Production registration may mint or rotate the token, so confirmation must
+  // use what the backend accepted — not the value read beforehand. This fails
+  // if registerWithBackend's return value is ignored.
+  {
+    const h = makeHarness({ status: "granted", token: null });
+    h.env.backend = async () => "ExponentPushToken[minted]";
+    const result = await h.recovery.run();
+    assert.equal(result.action, "confirmed", "registration mints a token when none is stored");
+    assert.ok(
+      result.identity.includes("ExponentPushToken[minted]"),
+      "confirmation identity uses the minted token",
+    );
+    // A later run with that token now stored is already confirmed.
+    h.env.token = "ExponentPushToken[minted]";
+    assert.equal((await h.recovery.run()).reason, "already-confirmed");
+  }
+
+  // The token rotates during registration: the accepted token wins over the
+  // one read before the request.
+  {
+    const h = makeHarness({ status: "granted", token: "ExponentPushToken[old]" });
+    h.env.backend = async () => "ExponentPushToken[rotated]";
+    const result = await h.recovery.run();
+    assert.ok(
+      result.identity.includes("ExponentPushToken[rotated]"),
+      "confirmation follows the rotated token, not the pre-read one",
+    );
+    assert.ok(
+      !result.identity.includes("ExponentPushToken[old]"),
+      "the stale pre-registration token is never confirmed",
+    );
+  }
+
+  // An unknown accepted token must never be persisted as a confirmation.
+  {
+    const h = makeHarness({ status: "granted" });
+    h.env.backend = async () => null;
+    const result = await h.recovery.run();
+    assert.equal(result.action, "failed");
+    assert.equal(result.reason, "unknown-accepted-token");
+    assert.equal(h.store.get("c:u1"), undefined, "no confirmation is written without a token");
+    assert.equal(result.retryable, true, "an unknown accepted token stays retryable");
+  }
+
+  // Two concurrent foreground callbacks join one registration.
+  {
+    const h = makeHarness({ status: "granted" });
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    h.env.backend = async (session, token) => { await gate; return token ?? h.env.token; };
+    const a = h.recovery.run();
+    const b = h.recovery.run();
+    release();
+    const [ra, rb] = await Promise.all([a, b]);
+    assert.equal(h.calls.backend, 1, "overlapping foreground events do not register twice");
+    assert.equal(ra.action, "confirmed");
+    assert.equal(rb.action, "confirmed");
+  }
+
+  // A request that finishes after reset()/logout must not write its result.
+  {
+    const h = makeHarness({ status: "granted" });
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    h.env.backend = async (session, token) => { await gate; return token ?? h.env.token; };
+    const pending = h.recovery.run();
+    h.recovery.reset();
+    release();
+    const result = await pending;
+    assert.equal(result.action, "discarded");
+    assert.ok(
+      String(result.reason).startsWith("reset-during-"),
+      `a reset wins over an older in-flight request (got ${result.reason})`,
+    );
+    assert.equal(h.recovery.getState().confirmation, null);
+  }
+
+  // Login and rotation both record the accepted token through the same path.
+  {
+    const h = makeHarness({ status: "granted", token: null });
+    h.env.backend = async (session, token, devicePushToken) =>
+      devicePushToken?.data ? `ExponentPushToken[${devicePushToken.data}]` : "ExponentPushToken[login]";
+    const login = await h.recovery.register();
+    assert.equal(login.action, "confirmed", "login records confirmation");
+    assert.ok(login.identity.includes("ExponentPushToken[login]"));
+
+    const rotated = await h.recovery.register({ devicePushToken: { data: "rot", type: "android" } });
+    assert.equal(rotated.action, "confirmed", "rotation records confirmation");
+    assert.ok(
+      rotated.identity.includes("ExponentPushToken[rot]"),
+      "rotation confirms the rotated token, not the login token",
+    );
+  }
+
+  // A rotation must not be swallowed by an in-flight registration for an
+  // older token.
+  {
+    const h = makeHarness({ status: "granted", token: "ExponentPushToken[old]" });
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    h.env.backend = async (session, token, devicePushToken) => {
+      if (!devicePushToken) { await gate; return "ExponentPushToken[old]"; }
+      return `ExponentPushToken[${devicePushToken.data}]`;
+    };
+    // Started while `slow` is still in flight, so a session-only dedupe key
+    // would make the rotation join it and resolve with the OLD token.
+    const slow = h.recovery.register();
+    const rotationPromise = h.recovery.register({ devicePushToken: { data: "new", type: "android" } });
+    release();
+    const rotation = await rotationPromise;
+    const older = await slow;
+    assert.equal(rotation.action, "confirmed");
+    assert.ok(
+      rotation.identity.includes("ExponentPushToken[new]"),
+      "a rotation runs its own registration rather than joining the older one",
+    );
+    // The older run is superseded by the rotation, so it must not confirm the
+    // stale token even though it started first.
+    assert.notEqual(older.action, "confirmed", "the superseded run does not confirm");
+  }
+
+  // A permanent failure for token A must not block token B.
+  {
+    const h = makeHarness({ status: "granted", token: "ExponentPushToken[A]" });
+    h.env.backend = async () => { throw Object.assign(new Error("bad"), { retryable: false }); };
+    assert.equal((await h.recovery.run()).action, "failed");
+    assert.equal((await h.recovery.run()).reason, "permanent-failure");
+    // Token rotates: the new identity gets a fresh budget.
+    h.env.token = "ExponentPushToken[B]";
+    h.env.backend = async (session, token) => token;
+    const afterRotation = await h.recovery.run();
+    assert.equal(
+      afterRotation.action,
+      "confirmed",
+      "a new token is not blocked by the previous token's permanent failure",
+    );
+  }
+
+  // An exhausted budget for token A must not block token B either.
+  {
+    const h = makeHarness({ status: "granted", token: "ExponentPushToken[A]" });
+    h.env.backend = async () => { throw Object.assign(new Error("flaky"), { retryable: true }); };
+    for (let i = 0; i < 5; i += 1) await h.recovery.run();
+    assert.equal((await h.recovery.run()).reason, "max-attempts");
+    const spent = h.calls.backend;
+    h.env.token = "ExponentPushToken[B]";
+    h.env.backend = async (session, token) => token;
+    assert.equal((await h.recovery.run()).action, "confirmed", "a new token gets a fresh budget");
+    assert.equal(h.calls.backend, spent + 1);
+  }
+
+  // Logging out and back in as the SAME user produces a new auth generation,
+  // so an operation from the old session must not be reused.
+  {
+    const h = makeHarness({ status: "granted" });
+    h.env.session = { userId: "u1", generation: 1 };
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    h.env.backend = async (session, token) => { await gate; return token ?? h.env.token; };
+    const pending = h.recovery.run();
+    // Logout then login as the same user.
+    h.env.session = { userId: "u1", generation: 2 };
+    release();
+    const result = await pending;
+    assert.equal(
+      result.action,
+      "discarded",
+      "a request from the previous auth generation is not applied to the new one",
+    );
+  }
+
+  // An old account's failure must not clear the new account's state.
+  {
+    const h = makeHarness({ status: "granted" });
+    h.env.session = { userId: "u1", generation: 1 };
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    h.env.backend = async () => { await gate; throw Object.assign(new Error("late"), { retryable: true }); };
+    const pending = h.recovery.run();
+    h.env.session = { userId: "u2", generation: 1 };
+    release();
+    const result = await pending;
+    assert.equal(result.action, "discarded", "an old account's failure is discarded");
+    assert.equal(
+      h.recovery.getState().permanentlyFailed,
+      false,
+      "the new account's state is untouched by the old account's failure",
+    );
+  }
+
+  // A reset during a FAILING request: the catch branch must not record the
+  // failure against state that now belongs to a fresh run.
+  {
+    const h = makeHarness({ status: "granted" });
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    h.env.backend = async () => {
+      await gate;
+      throw Object.assign(new Error("late failure"), { retryable: false });
+    };
+    const pending = h.recovery.run();
+    h.recovery.reset();
+    release();
+    const result = await pending;
+    assert.equal(result.action, "discarded", "a failure after reset is discarded");
+    assert.equal(
+      h.recovery.getState().permanentlyFailed,
+      false,
+      "a discarded failure does not mark the fresh state permanently failed",
+    );
+    assert.equal(
+      h.recovery.getState().attempts,
+      0,
+      "a discarded failure does not consume the fresh retry budget",
+    );
+  }
+
+  // Reaches the CATCH branch specifically: the account switches only after the
+  // backend request has actually started, so the earlier permission/token
+  // guards are already past and the rejection lands in catch.
+  {
+    const h = makeHarness({ status: "granted" });
+    h.env.session = { userId: "u1", generation: 1 };
+    let signalStarted;
+    const started = new Promise((resolve) => { signalStarted = resolve; });
+    let rejectRequest;
+    const request = new Promise((_, reject) => { rejectRequest = reject; });
+    h.env.backend = async () => {
+      signalStarted();
+      return request;
+    };
+    const pending = h.recovery.run();
+    await started;
+    // Switch accounts while the request is genuinely in flight.
+    h.env.session = { userId: "u2", generation: 1 };
+    rejectRequest(Object.assign(new Error("late failure"), { retryable: false }));
+    const result = await pending;
+    assert.equal(result.action, "discarded", "the catch branch discards a superseded failure");
+    assert.equal(
+      h.recovery.getState().permanentlyFailed,
+      false,
+      "a discarded failure does not mark the new account permanently failed",
+    );
+  }
+
+  // Same, but a reset lands after the request started.
+  {
+    const h = makeHarness({ status: "granted" });
+    let signalStarted;
+    const started = new Promise((resolve) => { signalStarted = resolve; });
+    let rejectRequest;
+    const request = new Promise((_, reject) => { rejectRequest = reject; });
+    h.env.backend = async () => { signalStarted(); return request; };
+    const pending = h.recovery.run();
+    await started;
+    h.recovery.reset();
+    rejectRequest(Object.assign(new Error("late"), { retryable: true }));
+    const result = await pending;
+    assert.equal(result.action, "discarded", "a reset after the request started discards the failure");
+    assert.equal(h.recovery.getState().attempts, 0, "the fresh retry budget is untouched");
+  }
+
+  // B succeeds before A: the older A must not overwrite B's confirmation.
+  {
+    const h = makeHarness({ status: "granted", token: null });
+    const gates = {};
+    const makeGate = (key) => {
+      let release;
+      gates[key] = { promise: new Promise((resolve) => { release = resolve; }) };
+      gates[key].release = release;
+    };
+    makeGate("A");
+    makeGate("B");
+    h.env.backend = async (session, token, devicePushToken) => {
+      const key = devicePushToken?.data ?? "A";
+      await gates[key].promise;
+      return `ExponentPushToken[${key}]`;
+    };
+    const a = h.recovery.register({ devicePushToken: { data: "A", type: "android" } });
+    const b = h.recovery.register({ devicePushToken: { data: "B", type: "android" } });
+    gates.B.release();
+    const rb = await b;
+    assert.equal(rb.action, "confirmed");
+    assert.ok(rb.identity.includes("ExponentPushToken[B]"));
+    gates.A.release();
+    const ra = await a;
+    assert.notEqual(ra.action, "confirmed", "the older registration does not confirm");
+    assert.ok(
+      h.store.get("c:u1").identity.includes("ExponentPushToken[B]"),
+      "the newer token's confirmation survives the older request completing last",
+    );
+  }
+
+  // Each await in the pipeline has its own guard. A single removed guard is
+  // masked by the next one, so this pins the stage each is responsible for:
+  // a reset landing at that step must be caught there, not later.
+  {
+    const stages = [
+      [1, "reset-during-permission-read"],
+      [2, "reset-during-hydration"],
+      [3, "reset-during-token-read"],
+      [4, "reset-during-request"],
+    ];
+    for (const [resetAfter, expectedReason] of stages) {
+      let step = 0;
+      let recovery;
+      const bump = () => {
+        step += 1;
+        if (step === resetAfter) recovery.reset();
+      };
+      recovery = pushRecovery.createPushRegistrationRecovery({
+        getSession: async () => ({ userId: "u1", generation: 1 }),
+        getPermissionStatus: async () => { bump(); return "granted"; },
+        readConfirmation: async () => { bump(); return null; },
+        getExpoToken: async () => { bump(); return "ExponentPushToken[a]"; },
+        registerWithBackend: async () => { bump(); return "ExponentPushToken[a]"; },
+        isRetryableError: () => true,
+        writeConfirmation: async () => {},
+        getPlatform: () => "android",
+        getProjectId: () => "p1",
+      });
+      const result = await recovery.run();
+      assert.equal(result.action, "discarded", `reset after step ${resetAfter} is discarded`);
+      assert.equal(
+        result.reason,
+        expectedReason,
+        `a reset at step ${resetAfter} is caught by its own guard`,
+      );
+    }
+  }
+
+  // Supersession AFTER the request reached the backend. This is the case the
+  // success-path guard exists for: A is already inside registerWithBackend
+  // when B starts, so the earlier hydration/token guards are long past and
+  // only the check before writing can stop A overwriting B's confirmation.
+  {
+    const h = makeHarness({ status: "granted", token: null });
+    let signalAStarted;
+    const aStarted = new Promise((resolve) => { signalAStarted = resolve; });
+    const gates = {};
+    for (const key of ["A", "B"]) {
+      let release;
+      gates[key] = { promise: new Promise((resolve) => { release = resolve; }) };
+      gates[key].release = release;
+    }
+    h.env.backend = async (session, token, devicePushToken) => {
+      const key = devicePushToken?.data ?? "A";
+      if (key === "A") signalAStarted();
+      await gates[key].promise;
+      return `ExponentPushToken[${key}]`;
+    };
+
+    const a = h.recovery.register({ devicePushToken: { data: "A", type: "android" } });
+    // Only start B once A is genuinely inside the backend call.
+    await aStarted;
+    const b = h.recovery.register({ devicePushToken: { data: "B", type: "android" } });
+
+    gates.B.release();
+    const rb = await b;
+    gates.A.release();
+    const ra = await a;
+
+    assert.equal(rb.action, "confirmed", "the newer token confirms");
+    assert.equal(
+      ra.action,
+      "discarded",
+      "a registration superseded after it reached the backend does not confirm",
+    );
+    assert.equal(ra.reason, "superseded");
+    assert.ok(
+      h.store.get("c:u1").identity.includes("ExponentPushToken[B]"),
+      "the stale response does not overwrite the newer confirmation",
+    );
+  }
+
+  // A pending -> B pending -> another A request: the second A joins the first
+  // rather than starting a third operation.
+  {
+    const h = makeHarness({ status: "granted", token: null });
+    const gates = {};
+    for (const key of ["A", "B"]) {
+      let release;
+      gates[key] = { promise: new Promise((resolve) => { release = resolve; }) };
+      gates[key].release = release;
+    }
+    h.env.backend = async (session, token, devicePushToken) => {
+      const key = devicePushToken?.data ?? "A";
+      await gates[key].promise;
+      return `ExponentPushToken[${key}]`;
+    };
+    const a1 = h.recovery.register({ devicePushToken: { data: "A", type: "android" } });
+    const b = h.recovery.register({ devicePushToken: { data: "B", type: "android" } });
+    const a2 = h.recovery.register({ devicePushToken: { data: "A", type: "android" } });
+    gates.A.release();
+    gates.B.release();
+    const [r1, rb, r2] = await Promise.all([a1, b, a2]);
+    // A2 must join A1 rather than start a third operation — a single in-flight
+    // slot would have lost A1's entry when B was registered.
+    assert.equal(r1.action, r2.action, "the repeated A request joins the pending one");
+    assert.equal(r1.reason, r2.reason);
+    // Only the newest intent (B) is allowed to confirm.
+    assert.equal(rb.action, "confirmed");
+    assert.notEqual(r1.action, "confirmed", "the superseded A does not confirm");
+    assert.equal(h.calls.backend, 1, "the superseded A never reaches the backend");
+  }
+
+  // The total number of network attempts is intentional: the orchestrator's
+  // budget multiplies the inner retry loop, so this pins the product.
+  {
+    const h = makeHarness({ status: "granted" });
+    let inner = 0;
+    // Models ensurePushTokenRegistered's own 3-attempt loop.
+    h.env.backend = async () => {
+      for (let i = 0; i < 3; i += 1) { inner += 1; }
+      throw Object.assign(new Error("flaky"), { retryable: true });
+    };
+    for (let i = 0; i < 10; i += 1) await h.recovery.run();
+    assert.equal(
+      h.calls.backend,
+      pushRetry.MAX_REGISTRATION_ATTEMPTS,
+      "the orchestrator stops at its own budget",
+    );
+    assert.equal(
+      inner,
+      pushRetry.MAX_REGISTRATION_ATTEMPTS * 3,
+      "total network attempts = orchestrator budget x inner retry loop",
+    );
+  }
+
+  // No unhandled rejection escapes a failing run.
+  {
+    const unhandled = [];
+    const onUnhandled = (reason) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    const h = makeHarness({
+      status: "granted",
+      backend: async () => { throw Object.assign(new Error("explode"), { retryable: true }); },
+    });
+    await h.recovery.run();
+    await new Promise((resolve) => setImmediate(resolve));
+    process.off("unhandledRejection", onUnhandled);
+    assert.deepEqual(unhandled, [], "a failing registration produces no unhandled rejection");
+  }
+}
+
 Promise.resolve()
   .then(testRefreshTaskSettlement)
   .then(testForegroundRefresh)
   .then(testLrdResource)
   .then(testInboxLockOrdering)
   .then(testInboxMutationOrdering)
+  .then(testPushRegistrationRecovery)
+  .then(() => require("./test-notification-icon-plugin.js"))
   .then(() => console.log("Tests OK"))
   .catch((error) => {
   console.error(error);

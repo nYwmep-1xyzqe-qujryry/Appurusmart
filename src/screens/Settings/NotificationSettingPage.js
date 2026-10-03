@@ -9,7 +9,7 @@ import {
   getNotificationPermissionStatus,
   loadNotificationSettings,
   openNotificationSystemSettings,
-  ensurePushTokenRegistered,
+  registerPushTokenConfirmed,
   saveNotificationSettings,
   syncNotificationSettingsToBackend,
 } from "../../services/notificationService";
@@ -39,8 +39,10 @@ export default function NotificationSettingPage() {
       const wasGranted = previousPermissionStatus.current === "granted";
       previousPermissionStatus.current = status;
       if (status === "granted" && !wasGranted) {
-        const session = await captureAuthSession();
-        if (session) await ensurePushTokenRegistered(session);
+        // Shared confirmed-registration path, so a toggle records the accepted
+        // token exactly like login, startup and rotation do. The permission
+        // reading above and this screen's UI are unchanged.
+        await registerPushTokenConfirmed();
       }
     } catch (_) {}
   }, []);

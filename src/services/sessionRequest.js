@@ -4,6 +4,7 @@ import { STORAGE_KEYS } from "../config";
 import { getCurrentUserId, clearCurrentUserId } from "./userSecurityKeys";
 import { clearBiometricToken, setBiometricEnabled } from "./biometricService";
 import { navigate } from "../navigation/navigationRef";
+import { clearPushRegistrationForUser } from "./pushRegistrationStorage";
 
 export async function attachRequestSession(config) {
   const session = config.authSession ?? await captureAuthSession();
@@ -22,8 +23,11 @@ export async function handleUnauthorized(error) {
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.USER,
       STORAGE_KEYS.NOTIFICATION_INBOX,
-      `${STORAGE_KEYS.PUSH_TOKEN}:user:${encodeURIComponent(userId ?? "")}`,
     ]);
+    // Drops the push token together with its backend confirmation, so a later
+    // login has to confirm POST /push-token again rather than trusting a
+    // record left over from the invalidated session.
+    await clearPushRegistrationForUser(userId);
     await clearCurrentUserId();
     if (userId) {
       await clearBiometricToken(userId);

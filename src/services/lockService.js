@@ -5,6 +5,7 @@ import { captureAuthSession, invalidateAuthSession, clearAuthSession } from "./a
 import { getStoredPushToken, removeTokenFromBackend } from "./notificationService";
 import { clearBiometricToken, setBiometricEnabled } from "./biometricService";
 import { clearCurrentUserId } from "./userSecurityKeys";
+import { clearPushRegistrationForUser } from "./pushRegistrationStorage";
 
 export const MAX_PIN_ATTEMPTS = 5;
 const LOCK_THRESHOLD_MS = 30 * 1000;
@@ -55,11 +56,14 @@ export const wipeForPinFailure = async (userId) => {
   return invalidateAuthSession(session, async () => {
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.USER,
-      `${STORAGE_KEYS.PUSH_TOKEN}:user:${encodeURIComponent(session.userId ?? "")}`,
       STORAGE_KEYS.NOTIFICATION_INBOX,
       STORAGE_KEYS.PIN_ATTEMPTS,
       STORAGE_KEYS.LAST_BACKGROUND_AT,
     ]);
+    // Clears the push token with its backend confirmation, so the next login
+    // must confirm POST /push-token again instead of trusting a record from
+    // the wiped session.
+    await clearPushRegistrationForUser(session.userId);
     await clearCurrentUserId();
     if (userId) {
       await clearBiometricToken(userId);
@@ -75,7 +79,13 @@ export const clearSessionOnly = async () => {
   const session = await captureAuthSession();
   if (session) {
     const pushToken = await getStoredPushToken(session);
+    // removeTokenFromBackend swallows its own errors and reports false. The
+    // local confirmation is cleared either way: a backend DELETE that failed
+    // leaves the server-side token in place, and keeping a local confirmation
+    // would let the next login skip POST /push-token and never repair it.
+    // Clearing is the safe direction — the cost is one redundant request.
     await removeTokenFromBackend(pushToken, session);
+    await clearPushRegistrationForUser(session.userId);
   }
   return clearAuthSession();
 };

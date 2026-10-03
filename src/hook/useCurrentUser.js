@@ -9,6 +9,7 @@ import { clearCurrentUserId } from "../services/userSecurityKeys";
 import { getStoredPushToken, removeTokenFromBackend } from "../services/notificationService";
 import api from "../services/api";
 import { getCurrentUserSnapshot, subscribeCurrentUser, refreshCurrentUser } from "../services/currentUserStore";
+import { clearPushRegistrationForUser } from "../services/pushRegistrationStorage";
 
 const getRootNavigation = (navigation) => {
   let current = navigation;
@@ -61,6 +62,10 @@ export default function useCurrentUser(navigation) {
             STORAGE_KEYS.USER,
             STORAGE_KEYS.NOTIFICATION_INBOX,
           ]);
+          // Runs whether or not the backend DELETE above succeeded. Keeping a
+          // local confirmation after logout would let the next login skip
+          // POST /push-token and leave the device registered only in theory.
+          if (userId) await clearPushRegistrationForUser(userId);
           // ลบ token และสถานะของบัญชีนี้ เพื่อให้การ login ครั้งถัดไปต้องบันทึก
           // biometric token ใหม่เสมอ ไม่ใช้ session ที่ logout แล้ว
           if (userId) await clearBiometricToken(userId);

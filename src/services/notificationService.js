@@ -1,6 +1,6 @@
 import * as Device from "expo-device";
 import Constants from "expo-constants";
-import { Alert, Linking, Platform } from "react-native";
+import { Alert, AppState, Linking, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { navigate } from "../navigation/navigationRef";
 import { API_BASE_URL, EXPO_PROJECT_ID, STORAGE_KEYS } from "../config";
@@ -15,6 +15,11 @@ import {
   mergeNotificationInbox,
 } from "../utils/notificationInbox";
 import { createSessionLock } from "../utils/sessionLock";
+import { createPushRegistrationRecovery } from "./pushRegistrationRecovery";
+import {
+  clearPushRegistrationForUser,
+  pushConfirmationKeyForUser,
+} from "./pushRegistrationStorage";
 import {
   applyPendingReads,
   isInboxResponseStale,
@@ -885,23 +890,36 @@ const isRetryablePushError = (error) => {
 
 const wait = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
 
+// Resolves with the Expo push token the backend accepted, or null when
+// registration did not complete. The token is the authoritative identity of a
+// confirmed registration.
 export async function ensurePushTokenRegistered(session = null, devicePushToken = null) {
   session ??= await captureAuthSession();
-  if (!session?.userId) return false;
-  const key = getInboxSessionKey(session);
+  if (!session?.userId) return null;
+  // The dedupe key includes the device token being registered. Keying on the
+  // session alone let a rotation join an in-flight registration for the OLD
+  // token and resolve with it, so the new token was never sent.
+  const key = `${getInboxSessionKey(session)}|${devicePushToken?.data ?? ""}`;
   if (pushRegistrationInFlight?.key === key) {
     return pushRegistrationInFlight.promise;
   }
 
   const promise = (async () => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
-      if (!await isAuthSessionCurrent(session)) return false;
+      if (!await isAuthSessionCurrent(session)) return null;
       try {
+        // registerForPushNotificationsAsync may mint or rotate the token, so
+        // the value accepted by the backend is only known here. Callers build
+        // their confirmation identity from the returned token rather than from
+        // whatever was stored before this ran.
         const token = await registerForPushNotificationsAsync(devicePushToken);
-        if (!token) return false;
-        if (!await isAuthSessionCurrent(session)) return false;
+        if (!token) return null;
+        if (!await isAuthSessionCurrent(session)) return null;
         await sendTokenToBackend(token, session.token);
-        return true;
+        // Re-check after the request: a logout or account switch while it was
+        // in flight must not produce a confirmation for the new session.
+        if (!await isAuthSessionCurrent(session)) return null;
+        return token;
       } catch (error) {
         if (attempt === 3 || !isRetryablePushError(error)) throw error;
         if (__DEV__) {
@@ -913,7 +931,7 @@ export async function ensurePushTokenRegistered(session = null, devicePushToken 
         await wait(attempt * 1500);
       }
     }
-    return false;
+    return null;
   })();
 
   pushRegistrationInFlight = { key, promise };
@@ -930,7 +948,9 @@ export async function handlePushTokenChange(devicePushToken) {
   if (!session || !devicePushToken?.data || !["android", "ios"].includes(devicePushToken.type)) return;
   const work = rotationQueue.catch(() => {}).then(async () => {
     if (!await isAuthSessionCurrent(session)) return;
-    await ensurePushTokenRegistered(session, devicePushToken);
+    // Routed through the orchestrator so a rotation records confirmation for
+    // the token the backend actually accepted, like every other entry point.
+    await registerPushTokenConfirmed({ devicePushToken });
   });
   rotationQueue = work.catch(() => {});
   try { await work; } catch {
@@ -938,6 +958,11 @@ export async function handlePushTokenChange(devicePushToken) {
   }
 }
 
+// Removing the device token always invalidates its local confirmation, whether
+// or not the backend DELETE succeeded. A failed DELETE leaves the server-side
+// token registered; keeping a local confirmation on top of that would let the
+// next login skip POST /push-token and never repair the mismatch. The return
+// value still reports the backend outcome so callers can distinguish them.
 export async function removeTokenFromBackend(token, session = null) {
   if (!isExpoPushToken(token)) return false;
   session ??= await captureAuthSession();
@@ -947,7 +972,17 @@ export async function removeTokenFromBackend(token, session = null) {
       data: getDeletePushTokenPayload(token), authSession: session, suppressAuthRedirect: true,
     });
     return true;
-  } catch { return false; }
+  } catch {
+    return false;
+  } finally {
+    // Scoped to the account whose token was removed; another account's stored
+    // confirmation is untouched.
+    await clearPushRegistrationForUser(session.userId);
+    // Only reset shared recovery state if this session is still the current
+    // one. A DELETE for a signed-out account that completes after the next
+    // login would otherwise wipe the new account's recovery state.
+    if (await isAuthSessionCurrent(session)) pushRecovery.reset();
+  }
 }
 
 export async function getStoredPushToken(session = null) {
@@ -1013,6 +1048,110 @@ export async function syncNotificationSettingsToBackend(settings, session = null
 }
 
 // ── เรียกตอน login สำเร็จ ────────────────────────────────────
+let permissionReturnSubscription = null;
+
+export { clearPushRegistrationForUser };
+
+const pushConfirmationKey = (session) => pushConfirmationKeyForUser(session.userId);
+
+// Backend confirmation is stored separately from the Expo token. The token is
+// written as soon as it is minted, before POST /push-token runs, so its
+// presence says nothing about whether the backend accepted it.
+const readPushConfirmation = async (session) => {
+  try {
+    const raw = await AsyncStorage.getItem(pushConfirmationKey(session));
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed?.identity ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+// Serialized with auth invalidation through the shared session queue, so a
+// write that started before a logout cannot land after cleanup and restore a
+// confirmation for a session that no longer exists. runWithSession resolves
+// undefined (without writing) when the session is already gone.
+//
+// This is the only auth lock taken on this path — the recovery orchestrator
+// holds no lock of its own — so there is no nesting and no deadlock.
+const writePushConfirmation = async (session, confirmation) => {
+  try {
+    await runWithSession(session, async () => {
+      await AsyncStorage.setItem(pushConfirmationKey(session), JSON.stringify(confirmation));
+    });
+  } catch (_) {}
+};
+
+const pushRecovery = createPushRegistrationRecovery({
+  getSession: () => captureAuthSession(),
+  getPermissionStatus: async () => {
+    const Notifications = getNotifications();
+    if (!Notifications) return "unavailable";
+    const current = await Notifications.getPermissionsAsync();
+    return hasNotificationPermission(current, Notifications) ? "granted" : current.status;
+  },
+  // Reads the already-minted token without prompting. Registration itself
+  // mints one when needed.
+  getExpoToken: (session) => runWithSession(session, () => AsyncStorage.getItem(pushTokenKey(session))),
+  // Resolves with the token the backend accepted so the confirmation identity
+  // matches what POST /push-token actually received.
+  registerWithBackend: async (session, _token, devicePushToken = null) => {
+    const acceptedToken = await ensurePushTokenRegistered(session, devicePushToken);
+    if (!acceptedToken) {
+      throw Object.assign(new Error("Push registration did not complete"), { retryable: true });
+    }
+    return acceptedToken;
+  },
+  isRetryableError: (error) => (error?.retryable === true ? true : isRetryablePushError(error)),
+  readConfirmation: readPushConfirmation,
+  writeConfirmation: writePushConfirmation,
+  getPlatform: () => Platform.OS,
+  getProjectId: () => getExpoProjectId(),
+  onError: (error, { retryable }) => {
+    if (__DEV__) {
+      console.warn(
+        "[Notifications] push registration recovery failed:",
+        retryable ? "retryable" : "permanent",
+        error?.status ?? error?.message,
+      );
+    }
+  },
+});
+
+subscribeAuthSession(() => pushRecovery.reset());
+
+// The permission prompt can hand the user off to system Settings and resolves
+// with the status read before that happened, so enabling notifications there
+// leaves this install unregistered. Re-check on foreground and register when
+// the status actually became granted — retrying while a previous attempt is
+// still unconfirmed.
+// Shared confirmed-registration entry point. Login, startup, permission
+// recovery, token rotation and the Settings toggle all go through this so the
+// accepted token is recorded as confirmation in exactly one place.
+export async function registerPushTokenConfirmed({ devicePushToken = null } = {}) {
+  const result = await pushRecovery.register({ devicePushToken });
+  return result?.action === "confirmed";
+}
+
+export function startPushPermissionWatcher() {
+  if (Platform.OS === "web" || isExpoGo) return () => {};
+  if (permissionReturnSubscription) return () => {};
+  if (!getNotifications()) return () => {};
+
+  const handleForeground = (state) => {
+    if (state !== "active") return;
+    // Errors are handled inside run(); catch here so a rejection can never
+    // escape the AppState callback.
+    pushRecovery.run().catch(() => {});
+  };
+
+  permissionReturnSubscription = AppState.addEventListener("change", handleForeground);
+  return () => {
+    permissionReturnSubscription?.remove();
+    permissionReturnSubscription = null;
+  };
+}
+
 export async function onLoginSuccess() {
   const session = await captureAuthSession();
   if (!session) return;
@@ -1022,7 +1161,7 @@ export async function onLoginSuccess() {
   }
 
   const registerPushToken = async () => {
-    const registered = await ensurePushTokenRegistered(session);
+    const registered = await registerPushTokenConfirmed();
     if (!registered && !isExpoGo && Device.isDevice) {
       console.warn(
         "PUSH TOKEN SKIPPED: permission, device หรือ build ยังไม่พร้อม",
