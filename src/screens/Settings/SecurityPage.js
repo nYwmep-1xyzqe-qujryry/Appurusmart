@@ -183,8 +183,17 @@ export default function SecurityPage() {
         <View className="bg-white mx-4 overflow-hidden" style={{ borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border }}>
           <View className="flex-row items-center gap-[14px] px-4 py-[16px]">
             <View className="w-10 h-10 rounded-xl bg-brand items-center justify-center shrink-0">
-              {biometricIcon === "faceid" ? (
-                <Image source={FACE_ID_ICON} style={{ width: 22, height: 22 }} resizeMode="contain" />
+              {biometricIcon === "faceid" || biometricIcon === "fingerprint" ? (
+                // "faceid" and "fingerprint" are sentinel values, not Ionicons
+                // names — they select a bundled PNG. Passing them to Ionicons
+                // rendered the missing-glyph "?" box. This row shows the Face ID
+                // artwork for both, so the biometric entry point looks the same
+                // whichever sensor the device reports.
+                <Image
+                  source={FACE_ID_ICON}
+                  style={{ width: 22, height: 22 }}
+                  resizeMode="contain"
+                />
               ) : (
                 <Ionicons name={biometricIcon} size={20} color="#fff" />
               )}
