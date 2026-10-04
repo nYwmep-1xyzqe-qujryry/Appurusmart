@@ -35,8 +35,16 @@ module.exports = {
       googleServicesFile:
         process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
       adaptiveIcon: {
-        foregroundImage: "./assets/icon.png",
-        backgroundColor: "#F0F6EF",
+        // Android shows only the middle 66.7% of the foreground and reserves
+        // the rest so each launcher can mask its own shape. assets/icon.png is
+        // drawn edge to edge for iOS — its wordmark spans 79% of the canvas —
+        // so Android cropped the sides off and the icon looked zoomed in. This
+        // foreground is the logo alone on transparency, sized to sit inside
+        // that safe area.
+        foregroundImage: "./assets/adaptive-icon.png",
+        // The background assets/icon.png bakes in, so the launcher icon reads
+        // the same colour as the iOS one.
+        backgroundColor: "#EBFAF1",
       },
       edgeToEdgeEnabled: true,
       softwareKeyboardLayoutMode: "pan",
