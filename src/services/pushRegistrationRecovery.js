@@ -189,7 +189,7 @@ export const createPushRegistrationRecovery = (deps) => {
       }
       state = onRegistrationConfirmed(state, confirmedIdentity);
       await writeConfirmation(session, { identity: confirmedIdentity });
-      return { action: "confirmed", identity: confirmedIdentity };
+      return { action: "confirmed", identity: confirmedIdentity, token: acceptedToken };
     } catch (error) {
       const retryable = isRetryableError(error);
       // The failure belongs to the operation that started it. After a reset or

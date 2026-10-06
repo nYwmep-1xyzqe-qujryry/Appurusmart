@@ -12,6 +12,7 @@ import {
 import {
   handleNotificationResponse,
   handlePushTokenChange,
+  initializeAndroidNotificationChannels,
   onLoginSuccess,
   saveNotificationToInbox,
   startPushPermissionWatcher,
@@ -49,6 +50,16 @@ export default function App() {
   useEffect(() => {
     (async () => {
       await Promise.all([initI18n(), preloadBrandAssets()]);
+      try {
+        // Android channels must exist before any authenticated push can arrive.
+        // This runs after i18n initialization because channel labels are
+        // localized, and before the app is marked ready.
+        await initializeAndroidNotificationChannels();
+      } catch (error) {
+        if (__DEV__) {
+          console.warn("[Notifications] channel setup skipped:", error?.message);
+        }
+      }
       // Cold-start lock check — ต้องรู้ผลก่อน ready เป็น true เสมอ กัน Home/หน้า
       // protected แวบให้เห็นก่อน LockOverlay ทันเวลา — PIN เป็น per-account จึง
       // ต้อง resolve userId ก่อนเสมอ (isPinSet ไม่รับ device-level อีกต่อไป)

@@ -97,7 +97,10 @@ export const normalizeAnnouncement = (item, fallbackTitle = "") => {
     source.media?.thumbnailUrl,
   );
   const imageUrl = fixPhotoUrl(readUrl(imageSource)) || null;
-  const thumbnailUrl = fixPhotoUrl(readUrl(thumbnailSource)) || imageUrl;
+  // Keep the API distinction intact. Home/list presentation chooses the
+  // original as a fallback when a legacy record has no thumbnail; detail and
+  // fullscreen must continue to prefer the original image explicitly.
+  const thumbnailUrl = fixPhotoUrl(readUrl(thumbnailSource)) || null;
   const imageWidth = Number(source.image_width ?? source.imageWidth ?? source.image?.width);
   const imageHeight = Number(source.image_height ?? source.imageHeight ?? source.image?.height);
   const thumbnailWidth = Number(

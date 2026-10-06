@@ -145,6 +145,21 @@ assert.equal(normalizedAnnouncement.title, "ข่าวทดสอบ");
 assert.equal(normalizedAnnouncement.body, "รายละเอียดข่าว");
 assert.equal(normalizedAnnouncement.imageUrl, "https://cdn.example.test/news.jpg");
 assert.equal(normalizedAnnouncement.thumbnailUrl, "https://cdn.example.test/news-thumb.jpg");
+
+const withoutThumbnail = announcement.normalizeAnnouncement({
+  image_url: "https://cdn.example.test/news-original.jpg",
+  thumbnail_url: null,
+});
+assert.equal(
+  withoutThumbnail.thumbnailUrl,
+  null,
+  "a missing API thumbnail stays null until a presentation helper chooses a fallback",
+);
+assert.equal(
+  announcementCarousel.getAnnouncementHomeImageSource(withoutThumbnail).uri,
+  withoutThumbnail.imageUrl,
+  "Home falls back to the original only at image selection time",
+);
 assert.equal(normalizedAnnouncement.imageAlt, "ภาพข่าวทดสอบ");
 assert.equal(normalizedAnnouncement.imageWidth, 1200);
 assert.equal(normalizedAnnouncement.imageHeight, 675);
@@ -1464,6 +1479,7 @@ async function testPushRegistrationRecovery() {
     h.env.status = "granted";
     const result = await h.recovery.run();
     assert.equal(result.action, "confirmed", "registers once permission is granted");
+    assert.equal(result.token, h.env.token, "confirmation exposes the token accepted by the backend");
     assert.equal(h.calls.backend, 1);
   }
 

@@ -33,7 +33,9 @@ let inboxWriteQueue = Promise.resolve();
 const inboxMetadata = new Map();
 const pendingReadFlushes = new Map();
 const notificationSettingsSyncQueues = new Map();
-let pushRegistrationInFlight = null;
+// Keep one in-flight registration per session+device token. A single shared
+// slot lets a rotated token join or evict an unrelated registration.
+const pushRegistrationInFlight = new Map();
 const BACKEND_INBOX_RETRY_AFTER_MS = 5 * 60 * 1000;
 let backendInboxUnavailableUntil = 0;
 const pendingPushInboxRetries = new Set();
@@ -131,6 +133,17 @@ const configureAndroidNotificationChannels = async (Notifications) => {
     }),
   ]);
 };
+
+// Channel creation is independent of login and token registration. App calls
+// this during startup so a notification sent before the first login still has
+// a valid Android channel. The updates channel intentionally remains DEFAULT;
+// the other three retain HIGH importance.
+export async function initializeAndroidNotificationChannels() {
+  const Notifications = getNotifications();
+  if (!Notifications) return false;
+  await configureAndroidNotificationChannels(Notifications);
+  return true;
+}
 
 const getNotificationSettingsPayload = (settings) => ({
   settings: { ...DEFAULT_NOTIFICATION_SETTINGS, ...settings },
@@ -900,9 +913,8 @@ export async function ensurePushTokenRegistered(session = null, devicePushToken 
   // session alone let a rotation join an in-flight registration for the OLD
   // token and resolve with it, so the new token was never sent.
   const key = `${getInboxSessionKey(session)}|${devicePushToken?.data ?? ""}`;
-  if (pushRegistrationInFlight?.key === key) {
-    return pushRegistrationInFlight.promise;
-  }
+  const existing = pushRegistrationInFlight.get(key);
+  if (existing) return existing;
 
   const promise = (async () => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -934,11 +946,13 @@ export async function ensurePushTokenRegistered(session = null, devicePushToken 
     return null;
   })();
 
-  pushRegistrationInFlight = { key, promise };
+  pushRegistrationInFlight.set(key, promise);
   try {
     return await promise;
   } finally {
-    if (pushRegistrationInFlight?.promise === promise) pushRegistrationInFlight = null;
+    if (pushRegistrationInFlight.get(key) === promise) {
+      pushRegistrationInFlight.delete(key);
+    }
   }
 }
 
@@ -948,9 +962,20 @@ export async function handlePushTokenChange(devicePushToken) {
   if (!session || !devicePushToken?.data || !["android", "ios"].includes(devicePushToken.type)) return;
   const work = rotationQueue.catch(() => {}).then(async () => {
     if (!await isAuthSessionCurrent(session)) return;
+    // registerForPushNotificationsAsync stores the newly minted token before
+    // POST /push-token. Read the previous value first so rotation can clean it
+    // up after, rather than accidentally deleting the new registration.
+    const previousToken = await getStoredPushToken(session);
+    if (!await isAuthSessionCurrent(session)) return;
     // Routed through the orchestrator so a rotation records confirmation for
     // the token the backend actually accepted, like every other entry point.
-    await registerPushTokenConfirmed({ devicePushToken });
+    const acceptedToken = await registerPushTokenConfirmed({ devicePushToken });
+    if (!acceptedToken || !previousToken || acceptedToken === previousToken) return;
+    if (!await isAuthSessionCurrent(session)) return;
+
+    // Do not run the normal local cleanup here: it would remove the new
+    // token's confirmation immediately after it was written.
+    await removeTokenFromBackend(previousToken, session, { clearLocal: false });
   });
   rotationQueue = work.catch(() => {});
   try { await work; } catch {
@@ -963,7 +988,7 @@ export async function handlePushTokenChange(devicePushToken) {
 // token registered; keeping a local confirmation on top of that would let the
 // next login skip POST /push-token and never repair the mismatch. The return
 // value still reports the backend outcome so callers can distinguish them.
-export async function removeTokenFromBackend(token, session = null) {
+export async function removeTokenFromBackend(token, session = null, { clearLocal = true } = {}) {
   if (!isExpoPushToken(token)) return false;
   session ??= await captureAuthSession();
   if (!session) return false;
@@ -975,13 +1000,15 @@ export async function removeTokenFromBackend(token, session = null) {
   } catch {
     return false;
   } finally {
-    // Scoped to the account whose token was removed; another account's stored
-    // confirmation is untouched.
-    await clearPushRegistrationForUser(session.userId);
-    // Only reset shared recovery state if this session is still the current
-    // one. A DELETE for a signed-out account that completes after the next
-    // login would otherwise wipe the new account's recovery state.
-    if (await isAuthSessionCurrent(session)) pushRecovery.reset();
+    if (clearLocal) {
+      // Scoped to the account whose token was removed; another account's
+      // stored confirmation is untouched.
+      await clearPushRegistrationForUser(session.userId);
+      // Only reset shared recovery state if this session is still the current
+      // one. A DELETE for a signed-out account that completes after the next
+      // login would otherwise wipe the new account's recovery state.
+      if (await isAuthSessionCurrent(session)) pushRecovery.reset();
+    }
   }
 }
 
@@ -1130,7 +1157,7 @@ subscribeAuthSession(() => pushRecovery.reset());
 // accepted token is recorded as confirmation in exactly one place.
 export async function registerPushTokenConfirmed({ devicePushToken = null } = {}) {
   const result = await pushRecovery.register({ devicePushToken });
-  return result?.action === "confirmed";
+  return result?.action === "confirmed" ? result.token ?? null : null;
 }
 
 export function startPushPermissionWatcher() {

@@ -17,14 +17,21 @@ const AppHeader = ({ title, onBack, rightIcon, onRightPress }) => {
         <TouchableOpacity
           onPress={onBack}
           className="w-10 h-10 items-center justify-center"
-          style={{ borderRadius: radius.pill, backgroundColor: "rgba(255,255,255,0.14)" }}
+          style={{
+            borderRadius: radius.pill,
+            backgroundColor: "rgba(255,255,255,0.14)",
+          }}
           activeOpacity={0.75}
           hitSlop={hitSlop}
         >
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
 
-        <Text className="text-white text-[17px] font-bold flex-1 text-center mx-2" style={{ lineHeight: 24, letterSpacing: 0 }} numberOfLines={1}>
+        <Text
+          className="text-white text-[17px] font-bold flex-1 text-center mx-2"
+          style={{ lineHeight: 24, letterSpacing: 0 }}
+          numberOfLines={1}
+        >
           {title}
         </Text>
 
@@ -32,7 +39,10 @@ const AppHeader = ({ title, onBack, rightIcon, onRightPress }) => {
           <TouchableOpacity
             onPress={onRightPress}
             className="w-10 h-10 items-center justify-center"
-            style={{ borderRadius: radius.pill, backgroundColor: "rgba(255,255,255,0.14)" }}
+            style={{
+              borderRadius: radius.pill,
+              backgroundColor: "rgba(255,255,255,0.14)",
+            }}
             activeOpacity={0.75}
             hitSlop={hitSlop}
           >
