@@ -99,6 +99,20 @@ export default function ProjectForm({ navigation, route }) {
         if (text) return text;
         return editingItem ? undefined : null;
       };
+      // lrdsystem2.projects has no column for these yet, and the backend drops
+      // an unknown key silently rather than erroring, so anything typed here
+      // was never stored. Sending them regardless would keep that failure
+      // invisible; withheld, the request carries only what the table can hold.
+      // The inputs stay on screen and keep their values for the session — the
+      // fields are wanted, the columns are what is missing. Remove a name from
+      // this list as soon as its column ships.
+      const UNSUPPORTED_PROJECT_COLUMNS = [
+        "projectname_eng",
+        "objective",
+        "abstract",
+        "contributor",
+        "local_expert",
+      ];
       const budgetText = String(form.budget ?? "").trim();
       const payload = {
         projectname: form.titleTh.trim(),
@@ -115,6 +129,7 @@ export default function ProjectForm({ navigation, route }) {
       };
       // undefined would survive into the request body as a dropped key only by
       // accident of the serializer; remove it here so the contract is explicit.
+      UNSUPPORTED_PROJECT_COLUMNS.forEach((key) => delete payload[key]);
       Object.keys(payload).forEach((key) => {
         if (payload[key] === undefined) delete payload[key];
       });
@@ -162,6 +177,16 @@ export default function ProjectForm({ navigation, route }) {
           <InlineDropdown label={te("project.field")} value={form.field} options={researchFieldOptions} onSelect={(v) => set("field", v)} required searchable />
           <InlineDropdown label={te("project.funding")} value={form.fundingSource} options={fundingSourceOptions} onSelect={(v) => set("fundingSource", v)} required searchable compact />
           <FormField ref={titleThRef} label={te("project.titleTh")} value={form.titleTh} onChangeText={(v) => set("titleTh", v)} required onSubmitEditing={() => titleEnRef.current?.focus()} />
+          {/* The five fields below have no column in lrdsystem2.projects yet,
+              so the backend accepts the request and quietly discards them.
+              Saying so here is the only way a user can tell; without it the
+              save reports success and the text is gone on the next open. */}
+          <View className="mx-4 mb-1 mt-2 flex-row items-start rounded-xl bg-[#fff8e6] border border-[#f0d9a0] px-3 py-[10px]">
+            <Ionicons name="information-circle-outline" size={18} color="#a8631a" style={{ marginTop: 1 }} />
+            <Text className="flex-1 ml-2 text-[13px] leading-[19px] text-[#7a4a12]">
+              {te("project.pendingColumns")}
+            </Text>
+          </View>
           <FormField ref={titleEnRef} label={te("project.titleEn")} value={form.titleEn} onChangeText={(v) => set("titleEn", v)} onSubmitEditing={() => keywordsRef.current?.focus()} />
           <FormField ref={keywordsRef} label={te("project.keywords")} value={form.keywords} onChangeText={(v) => set("keywords", v)} placeholder={te("project.keywordsPlaceholder")} required onSubmitEditing={() => objectiveRef.current?.focus()} />
           <FormField ref={objectiveRef} label={te("project.objective")} value={form.objective} onChangeText={(v) => set("objective", v)} multiline returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => abstractRef.current?.focus()} />

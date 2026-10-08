@@ -27,6 +27,10 @@ const buildPayloadFactory = () => {
   );
   const body = source.slice(start, end);
   assert.ok(
+    /UNSUPPORTED_PROJECT_COLUMNS/.test(body),
+    "the payload must withhold columns the projects table does not have",
+  );
+  assert.ok(
     !/\|\|\s*null/.test(body),
     "the update payload must not coerce an empty optional field to null",
   );
@@ -55,13 +59,12 @@ async function main() {
   const editing = { id: 7, researcher_id: "r1" };
   const editPayload = buildPayload(blankForm, editing);
 
-  ["budget", "abstract", "objective", "contributor", "local_expert", "projectname_eng"]
-    .forEach((key) => {
-      assert.ok(
-        !(key in editPayload),
-        `${key} must be omitted on update so the stored value survives`,
-      );
-    });
+  ["budget"].forEach((key) => {
+    assert.ok(
+      !(key in editPayload),
+      `${key} must be omitted on update so the stored value survives`,
+    );
+  });
   assert.strictEqual(
     Object.values(editPayload).some((value) => value === null),
     false,
@@ -72,27 +75,57 @@ async function main() {
   assert.strictEqual(editPayload.year_id, 2568);
   assert.strictEqual(editPayload.keyword, "คำสำคัญ");
 
-  // 2. The user's real edits must still be sent.
+  // 2. The user's real edits to supported columns must still be sent.
   const filledPayload = buildPayload(
-    { ...blankForm, abstract: "  บทคัดย่อ  ", budget: "50000" },
+    { ...blankForm, keywords: "  คำสำคัญใหม่  ", budget: "50000" },
     editing,
   );
-  assert.strictEqual(filledPayload.abstract, "บทคัดย่อ", "a typed value is trimmed and sent");
+  assert.strictEqual(filledPayload.keyword, "คำสำคัญใหม่", "a typed value is trimmed and sent");
   assert.strictEqual(filledPayload.budget, 50000, "budget is sent as a number");
 
   // 3. Creating is unaffected: null is harmless on a new row and keeps the
   //    previous contract for a backend that distinguishes absent from null.
   const createPayload = buildPayload(blankForm, null);
-  assert.strictEqual(createPayload.abstract, null, "create still sends null for an empty field");
   assert.strictEqual(createPayload.budget, null, "create still sends null budget");
 
   // 4. Clearing a value stays possible through an empty string, which the
   //    backend stores as empty rather than reading as "unchanged".
-  const clearedPayload = buildPayload({ ...blankForm, abstract: "   " }, editing);
+  const clearedPayload = buildPayload({ ...blankForm, budget: "   " }, editing);
   assert.ok(
-    !("abstract" in clearedPayload),
+    !("budget" in clearedPayload),
     "whitespace-only input is treated as untouched, not as a deliberate clear",
   );
+
+  // 5. Columns that do not exist in lrdsystem2.projects are never sent, on
+  //    create or update. The backend drops unknown keys without erroring, so
+  //    sending them would hide the fact that the data is going nowhere.
+  const unsupported = [
+    "projectname_eng",
+    "objective",
+    "abstract",
+    "contributor",
+    "local_expert",
+  ];
+  const typedEverything = {
+    ...blankForm,
+    titleEn: "An English title",
+    objective: "วัตถุประสงค์",
+    abstract: "บทคัดย่อ",
+    contributors: "ผู้ร่วมวิจัย",
+    localExperts: "ผู้เชี่ยวชาญ",
+  };
+  [editing, null].forEach((mode) => {
+    const payload = buildPayload(typedEverything, mode);
+    unsupported.forEach((key) => {
+      assert.ok(
+        !(key in payload),
+        `${key} has no column and must not be sent (${mode ? "update" : "create"})`,
+      );
+    });
+    // The supported fields must still survive the filtering.
+    assert.strictEqual(payload.projectname, "โครงการทดสอบ");
+    assert.strictEqual(payload.keyword, "คำสำคัญ");
+  });
 
   console.log("Project form payload tests OK");
 }
