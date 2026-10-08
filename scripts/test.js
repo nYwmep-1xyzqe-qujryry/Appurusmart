@@ -54,6 +54,7 @@ const profilePdfSanitizer = loadModule("src/utils/profilePdfSanitizer.js");
 const notificationDeletion = loadModule("src/utils/notificationDeletion.js");
 const testLrdResource = require("./test-lrd-resource");
 const testLrdSession = require("./test-lrd-session");
+const testProjectFormPayload = require("./test-project-form-payload");
 
 const parsed = thaiDate.parseISOToDate("2024-10-26");
 assert.equal(parsed.getFullYear(), 2024);
@@ -2246,6 +2247,7 @@ Promise.resolve()
   .then(testForegroundRefresh)
   .then(testLrdResource)
   .then(testLrdSession)
+  .then(testProjectFormPayload)
   .then(testInboxLockOrdering)
   .then(testInboxMutationOrdering)
   .then(testPushRegistrationRecovery)

@@ -86,19 +86,38 @@ export default function ProjectForm({ navigation, route }) {
         Alert.alert(te("common.noPermissionTitle"), te("project.noPermissionMessage"));
         return;
       }
+      // PUT/PATCH merges: a key that is absent keeps its stored value, but an
+      // explicit null clears it. The list and detail responses omit some
+      // columns the API still accepts on save (budget, bcg, sdg), so those
+      // fields load blank even when the record holds data — sending their
+      // emptiness back as null erased it on every edit. On update an optional
+      // field is therefore sent only when the user actually has a value for
+      // it; clearing one stays possible by submitting an empty string, which
+      // the backend stores as empty rather than reading as "unchanged".
+      const optional = (value) => {
+        const text = String(value ?? "").trim();
+        if (text) return text;
+        return editingItem ? undefined : null;
+      };
+      const budgetText = String(form.budget ?? "").trim();
       const payload = {
         projectname: form.titleTh.trim(),
         year_id: Number(form.year),
         work_id: Number(form.field),
         fund_id: Number(form.fundingSource),
-        projectname_eng: form.titleEn.trim() || null,
+        projectname_eng: optional(form.titleEn),
         keyword: form.keywords.trim(),
-        objective: form.objective.trim() || null,
-        abstract: form.abstract.trim() || null,
-        contributor: form.contributors.trim() || null,
-        local_expert: form.localExperts.trim() || null,
-        budget: form.budget === "" ? null : Number(form.budget),
+        objective: optional(form.objective),
+        abstract: optional(form.abstract),
+        contributor: optional(form.contributors),
+        local_expert: optional(form.localExperts),
+        budget: budgetText ? Number(budgetText) : (editingItem ? undefined : null),
       };
+      // undefined would survive into the request body as a dropped key only by
+      // accident of the serializer; remove it here so the contract is explicit.
+      Object.keys(payload).forEach((key) => {
+        if (payload[key] === undefined) delete payload[key];
+      });
       const mutationResult = editingItem
         ? await update(editingItem.id, payload)
         : await create(payload);
