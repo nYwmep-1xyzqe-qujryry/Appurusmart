@@ -10,10 +10,11 @@ import api from "./api";
 import { getAuthToken, captureAuthSession, runWithSession, isAuthSessionCurrent, subscribeAuthSession } from "./authStorage";
 import { colors } from "../theme/tokens";
 import {
-  getAnnouncementId,
   getCorrectedUnreadCount,
   mergeNotificationInbox,
+  reconcileAnnouncementNotificationContent,
 } from "../utils/notificationInbox";
+import { getAnnouncementRows, normalizeAnnouncements } from "../utils/announcement";
 import { createSessionLock } from "../utils/sessionLock";
 import { createPushRegistrationRecovery } from "./pushRegistrationRecovery";
 import {
@@ -26,6 +27,11 @@ import {
   mergeStaleInboxResponse,
   removeConfirmedPendingIds,
 } from "../utils/inboxSync";
+import {
+  filterDismissedNotifications,
+  getDismissedUnreadCount,
+  normalizeNotificationIds,
+} from "../utils/notificationDeletion";
 
 const NOTIFICATION_INBOX_LIMIT = 100;
 const inboxListeners = new Set();
@@ -451,23 +457,35 @@ async function fetchNotificationInbox(session) {
     // Captured before the request so a mutation that commits while it is in
     // flight can be detected at commit time.
     const revisionAtStart = getInboxRevision(session);
-    const response = await api.get("/notifications", {
-      authSession: session,
-      params: { page: 1, per_page: NOTIFICATION_INBOX_LIMIT },
-      timeout: 5000,
-      suppressErrorLog: true,
-      suppressAuthRedirect: true,
-    });
-    let serverItems = extractServerNotifications(response.data)
+    const [inboxResult, announcementsResult] = await Promise.allSettled([
+      api.get("/notifications", {
+        authSession: session,
+        params: { page: 1, per_page: NOTIFICATION_INBOX_LIMIT },
+        timeout: 5000,
+        suppressErrorLog: true,
+        suppressAuthRedirect: true,
+      }),
+      // This request enriches text only. A missing item is ambiguous, so it
+      // must never remove or change the read state of an inbox notification.
+      api.get("/announcements", {
+        authSession: session,
+        timeout: 5000,
+        suppressErrorLog: true,
+        suppressAuthRedirect: true,
+      }),
+    ]);
+    if (inboxResult.status !== "fulfilled") throw inboxResult.reason;
+
+    const announcementRows = announcementsResult.status === "fulfilled"
+      ? normalizeAnnouncements(getAnnouncementRows(announcementsResult.value.data))
+      : [];
+    const serverItems = reconcileAnnouncementNotificationContent(
+      extractServerNotifications(inboxResult.value.data)
       .map(normalizeServerNotification)
-      .filter(Boolean);
-    // The notification record from the authenticated inbox is the source of
-    // truth for whether a notification belongs to this user. Cross-checking it
-    // against GET /announcements hid valid notifications, because that list is
-    // paginated (Home requests limit=5) and an older announcement simply is not
-    // in it — the detail endpoint still serves it. Deleted or unpublished
-    // announcements are handled by the detail screen's 403/404/410 responses.
-    const serverUnreadCount = extractUnreadCount(response.data);
+      .filter(Boolean),
+      announcementRows,
+    );
+    const serverUnreadCount = extractUnreadCount(inboxResult.value.data);
 
     // Both the dismissal set and the pending reads are read inside the lock:
     // a mutation that lands while this request is in flight must not be
@@ -607,35 +625,55 @@ export async function markNotificationRead(id) {
   return items;
 }
 
-export async function dismissNotification(id) {
-  const session = await captureAuthSession();
+export async function dismissNotifications(ids, sessionOverride = null) {
+  const session = sessionOverride ?? await captureAuthSession();
   if (!session?.userId) return [];
-  // The read state is resolved inside the lock: a sync running concurrently
-  // can flip the row to read, and deciding from a snapshot taken outside the
-  // lock would decrement the badge for a row the server already stopped
-  // counting.
+  const normalizedIds = normalizeNotificationIds(ids);
+  if (normalizedIds.length === 0) return [];
+
+  // Resolve every read state inside one lock. A storage failure rejects the
+  // whole operation, so the UI retains the selection for retry instead of
+  // reporting a partial delete as success.
   return withInboxLock(session, async () => {
+    if (!await isAuthSessionCurrent(session)) {
+      throw Object.assign(new Error("Session changed"), { code: "ERR_CANCELED" });
+    }
     const currentItems = await readInbox(session);
-    const currentItem = currentItems.find((item) => String(item.id) === String(id));
-    const wasUnread = Boolean(currentItem && !currentItem.read);
+    const dismissedUnreadCount = getDismissedUnreadCount(currentItems, normalizedIds);
     const dismissedIds = await readDismissedNotificationIds(session);
-    const alreadyDismissed = dismissedIds.has(String(id));
-    dismissedIds.add(String(id));
-    await writeDismissedNotificationIds(session, dismissedIds);
+    normalizedIds.forEach((id) => dismissedIds.add(id));
+    const saved = await runWithSession(
+      session,
+      async () => {
+        await writeDismissedNotificationIds(session, dismissedIds);
+        return true;
+      },
+    );
+    if (saved === undefined || !await isAuthSessionCurrent(session)) {
+      throw Object.assign(new Error("Session changed"), { code: "ERR_CANCELED" });
+    }
 
     // This is an optimistic local adjustment so the badge reacts immediately.
     // The next sync recomputes it from the server rows, which is what keeps it
-    // correct once the server's own count changes for this row.
+    // correct once the server's own count changes for these rows.
     const knownMetadata = inboxMetadata.get(getInboxSessionKey(session));
-    bumpInboxRevision(session, id);
-    return updateNotificationInbox(
-      (current) => current.filter((item) => String(item.id) !== String(id)),
+    normalizedIds.forEach((id) => bumpInboxRevision(session, id));
+    const updated = await updateNotificationInbox(
+      (current) => filterDismissedNotifications(current, normalizedIds),
       session,
-      knownMetadata && wasUnread && !alreadyDismissed
-        ? { unreadCount: Math.max(0, knownMetadata.unreadCount - 1) }
+      knownMetadata && dismissedUnreadCount > 0
+        ? { unreadCount: Math.max(0, knownMetadata.unreadCount - dismissedUnreadCount) }
         : knownMetadata,
     );
+    if (!await isAuthSessionCurrent(session)) {
+      throw Object.assign(new Error("Session changed"), { code: "ERR_CANCELED" });
+    }
+    return updated;
   });
+}
+
+export async function dismissNotification(id, session) {
+  return dismissNotifications([id], session);
 }
 
 export async function markAllNotificationsRead() {
@@ -832,7 +870,7 @@ export async function registerForPushNotificationsAsync(devicePushToken = null) 
       }
       return null;
     }
-    if (__DEV__) console.warn("EXPO PUSH TOKEN ERROR:", e);
+    if (__DEV__) console.warn("EXPO PUSH TOKEN ERROR:", e?.message ?? "unknown error");
     throw e;
   }
 }
@@ -876,16 +914,15 @@ export async function sendTokenToBackend(token, sanctumToken) {
       body: JSON.stringify(getPushTokenPayload(token)),
       signal: controller.signal,
     });
-    const result = await response.text();
     if (__DEV__) console.log("PUSH TOKEN API:", response.status);
 
     if (!response.ok) {
-      // Keep the server's diagnostic available during development without
-      // logging the push token or Sanctum authorization header.
+      // Keep only the status available during development. The response body
+      // may contain server details and must not enter device logs.
       if (__DEV__) {
-        console.warn("[Notifications] push-token registration failed:", response.status, result || "<empty response>");
+        console.warn("[Notifications] push-token registration failed:", response.status);
       }
-      const error = new Error(result || `HTTP ${response.status}`);
+      const error = new Error(`HTTP ${response.status}`);
       error.status = response.status;
       throw error;
     }
@@ -1270,13 +1307,15 @@ export async function handleNotificationResponse(response) {
   const data = verified.data;
 
   if (data.type === "announcement") {
-    if (data.announcement_id == null) {
+    const announcementId = data.announcement_id ?? data.announcementId;
+    if (announcementId == null) {
       if (await isAuthSessionCurrent(session)) navigate("Notifications");
       return;
     }
     if (await isAuthSessionCurrent(session)) {
       navigate("AnnouncementDetail", {
-        announcementId: data.announcement_id,
+        announcementId,
+        notificationId: verified.id,
       });
     }
     return;

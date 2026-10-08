@@ -26,6 +26,8 @@ import {
   normalizeAnnouncement,
 } from "../../utils/announcement";
 import { normalizeOptionalUrl } from "../../utils/url";
+import { dismissNotification } from "../../services/notificationService";
+import { captureAuthSession, isResourceSessionCurrent } from "../../services/authStorage";
 
 // Wider than this and the preview gets too short to read; narrower and the
 // side crop starts cutting into banner content.
@@ -85,6 +87,7 @@ export default function AnnouncementDetail({ navigation, route }) {
     ?? routeAnnouncement?.id
     ?? routeAnnouncement?.announcement_id
     ?? null;
+  const notificationId = route.params?.notificationId ?? null;
   const seededAnnouncement = useMemo(() => {
     const record = getAnnouncementRecord(routeAnnouncement);
     return record ? normalizeAnnouncement(record, t("announce.defaultTitle")) : null;
@@ -114,12 +117,18 @@ export default function AnnouncementDetail({ navigation, route }) {
     setLoading(true);
     setErrorKind(null);
     setRefreshError(null);
+    const requestSession = await captureAuthSession();
 
     try {
       const response = await api.get(
         `/announcements/${encodeURIComponent(announcementId)}`,
-        { suppressErrorLog: true },
+        {
+          suppressErrorLog: true,
+          authSession: requestSession,
+          sessionSnapshot: true,
+        },
       );
+      if (!await isResourceSessionCurrent(requestSession)) return;
       const recordPayload = response.data?.data ?? response.data;
       const record = getAnnouncementRecord(recordPayload);
       if (__DEV__) {
@@ -146,7 +155,15 @@ export default function AnnouncementDetail({ navigation, route }) {
       setAnnouncement(normalized);
     } catch (error) {
       if (currentRequest !== requestId.current) return;
+      if (!await isResourceSessionCurrent(requestSession)) return;
       const kind = getErrorKind(error);
+      if (kind === "notFound" && notificationId != null) {
+        // A 404/410 is evidence that this announcement is gone. Hide only the
+        // notification that opened this detail; transient failures stay visible.
+        await dismissNotification(notificationId, requestSession).catch(() => {});
+        if (currentRequest === requestId.current) navigation.goBack();
+        return;
+      }
       if ((kind === "load" || kind === "notFound") && seededAnnouncement) {
         setAnnouncement(seededAnnouncement);
         setRefreshError(t("announce.detailRefreshFailed"));
@@ -156,9 +173,9 @@ export default function AnnouncementDetail({ navigation, route }) {
         setErrorKind(kind);
       }
     } finally {
-      if (currentRequest === requestId.current) setLoading(false);
+      if (currentRequest === requestId.current && await isResourceSessionCurrent(requestSession)) setLoading(false);
     }
-  }, [announcementId, seededAnnouncement, t]);
+  }, [announcementId, navigation, notificationId, seededAnnouncement, t]);
 
   useEffect(() => {
     // รายการข่าวส่งข้อมูลมาแล้ว จึงเปิดอ่านได้ทันที ส่วน Push ที่มีเฉพาะ ID

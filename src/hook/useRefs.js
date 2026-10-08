@@ -6,25 +6,33 @@
 import { useEffect, useRef, useState } from "react";
 import infoApi from "../services/infoApi";
 import { readResourceCache, writeResourceCache } from "../services/resourceCache";
+import { captureAuthSession, isResourceSessionCurrent, runWithSession, subscribeAuthSession } from "../services/authStorage";
 
 const cache = {};
 
-const fetchRef = async (path) => {
-  if (cache[path]) return cache[path];
-  const cached = await readResourceCache(`expert:ref:${path}`);
+const fetchRef = async (path, session) => {
+  const cacheKey = `expert:ref:${path}`;
+  const memoryKey = `${session?.userId ?? "public"}:${path}`;
+  if (cache[memoryKey]) return cache[memoryKey];
+  const cacheOptions = { scope: session?.userId ?? null };
+  const cached = await readResourceCache(cacheKey, cacheOptions);
   if (cached) {
-    cache[path] = Array.isArray(cached.data) ? cached.data : [];
-    if (cached.fresh) return cache[path];
+    cache[memoryKey] = Array.isArray(cached.data) ? cached.data : [];
+    if (cached.fresh) return cache[memoryKey];
   }
-  const res = await infoApi.get(path);
+  const res = await infoApi.get(path, { authSession: session, sessionSnapshot: true });
   const data = res.data?.data ?? res.data ?? [];
   const arr = Array.isArray(data) ? data : [];
   if (__DEV__ && arr.length > 0 && arr[0].id === undefined) {
     console.warn(`[useRefs] ${path}: items มีไม่มี field 'id' — fields ที่มี:`, Object.keys(arr[0]));
   }
-  cache[path] = arr;
-  await writeResourceCache(`expert:ref:${path}`, arr);
-  return cache[path];
+  if (!await isResourceSessionCurrent(session)) return cached?.data ?? [];
+  const committed = await runWithSession(session, async () => {
+    cache[memoryKey] = arr;
+    await writeResourceCache(cacheKey, arr, cacheOptions);
+    return true;
+  });
+  return committed === undefined ? (cached?.data ?? []) : cache[memoryKey];
 };
 
 const useRefs = () => {
@@ -43,8 +51,8 @@ const useRefs = () => {
     return () => { mounted.current = false; };
   }, []);
 
-  useEffect(() => {
-    const load = async () => {
+  const loadRefs = async () => {
+      const session = await captureAuthSession();
       const keys = ["degrees", "journalTypes", "researchTypes", "researchLevels", "researchPmuTypes"];
       const paths = [
         "/info/expert/ref/degrees",
@@ -53,8 +61,8 @@ const useRefs = () => {
         "/info/expert/ref/research-levels",
         "/info/expert/ref/research-pmu-types",
       ];
-      const results = await Promise.allSettled(paths.map((p) => fetchRef(p)));
-      if (!mounted.current) return;
+      const results = await Promise.allSettled(paths.map((p) => fetchRef(p, session)));
+      if (!mounted.current || !await isResourceSessionCurrent(session)) return;
       const merged = {};
       results.forEach((r, i) => {
         merged[keys[i]] = r.status === "fulfilled" ? r.value : [];
@@ -62,8 +70,16 @@ const useRefs = () => {
       });
       setRefs((prev) => ({ ...prev, ...merged }));
       setLoading(false);
-    };
-    load();
+  };
+
+  useEffect(() => {
+    loadRefs();
+    return subscribeAuthSession(() => {
+      if (!mounted.current) return;
+      setRefs({ degrees: [], journalTypes: [], researchTypes: [], researchLevels: [], researchPmuTypes: [] });
+      setLoading(true);
+      loadRefs();
+    });
   }, []);
 
   return { ...refs, loading };

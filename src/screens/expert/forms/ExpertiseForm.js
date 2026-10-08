@@ -60,8 +60,6 @@ const ExpertiseForm = ({ navigation, route }) => {
     const groupLabel =
       expertGroups.find((g) => g.id === form.group_id)?.label ?? "";
     const payload = { group_id: parseInt(form.group_id, 10), name: groupLabel };
-    if (__DEV__)
-      console.log("[ExpertiseForm] payload:", JSON.stringify(payload));
     setSaving(true);
     try {
       editingItem

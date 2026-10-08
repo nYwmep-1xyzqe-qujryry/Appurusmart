@@ -579,9 +579,6 @@ const ProfileForm = ({ navigation, route }) => {
         sub_unit: form.sub_unit ? parseInt(form.sub_unit, 10) : null,
       };
 
-      if (__DEV__)
-        console.log("[ProfileForm] PUT /me payload:", JSON.stringify(payload));
-
       await api.put("/me", payload);
       Alert.alert(
         t("research.profile.saveSuccess"),

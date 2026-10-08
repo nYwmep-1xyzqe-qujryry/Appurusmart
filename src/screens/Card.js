@@ -25,7 +25,7 @@ const normalize = (d) => {
     str(d.name) || str(d.full_name) || str(d.teacher_name) ||
     (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName);
 
-  if (__DEV__) console.log("[Card /me keys]", Object.keys(d), "→ name:", fullName);
+  if (__DEV__) console.log("[Card /me] response received", { fieldCount: Object.keys(d).length });
 
   return {
     name:       fullName,

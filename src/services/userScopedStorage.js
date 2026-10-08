@@ -19,7 +19,14 @@ export async function getUserScopedStorageKey(baseKey) {
   if (identity === undefined || identity === null || String(identity).trim() === "") {
     throw new Error("ไม่สามารถระบุบัญชีผู้ใช้สำหรับจัดเก็บข้อมูลได้");
   }
-  return `${baseKey}:user:${encodeURIComponent(String(identity))}`;
+  return getUserScopedStorageKeyForId(baseKey, identity);
+}
+
+export function getUserScopedStorageKeyForId(baseKey, userId) {
+  if (userId === undefined || userId === null || String(userId).trim() === "") {
+    throw new Error("ไม่สามารถระบุบัญชีผู้ใช้สำหรับจัดเก็บข้อมูลได้");
+  }
+  return `${baseKey}:user:${encodeURIComponent(String(userId))}`;
 }
 
 export async function getUserScopedValue(baseKey) {
@@ -28,4 +35,15 @@ export async function getUserScopedValue(baseKey) {
 
 export async function setUserScopedValue(baseKey, value) {
   await AsyncStorage.setItem(await getUserScopedStorageKey(baseKey), String(value));
+}
+
+export async function getUserScopedValueForSession(baseKey, session) {
+  return AsyncStorage.getItem(getUserScopedStorageKeyForId(baseKey, session?.userId));
+}
+
+export async function setUserScopedValueForSession(baseKey, session, value) {
+  await AsyncStorage.setItem(
+    getUserScopedStorageKeyForId(baseKey, session?.userId),
+    String(value),
+  );
 }

@@ -147,7 +147,6 @@ const ResearchForm = ({ navigation }) => {
       console.log("=== [ResearchForm] GET /researches ===");
       console.log("  จำนวน:", items.length);
       console.log("  keys ของ item แรก:", Object.keys(items[0]));
-      console.log("  item แรก (full):", JSON.stringify(items[0], null, 2));
       console.log("=====================================");
     }
   }, [items]);
@@ -218,8 +217,6 @@ const ResearchForm = ({ navigation }) => {
         ...(form.pmu ? { research_PMU_type_id: parseInt(form.pmu, 10) } : {}),
         ...(form.level ? { research_level_id: parseInt(form.level, 10) } : {}),
       };
-      if (__DEV__)
-        console.log("[ResearchForm] payload:", JSON.stringify(payload));
       editingItem
         ? await update(editingItem.id, payload)
         : await create(payload);

@@ -35,6 +35,11 @@ import { resolveUserId } from "../services/userSecurityKeys";
 import { ensureExpertProfile } from "../services/infoApi";
 import { colors, typography } from "../theme/tokens";
 import { URUSMART_LOGO } from "../assets/brandAssets";
+import {
+  extractSsoToken,
+  isTrustedSsoCallbackUrl,
+  isTrustedSsoMessageUrl as isTrustedSsoMessageSourceUrl,
+} from "../utils/ssoSecurity";
 
 const API_URL = API_BASE_URL;
 const SSO_BASE_URL =
@@ -68,6 +73,7 @@ const parseUrl = (url = "") => {
 
 const getSsoBackendHost = () =>
   parseUrl(SSO_BASE_URL)?.hostname ?? "urusmart.uru.ac.th";
+const getSsoBackendPort = () => parseUrl(SSO_BASE_URL)?.port || null;
 
 const isUniversityHost = (hostname = "") =>
   hostname === "uru.ac.th" || hostname.endsWith(".uru.ac.th");
@@ -94,13 +100,10 @@ const sanitizeSsoUrlForLog = (url = "") => {
   const parsed = parseUrl(url);
   if (!parsed) return String(url || "");
 
-  ["token", "access_token", "ssoToken", "passportToken", "code", "state"].forEach(
-    (key) => {
-      if (parsed.searchParams.has(key)) {
-        parsed.searchParams.set(key, "[hidden]");
-      }
-    },
-  );
+  for (const key of parsed.searchParams.keys()) parsed.searchParams.set(key, "[hidden]");
+  parsed.hash = "";
+  parsed.username = "";
+  parsed.password = "";
   return parsed.toString();
 };
 
@@ -114,7 +117,13 @@ const isTrustedSsoNavigationUrl = (url = "") => {
 
   const parsed = parseUrl(value);
   if (!parsed) return false;
-  if (!["http:", "https:"].includes(parsed.protocol)) return false;
+  if (parsed.protocol !== "https:" && !(__DEV__ && parsed.protocol === "http:")) return false;
+  const backendUrl = parseUrl(SSO_BASE_URL);
+  if (parsed.hostname === getSsoBackendHost()) {
+    if (parsed.port !== (backendUrl?.port || "")) return false;
+  } else if (parsed.port) {
+    return false;
+  }
 
   return (
     parsed.hostname === getSsoBackendHost() ||
@@ -124,31 +133,14 @@ const isTrustedSsoNavigationUrl = (url = "") => {
 };
 
 const isTrustedSsoMessageUrl = (url = "") => {
-  const parsed = parseUrl(url);
-  if (!parsed) return false;
-  if (!["http:", "https:"].includes(parsed.protocol)) return false;
-  return parsed.hostname === getSsoBackendHost();
+  return isTrustedSsoMessageSourceUrl(url, getSsoBackendHost(), __DEV__, getSsoBackendPort());
 };
 
 const isSsoCallbackUrl = (url = "") =>
-  String(url).includes("/auth/callback") ||
-  String(url).includes("token=") ||
-  String(url).includes("access_token=");
+  isTrustedSsoCallbackUrl(url, getSsoBackendHost(), __DEV__, getSsoBackendPort());
 
-const extractTokenFromUrl = (url = "") => {
-  try {
-    const parsed = new URL(String(url));
-    return (
-      parsed.searchParams.get("token") ||
-      parsed.searchParams.get("access_token") ||
-      parsed.searchParams.get("ssoToken") ||
-      parsed.searchParams.get("passportToken") ||
-      null
-    );
-  } catch {
-    return null;
-  }
-};
+const extractTokenFromUrl = (url = "") =>
+  extractSsoToken(url, getSsoBackendHost(), __DEV__, getSsoBackendPort());
 
 const HIDE_SSO_CALLBACK_SCRIPT = `
   (function () {
@@ -278,7 +270,7 @@ const Login = ({ navigation, route }) => {
 
   const runPostLoginNotifications = () => {
     onLoginSuccess().catch((error) => {
-      console.error("POST-LOGIN NOTIFICATION ERROR:", error);
+      console.error("POST-LOGIN NOTIFICATION ERROR:", error?.message ?? "unknown error");
     });
   };
 
@@ -354,7 +346,7 @@ const Login = ({ navigation, route }) => {
       setTimeout(() => {
         promptEnableBiometric(userId, token)
           .catch((error) => {
-            console.error("BIOMETRIC PROMPT ERROR:", error);
+            console.error("BIOMETRIC PROMPT ERROR:", error?.message ?? "unknown error");
           })
           .finally(resolve);
       }, 600);
@@ -407,7 +399,7 @@ const Login = ({ navigation, route }) => {
       // แล้วค่อยถาม popup ทีหลัง (เป็นแค่การตั้งค่าสำหรับปลดล็อกครั้งถัดไป)
       navigateToMain();
       await promptEnableBiometricAfterNavigation(userId, data.token).catch((error) => {
-        console.error("BIOMETRIC PROMPT ERROR:", error);
+        console.error("BIOMETRIC PROMPT ERROR:", error?.message ?? "unknown error");
       });
       // Native alert ต้องเรียงทีละตัว มิฉะนั้น permission prompt ของ Push อาจชน
       // กับ biometric prompt ในการ login ครั้งแรกและทำให้ผู้ใช้พลาดหนึ่งในสองอัน
@@ -699,8 +691,8 @@ const Login = ({ navigation, route }) => {
             domStorageEnabled
             sharedCookiesEnabled
             thirdPartyCookiesEnabled
-            originWhitelist={["*"]}
-            mixedContentMode="always"
+            originWhitelist={__DEV__ ? ["http://*", "https://*"] : ["https://*"]}
+            mixedContentMode={__DEV__ ? "always" : "never"}
             cacheEnabled={false}
             startInLoadingState
             onShouldStartLoadWithRequest={(request) => {

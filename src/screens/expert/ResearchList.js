@@ -250,18 +250,6 @@ const ExpertCard = ({ item, index, onPress }) => {
     item.user?.image_url, item.user?.picture, item.user?.photo,
   ].find((value) => /^https?:\/\//i.test(String(value ?? "").trim())) ?? "";
   const photoUrl = fixPhotoUrl(rawPhoto, INFO_API_BASE_URL);
-  if (__DEV__) {
-    console.log("[ResearchList] photo URL:", photoUrl || "<default-avatar>");
-    if (!photoUrl) {
-      console.log("[ResearchList] photo fields:", {
-        picture: item.picture ?? null,
-        photo_url: item.photo_url ?? null,
-        picture_url: item.picture_url ?? null,
-        profile_picture: item.profile_picture ?? null,
-        user_picture: item.user?.picture ?? null,
-      });
-    }
-  }
   const expertises = (item.expertises ?? []).map((e) => e.name ?? e.label ?? String(e)).filter(Boolean);
   const interests  = (item.interests  ?? []).map((e) => e.name ?? e.label ?? String(e)).filter(Boolean);
 

@@ -8,6 +8,31 @@ export const getAnnouncementId = (item) => {
   return value == null || value === "" ? null : String(value);
 };
 
+// Push text is a historical snapshot. An administrator can edit the linked
+// announcement later, so the inbox may enrich the presentation from a current
+// announcement-list response. List membership must never be used to decide
+// whether a notification exists: an absent row can simply be paginated,
+// filtered, or temporarily unavailable.
+export const reconcileAnnouncementNotificationContent = (items, announcements) => {
+  const byId = new Map(
+    (announcements ?? [])
+      .filter((announcement) => announcement?.id != null)
+      .map((announcement) => [String(announcement.id), announcement]),
+  );
+
+  return (items ?? []).map((item) => {
+    if (item?.data?.type !== "announcement") return item;
+    const announcement = byId.get(getAnnouncementId(item));
+    if (!announcement) return item;
+
+    return {
+      ...item,
+      title: announcement.title || item.title,
+      body: announcement.body || announcement.sub || item.body,
+    };
+  });
+};
+
 // Corrects the server's unread_count for state the server does not know about.
 //
 // Hiding a row locally and owing the server a correction are different things,

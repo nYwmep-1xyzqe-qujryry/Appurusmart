@@ -7,8 +7,11 @@ import { navigate } from "../navigation/navigationRef";
 import { clearPushRegistrationForUser } from "./pushRegistrationStorage";
 
 export async function attachRequestSession(config) {
-  const session = config.authSession ?? await captureAuthSession();
-  if (config.authSession && !await isAuthSessionCurrent(session)) {
+  const hasSessionSnapshot = config.sessionSnapshot === true;
+  const session = hasSessionSnapshot
+    ? (config.authSession ?? null)
+    : (config.authSession ?? await captureAuthSession());
+  if ((config.authSession || hasSessionSnapshot) && session && !await isAuthSessionCurrent(session)) {
     throw Object.assign(new Error("Session changed"), { code: "ERR_CANCELED" });
   }
   config.authSession = session;

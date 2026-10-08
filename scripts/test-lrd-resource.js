@@ -88,6 +88,12 @@ async function main() {
       readResourceCache: async () => null,
       writeResourceCache: async (_key, data) => ({ data, updatedAt: Date.now() }),
     },
+    "../services/authStorage": {
+      captureAuthSession: async () => ({ generation: 1, userId: "account-A", token: "test-token" }),
+      isResourceSessionCurrent: async () => true,
+      runWithSession: async (_session, operation) => operation(),
+      subscribeAuthSession: () => () => {},
+    },
   }).default;
 
   const resource = hook("/info/lrd/projects", {

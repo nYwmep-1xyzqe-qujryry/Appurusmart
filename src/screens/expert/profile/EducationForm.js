@@ -60,7 +60,6 @@ const EducationForm = ({ navigation }) => {
     }
     try {
       const payload = { degree: parseInt(form.degree, 10), year: form.year, course: form.course.trim(), university: form.university.trim() };
-      if (__DEV__) console.log("[EducationForm] payload:", JSON.stringify(payload));
       editingItem ? await update(editingItem.id, payload) : await create(payload);
       Alert.alert(editingItem ? t("research.common.editSuccess") : t("research.common.addSuccess"));
       openNewForm();

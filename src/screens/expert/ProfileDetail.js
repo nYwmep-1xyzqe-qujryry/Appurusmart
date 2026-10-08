@@ -5,7 +5,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -16,10 +15,11 @@ import { stripNamePrefix } from "../../utils/name";
 import { fixPhotoUrl } from "../../utils/image";
 import { getExpertLink, getExpertTitle, getExpertYear } from "../../utils/expertFields";
 import infoApi from "../../services/infoApi";
-import { API_BASE_URL, INFO_API_BASE_URL, STORAGE_KEYS } from "../../config";
+import { API_BASE_URL, INFO_API_BASE_URL } from "../../config";
 import { getAuthToken } from "../../services/authStorage";
 import useRefs from "../../hook/useRefs";
 import { colors } from "../../theme/tokens";
+import { sanitizeProfilePdfHtml } from "../../utils/profilePdfSanitizer";
 
 const DEGREE_KEYS = {
   "1": "research.profileDetail.degreeLow",
@@ -143,7 +143,7 @@ const downloadProfilePdfWeb = async (userId) => {
     throw new Error(`PDF HTML request failed: ${response.status}`);
   }
 
-  const htmlContent = await response.text();
+  const htmlContent = sanitizeProfilePdfHtml(await response.text());
   const element = document.createElement("div");
 
   element.innerHTML = enhanceProfilePdfHtml(htmlContent);
@@ -497,27 +497,20 @@ export default function ProfileDetail({ navigation, route }) {
     if (!id) { setError(t("research.profileDetail.notFound")); setLoading(false); return; }
     setLoading(true); setError(null);
     try {
-      if (__DEV__) {
-        const raw = await AsyncStorage.getItem(STORAGE_KEYS.USER);
-        const me = raw ? JSON.parse(raw) : {};
-        console.log("=== [ProfileDetail] profile id:", id, "| login id:", me.id ?? me.user_id ?? "N/A", "===");
-      }
       const res = await infoApi.get(`/info/expert/profile/${id}`);
       const data = res.data?.data?.profile ?? res.data?.data ?? res.data;
       if (__DEV__) {
         const rels = ["expertises","interests","educations","workexes","boardexes",
           "researches","journals","proceedings","hsps","books","patents",
           "awards","lecturers","trainings","academics"];
-        rels.forEach((k) => {
-          const arr = data?.[k];
-          if (Array.isArray(arr) && arr.length > 0) console.log(`[ProfileDetail] ${k}(${arr.length}) sample:`, JSON.stringify(arr[0]));
-          else console.log(`[ProfileDetail] ${k}: ${Array.isArray(arr) ? 0 : "MISSING"}`);
-        });
+        console.log("[ProfileDetail] relation counts:", Object.fromEntries(
+          rels.map((key) => [key, Array.isArray(data?.[key]) ? data[key].length : null]),
+        ));
       }
       setProfile(data);
     } catch (e) {
       if (__DEV__) {
-        console.warn("[ProfileDetail]", e?.response?.status, e?.message);
+        console.warn("[ProfileDetail] request failed:", e?.response?.status ?? e?.code ?? "REQUEST_ERROR");
       }
       const s = e?.response?.status;
       if (s === 404) setError(t("research.profileDetail.notFound"));
@@ -576,7 +569,6 @@ export default function ProfileDetail({ navigation, route }) {
     profile.user?.picture_url, profile.user?.photo_url, profile.user?.picture, profile.user?.photo,
   ].find((value) => /^https?:\/\//i.test(String(value ?? "").trim())) ?? "";
   const photoUrl = fixPhotoUrl(rawPhoto, INFO_API_BASE_URL);
-  if (__DEV__) console.log("[ProfileDetail] photo URL:", photoUrl || "<default-avatar>");
   const email     = profile.email ?? "";
   const phone     = profile.phone ?? profile.phone_work ?? profile.phone_number ?? profile.tel ?? "";
   const affil     = [faculty, dept && dept !== faculty ? dept : ""].filter(Boolean).join(" · ");
@@ -752,7 +744,7 @@ export default function ProfileDetail({ navigation, route }) {
       await FileSystem.copyAsync({ from: uri, to: fileUri });
       await Sharing.shareAsync(fileUri, { mimeType: "application/pdf", UTI: "com.adobe.pdf" });
     } catch (e) {
-      console.warn("[ProfileDetail] PDF error:", e?.message);
+      console.warn("[ProfileDetail] PDF export failed");
       Alert.alert(t("research.profileDetail.downloadPdf"), t("research.profileDetail.pdfError"));
     } finally {
       setPdfLoading(false);

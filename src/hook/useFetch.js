@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../services/api";
 import { readResourceCache, writeResourceCache } from "../services/resourceCache";
+import { captureAuthSession, isResourceSessionCurrent, runWithSession, subscribeAuthSession } from "../services/authStorage";
 
 const useFetch = (endpoint, options = {}) => {
   const {
@@ -20,12 +21,14 @@ const useFetch = (endpoint, options = {}) => {
   const mounted = useRef(true);
   const inFlight = useRef(null);
   const queuedForce = useRef(null);
+  const requestSequence = useRef(0);
   const paramsKey = JSON.stringify(params);
   const cacheKey = `api:${endpoint}:${paramsKey}`;
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      requestSequence.current += 1;
       queuedForce.current = null;
     };
   }, []);
@@ -52,7 +55,11 @@ const useFetch = (endpoint, options = {}) => {
     }
 
     const request = (async () => {
-      const cached = await readResourceCache(cacheKey);
+      const sequence = ++requestSequence.current;
+      const session = await captureAuthSession();
+      const cacheOptions = { scope: session?.userId ?? null };
+      const cached = await readResourceCache(cacheKey, cacheOptions);
+      if (!await isResourceSessionCurrent(session) || sequence !== requestSequence.current) return null;
       if (cached && mounted.current) {
         setData(cached.data);
         setError(null);
@@ -67,8 +74,15 @@ const useFetch = (endpoint, options = {}) => {
         if (__DEV__ && isAnnouncementRequest) {
           console.log(`[${debugLabel}] request start`);
         }
-        const res = await api.get(endpoint, { params });
+        const res = await api.get(endpoint, {
+          params,
+          authSession: session,
+          sessionSnapshot: true,
+        });
         const result = res.data?.data ?? res.data;
+        if (!await isResourceSessionCurrent(session) || sequence !== requestSequence.current) {
+          return cached?.data ?? null;
+        }
         if (__DEV__ && debugLabel) {
           const firstItem = Array.isArray(result)
             ? result[0]
@@ -92,13 +106,18 @@ const useFetch = (endpoint, options = {}) => {
             console.log(`[${debugLabel}] response`, { status: res.status });
           }
         }
-        await writeResourceCache(cacheKey, result);
-        if (mounted.current) {
+        const committed = await runWithSession(session, async () => {
+          await writeResourceCache(cacheKey, result, cacheOptions);
+          return true;
+        });
+        if (committed === undefined) return cached?.data ?? null;
+        if (mounted.current && sequence === requestSequence.current && await isResourceSessionCurrent(session)) {
           setData(result);
           setError(null);
         }
         return result;
       } catch (err) {
+        if (!await isResourceSessionCurrent(session) || sequence !== requestSequence.current) return cached?.data ?? null;
         if (!cached && mounted.current) {
           setError(err.response?.data?.message ?? err.message ?? "เกิดข้อผิดพลาด");
         }
@@ -120,6 +139,18 @@ const useFetch = (endpoint, options = {}) => {
   }, [cacheKey, debugLabel, endpoint, paramsKey, skip]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => subscribeAuthSession(() => {
+    requestSequence.current += 1;
+    inFlight.current = null;
+    queuedForce.current = null;
+    if (mounted.current) {
+      setData(initialData);
+      setError(null);
+      setLoading(!skip);
+      fetchData({ force: true });
+    }
+  }), [fetchData, initialData, skip]);
 
   return { data, loading, error, refetch: fetchData };
 };

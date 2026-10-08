@@ -8,10 +8,10 @@ import { resolveLrdApiState, resolveLrdFailureState } from "../utils/lrdResource
 import { orderLrdRowsByCreation } from "../utils/lrdResponse";
 import {
   invalidateResourceCache,
-  getResourceCacheScope,
   readResourceCache,
   writeResourceCache,
 } from "../services/resourceCache";
+import { captureAuthSession, isResourceSessionCurrent, runWithSession, subscribeAuthSession } from "../services/authStorage";
 
 const EMPTY_CACHE_INFO = { source: "none", updatedAt: null, stale: false, refreshError: null };
 const ORDERED_ENDPOINTS = new Set([LRD_ENDPOINTS.projects, LRD_ENDPOINTS.papers]);
@@ -77,7 +77,8 @@ export default function useLrdResource(endpoint, options = {}) {
       const state = { cacheKey };
       const request = (async () => {
         const requestId = createLrdRequestId();
-        const requestScope = await getResourceCacheScope();
+        const requestSession = await captureAuthSession();
+        const requestScope = requestSession?.userId ?? null;
         const scopeChanged = cacheScopeRef.current !== null && cacheScopeRef.current !== requestScope;
         cacheScopeRef.current = requestScope;
         if (scopeChanged && active()) {
@@ -88,7 +89,7 @@ export default function useLrdResource(endpoint, options = {}) {
         }
         const cached = await readResourceCache(cacheKey, { scope: requestScope });
         const cachedItems = orderResourceRows(endpoint, cached?.data?.items ?? []);
-        const sameAccount = () => getResourceCacheScope().then((scope) => scope === requestScope);
+        const sameAccount = () => isResourceSessionCurrent(requestSession);
         const cacheMatchesAccount = await sameAccount();
         const cacheAgeMs = getLrdCacheAgeMs(cached?.updatedAt);
         if (cached && active() && cacheMatchesAccount) {
@@ -118,7 +119,12 @@ export default function useLrdResource(endpoint, options = {}) {
 
         try {
           if (!cached && active()) { setLoading(true); setError(null); setCacheInfo(EMPTY_CACHE_INFO); }
-          const response = await getLrd(endpoint, { params, lrdRequestId: requestId });
+          const response = await getLrd(endpoint, {
+            params,
+            lrdRequestId: requestId,
+            authSession: requestSession,
+            sessionSnapshot: true,
+          });
           const apiState = resolveLrdApiState(response.data);
           const { pagination } = apiState;
           const rows = orderResourceRows(endpoint, apiState.items);
@@ -139,7 +145,10 @@ export default function useLrdResource(endpoint, options = {}) {
             });
           }
           if (!active() || !(await sameAccount())) return cached?.data?.items ?? [];
-          const cacheEntry = await writeResourceCache(cacheKey, { items: rows, total: pagination.total }, { scope: requestScope });
+          const cacheEntry = await runWithSession(requestSession, () =>
+            writeResourceCache(cacheKey, { items: rows, total: pagination.total }, { scope: requestScope }),
+          );
+          if (cacheEntry === undefined) return cached?.data?.items ?? [];
           if (active() && await sameAccount()) {
             setItems(rows);
             setTotal(pagination.total);
@@ -208,18 +217,34 @@ export default function useLrdResource(endpoint, options = {}) {
     return startRequest(force);
   }, [cacheKey, diagnosticOwnerId, endpoint, paramsKey, skip]);
 
+  useEffect(() => subscribeAuthSession(() => {
+    requestGeneration.current += 1;
+    requestState.current = null;
+    cacheScopeRef.current = null;
+    if (!mounted.current) return;
+    setItems([]);
+    setTotal(0);
+    setError(null);
+    setCacheInfo(EMPTY_CACHE_INFO);
+    if (!skip && loadOnFocus) refetch({ force: true });
+  }), [loadOnFocus, refetch, skip]);
+
   useFocusEffect(useCallback(() => {
     if (loadOnFocus) refetch({ force: forceRefreshOnFocus });
   }, [forceRefreshOnFocus, loadOnFocus, refetch]));
 
   const mutate = useCallback(async (request, busySetter, fallback) => {
     if (mutationLock.current) return null;
+    const mutationSession = await captureAuthSession();
+    if (!mutationSession) throw new Error("ไม่พบ session ของผู้ใช้");
     mutationLock.current = true;
     if (mounted.current) busySetter(true);
     try {
-      const response = await request();
-      const mutationScope = await getResourceCacheScope();
-      await invalidateResourceCache(resourceCachePrefix, { scope: mutationScope });
+      const response = await request(mutationSession);
+      if (!await isResourceSessionCurrent(mutationSession)) {
+        throw Object.assign(new Error("Session changed"), { code: "ERR_CANCELED" });
+      }
+      await invalidateResourceCache(resourceCachePrefix, { scope: mutationSession.userId });
       notifyLrdChange(endpoint);
       if (refetchAfterMutation) await refetch({ force: true });
       return response.data?.data ?? response.data;
@@ -232,11 +257,11 @@ export default function useLrdResource(endpoint, options = {}) {
   }, [refetch, refetchAfterMutation, resourceCachePrefix]);
 
   const create = useCallback((data) =>
-    mutate(() => postLrd(endpoint, data), setSaving, "บันทึกไม่สำเร็จ"), [endpoint, mutate]);
+    mutate((session) => postLrd(endpoint, data, { authSession: session, sessionSnapshot: true }), setSaving, "บันทึกไม่สำเร็จ"), [endpoint, mutate]);
   const update = useCallback((id, data) =>
-    mutate(() => patchLrd(`${endpoint}/${encodeURIComponent(id)}`, data), setSaving, "แก้ไขไม่สำเร็จ"), [endpoint, mutate]);
+    mutate((session) => patchLrd(`${endpoint}/${encodeURIComponent(id)}`, data, { authSession: session, sessionSnapshot: true }), setSaving, "แก้ไขไม่สำเร็จ"), [endpoint, mutate]);
   const remove = useCallback((id) =>
-    mutate(() => deleteLrd(`${endpoint}/${encodeURIComponent(id)}`), setRemoving, "ลบไม่สำเร็จ"), [endpoint, mutate]);
+    mutate((session) => deleteLrd(`${endpoint}/${encodeURIComponent(id)}`, { authSession: session, sessionSnapshot: true }), setRemoving, "ลบไม่สำเร็จ"), [endpoint, mutate]);
 
   return { items, total, loading, saving, removing, error, cacheInfo, create, update, remove, refetch };
 }

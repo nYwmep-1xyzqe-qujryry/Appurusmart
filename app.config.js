@@ -1,6 +1,29 @@
 // app.json แปลงเป็น dynamic config เพราะ googleServicesFile ต้องอ่านจาก
 // process.env.GOOGLE_SERVICES_JSON (EAS materializes the sensitive env var
 // to a real file path on the builder) — static app.json ทำแบบนี้ไม่ได้
+const configuredApiUrls = [
+  process.env.EXPO_PUBLIC_API_URL,
+  process.env.EXPO_PUBLIC_INFO_API_URL,
+  process.env.EXPO_PUBLIC_LRD_API_URL,
+].filter(Boolean);
+const isPrivateDevelopmentHost = (value) => {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === "localhost"
+      || hostname === "127.0.0.1"
+      || hostname === "::1"
+      || /^10\./.test(hostname)
+      || /^192\.168\./.test(hostname)
+      || /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname);
+  } catch (_) {
+    return false;
+  }
+};
+const isDevelopmentBuild = process.env.NODE_ENV !== "production"
+  && process.env.EAS_BUILD_PROFILE !== "production";
+const allowCleartextTraffic = isDevelopmentBuild
+  && configuredApiUrls.some((value) => /^http:\/\//i.test(value) && isPrivateDevelopmentHost(value));
+
 module.exports = {
   expo: {
     name: "URU Smart",
@@ -89,7 +112,9 @@ module.exports = {
         "expo-build-properties",
         {
           android: {
-            usesCleartextTraffic: true,
+            // Local HTTP is permitted only when a configured development API
+            // explicitly uses it. Production HTTPS builds keep cleartext off.
+            usesCleartextTraffic: allowCleartextTraffic,
           },
         },
       ],

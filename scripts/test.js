@@ -3,6 +3,7 @@ const fs = require("fs");
 const Module = require("module");
 const path = require("path");
 const babel = require("@babel/core");
+const { JSDOM } = require("jsdom");
 
 process.env.EXPO_PUBLIC_API_URL = "https://api.example.test/api";
 
@@ -47,7 +48,12 @@ const sessionLock = loadModule("src/utils/sessionLock.js");
 const pushRetry = loadModule("src/utils/pushRegistrationRetry.js");
 const pushRecovery = loadModule("src/services/pushRegistrationRecovery.js");
 const inboxSync = loadModule("src/utils/inboxSync.js");
+const sessionResourceState = loadModule("src/utils/sessionResourceState.js");
+const ssoSecurity = loadModule("src/utils/ssoSecurity.js");
+const profilePdfSanitizer = loadModule("src/utils/profilePdfSanitizer.js");
+const notificationDeletion = loadModule("src/utils/notificationDeletion.js");
 const testLrdResource = require("./test-lrd-resource");
+const testLrdSession = require("./test-lrd-session");
 
 const parsed = thaiDate.parseISOToDate("2024-10-26");
 assert.equal(parsed.getFullYear(), 2024);
@@ -67,6 +73,132 @@ assert.equal(
 );
 assert.equal(image.fixPhotoUrl("https://cdn.example.test/a.jpg"), "https://cdn.example.test/a.jpg");
 assert.equal(image.fixPhotoUrl(null), "");
+
+assert.equal(
+  sessionResourceState.isSameSessionSnapshot(
+    { generation: 1, userId: "A", token: "a" },
+    { generation: 1, userId: "A", token: "a" },
+  ),
+  true,
+);
+assert.equal(
+  sessionResourceState.isSameSessionSnapshot(
+    { generation: 1, userId: "A", token: "a" },
+    { generation: 2, userId: "A", token: "a" },
+  ),
+  false,
+  "same-user logout/login cannot commit an older resource response",
+);
+assert.equal(
+  sessionResourceState.isSameSessionSnapshot(
+    { generation: 1, userId: "A", token: "a" },
+    { generation: 1, userId: "B", token: "b" },
+  ),
+  false,
+  "an account switch cannot commit the previous account response",
+);
+assert.equal(
+  ssoSecurity.isTrustedSsoCallbackUrl("https://urusmart.uru.ac.th/auth/callback?token=secret", "urusmart.uru.ac.th"),
+  true,
+);
+assert.equal(
+  ssoSecurity.isTrustedSsoCallbackUrl("https://urusmart.uru.ac.th/auth/redirect", "urusmart.uru.ac.th"),
+  false,
+  "the SSO entry URL is not treated as a completed callback",
+);
+assert.equal(
+  ssoSecurity.isTrustedSsoMessageUrl("https://urusmart.uru.ac.th/auth/redirect", "urusmart.uru.ac.th"),
+  true,
+  "the existing SSO entry page may still deliver a message without starting the callback timer",
+);
+assert.equal(
+  ssoSecurity.extractSsoToken("https://urusmart.uru.ac.th/auth/redirect?token=secret", "urusmart.uru.ac.th"),
+  "secret",
+  "a token delivered directly by the existing entry endpoint remains supported",
+);
+assert.equal(
+  ssoSecurity.extractSsoToken("https://login.microsoftonline.com/auth/redirect?token=secret", "urusmart.uru.ac.th"),
+  null,
+  "credentials from an external navigation host are rejected",
+);
+assert.equal(
+  ssoSecurity.isTrustedSsoCallbackUrl("http://192.168.1.194/auth/redirect?token=secret", "192.168.1.194", false),
+  false,
+  "HTTP SSO callbacks are unavailable outside development",
+);
+assert.equal(
+  ssoSecurity.isTrustedSsoCallbackUrl("http://192.168.1.194/auth/redirect?token=secret", "192.168.1.194", true),
+  false,
+);
+assert.equal(
+  ssoSecurity.extractSsoToken("http://192.168.1.194/auth/redirect?token=secret", "192.168.1.194", true),
+  "secret",
+  "development LAN token delivery remains supported on the entry path",
+);
+assert.equal(
+  ssoSecurity.isTrustedSsoCallbackUrl("https://urusmart.uru.ac.th:8443/auth/callback?token=secret", "urusmart.uru.ac.th", false, null),
+  true,
+  "legacy host-only helper remains compatible when no expected port is supplied",
+);
+assert.equal(
+  ssoSecurity.isTrustedSsoCallbackUrl("https://urusmart.uru.ac.th:8443/auth/callback?token=secret", "urusmart.uru.ac.th", false, "443"),
+  false,
+  "a callback from an unexpected backend port is rejected",
+);
+assert.equal(
+  ssoSecurity.extractSsoToken("https://urusmart.uru.ac.th/profile?token=secret", "urusmart.uru.ac.th"),
+  null,
+  "tokens on non-callback paths are rejected",
+);
+assert.equal(profilePdfSanitizer.isSafePdfResourceUrl("https://cdn.example.test/photo.webp", { image: true }), true);
+assert.equal(profilePdfSanitizer.isSafePdfResourceUrl("javascript:alert(1)", { image: true }), false);
+assert.equal(profilePdfSanitizer.isSafePdfResourceUrl("data:text/html;base64,SGk=", { image: true }), false);
+assert.equal(profilePdfSanitizer.isSafePdfResourceUrl("data:image/png;base64,AAAA", { image: true }), true);
+assert.equal(profilePdfSanitizer.isSafePdfResourceUrl("//evil.example.test/x.png", { image: true }), false);
+assert.ok(profilePdfSanitizer.profilePdfAllowedTags().includes("TABLE"));
+{
+  const dom = new JSDOM("<!doctype html><html><body></body></html>");
+  class TestDOMParser extends dom.window.DOMParser {
+    parseFromString(...args) {
+      const document = super.parseFromString(...args);
+      Object.defineProperty(document, "defaultView", { value: dom.window });
+      return document;
+    }
+  }
+  const clean = profilePdfSanitizer.sanitizeProfilePdfHtml(`
+    <html><head>
+      <style>@font-face { font-family: Thai; src: url('https://cdn.example.test/thai.woff2'); }
+        .photo { background-image: url(https://cdn.example.test/bg.png); }
+        .bad { background-image: url(javascript:alert(1)); }
+      </style>
+    </head><body onload="alert(1)">
+      <script>alert(1)</script><img src="https://cdn.example.test/photo.webp" onerror="alert(1)">
+      <a href="javascript:alert(1)">safe text</a><table><tr><td>ไทย</td></tr></table>
+    </body></html>
+  `, TestDOMParser);
+  assert.ok(!/<script|onload=|onerror=|javascript:/i.test(clean), "HTML sanitizer removes executable content");
+  assert.ok(clean.includes("https://cdn.example.test/thai.woff2"), "safe font URLs remain usable");
+  assert.ok(clean.includes("https://cdn.example.test/bg.png"), "safe CSS image URLs remain usable");
+  assert.ok(clean.includes("<table"), "tables remain available for PDF layout");
+}
+const selectedNotificationIds = notificationDeletion.normalizeNotificationIds(["a", "a", 2, null, ""]);
+assert.deepEqual(selectedNotificationIds, ["a", "2"]);
+assert.equal(
+  notificationDeletion.getDismissedUnreadCount(
+    [{ id: "a", read: false }, { id: "2", read: true }, { id: "3", read: false }],
+    selectedNotificationIds,
+  ),
+  1,
+  "bulk dismissal adjusts the badge only for selected unread rows",
+);
+assert.deepEqual(
+  notificationDeletion.filterDismissedNotifications(
+    [{ id: "a" }, { id: "2" }, { id: "3" }],
+    selectedNotificationIds,
+  ).map((item) => item.id),
+  ["3"],
+  "bulk dismissal removes only the selected rows",
+);
 
 assert.equal(responseCount.extractResponseCount({ data: [{ id: 1 }, { id: 2 }], total: 125 }), 125);
 assert.equal(responseCount.extractResponseCount({ data: { data: [{ id: 1 }], total: 42 } }), 42);
@@ -678,6 +810,40 @@ const notificationMerged = notificationInbox.mergeNotificationInbox(
 );
 assert.deepEqual(notificationMerged.map((item) => item.id), ["3", "1", "local"]);
 assert.equal(notificationInbox.getAnnouncementId({ data: { announcement_id: 42 } }), "42");
+assert.equal(notificationInbox.getAnnouncementId({ data: { announcementId: 43 } }), "43");
+
+const reconciledAnnouncementNotifications = notificationInbox.reconcileAnnouncementNotificationContent(
+  [
+    {
+      id: "edited-news",
+      title: "old push title",
+      body: "old push body",
+      data: { type: "announcement", announcement_id: 18 },
+    },
+    {
+      id: "other-notification",
+      title: "keep this title",
+      body: "keep this body",
+      data: { type: "reminder" },
+    },
+    {
+      id: "missing-news",
+      title: "push fallback",
+      body: "push fallback body",
+      data: { type: "announcement", announcementId: 999 },
+    },
+  ],
+  [{ id: 18, title: "เฉลิมฉลองครบ 90 ปี", body: "ข้อความข่าวที่แก้ไขแล้ว" }],
+);
+assert.deepEqual(
+  reconciledAnnouncementNotifications.map((item) => [item.id, item.title, item.body]),
+  [
+    ["edited-news", "เฉลิมฉลองครบ 90 ปี", "ข้อความข่าวที่แก้ไขแล้ว"],
+    ["other-notification", "keep this title", "keep this body"],
+    ["missing-news", "push fallback", "push fallback body"],
+  ],
+  "the announcement list updates text only; an unmatched id stays visible with its push snapshot",
+);
 
 // An announcement notification must survive even when its announcement is no
 // longer in GET /announcements. That list is paginated (Home requests limit=5),
@@ -2079,6 +2245,7 @@ Promise.resolve()
   .then(testRefreshTaskSettlement)
   .then(testForegroundRefresh)
   .then(testLrdResource)
+  .then(testLrdSession)
   .then(testInboxLockOrdering)
   .then(testInboxMutationOrdering)
   .then(testPushRegistrationRecovery)

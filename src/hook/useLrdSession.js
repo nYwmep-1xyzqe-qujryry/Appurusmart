@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getLrd, getLrdErrorMessage, LRD_ENDPOINTS, registerLrdResearcher } from "../services/lrdApi";
 import { STORAGE_KEYS } from "../config";
-import { getUserScopedValue, setUserScopedValue } from "../services/userScopedStorage";
 import {
-  getResourceCacheScope,
+  getUserScopedValueForSession,
+  setUserScopedValueForSession,
+} from "../services/userScopedStorage";
+import {
   readResourceCache,
   writeResourceCache,
 } from "../services/resourceCache";
+import { captureAuthSession, isResourceSessionCurrent, runWithSession, subscribeAuthSession } from "../services/authStorage";
 
 export default function useLrdSession() {
   const mounted = useRef(true);
@@ -18,6 +21,7 @@ export default function useLrdSession() {
   const [sessionError, setSessionError] = useState(null);
   const [connectError, setConnectError] = useState(null);
   const inFlight = useRef(null);
+  const requestSequence = useRef(0);
 
   useEffect(() => {
     mounted.current = true;
@@ -28,13 +32,18 @@ export default function useLrdSession() {
     if (inFlight.current) return inFlight.current;
 
     const request = (async () => {
-      const requestScope = await getResourceCacheScope();
+      const sequence = ++requestSequence.current;
+      const requestSession = await captureAuthSession();
+      const requestScope = requestSession?.userId ?? null;
       const cached = await readResourceCache("lrd:session", { scope: requestScope });
-      const cacheMatchesAccount = await getResourceCacheScope() === requestScope;
+      const cacheMatchesAccount = await isResourceSessionCurrent(requestSession);
+      if (sequence !== requestSequence.current || !cacheMatchesAccount) return null;
       if (cached?.data?.authenticated && cacheMatchesAccount) {
         const cachedResearcherId = cached.data?.user?.lrd_researcher_id;
-        const resolvedResearcherId = cachedResearcherId || await getUserScopedValue(STORAGE_KEYS.LRD_RESEARCHER_ID);
-        if (mounted.current) {
+        const resolvedResearcherId = await runWithSession(requestSession, async () =>
+          cachedResearcherId || await getUserScopedValueForSession(STORAGE_KEYS.LRD_RESEARCHER_ID, requestSession),
+        );
+        if (resolvedResearcherId !== undefined && mounted.current && sequence === requestSequence.current) {
           setSession(cached.data);
           setResearcherId(resolvedResearcherId || null);
           setSessionError(null);
@@ -45,26 +54,35 @@ export default function useLrdSession() {
 
       try {
         if (!cached && mounted.current) { setLoading(true); setSessionError(null); }
-        const response = await getLrd(LRD_ENDPOINTS.session);
+        const response = await getLrd(LRD_ENDPOINTS.session, {
+          authSession: requestSession,
+          sessionSnapshot: true,
+        });
         if (!response.data?.authenticated) throw new Error(response.data?.message || "ไม่พบ session ของผู้ใช้");
-        if (await getResourceCacheScope() !== requestScope) return null;
-        await writeResourceCache("lrd:session", response.data, { scope: requestScope });
+        if (sequence !== requestSequence.current || !await isResourceSessionCurrent(requestSession)) return null;
         const sessionResearcherId = response.data?.user?.lrd_researcher_id;
-        const resolvedResearcherId = sessionResearcherId || await getUserScopedValue(STORAGE_KEYS.LRD_RESEARCHER_ID);
-        if (sessionResearcherId) {
-          await setUserScopedValue(STORAGE_KEYS.LRD_RESEARCHER_ID, sessionResearcherId);
-        }
-        if (mounted.current) {
+        const committed = await runWithSession(requestSession, async () => {
+          await writeResourceCache("lrd:session", response.data, { scope: requestScope });
+          const storedResearcherId = sessionResearcherId
+            || await getUserScopedValueForSession(STORAGE_KEYS.LRD_RESEARCHER_ID, requestSession);
+          if (sessionResearcherId) {
+            await setUserScopedValueForSession(STORAGE_KEYS.LRD_RESEARCHER_ID, requestSession, sessionResearcherId);
+          }
+          return storedResearcherId || null;
+        });
+        if (committed !== undefined && mounted.current && sequence === requestSequence.current) {
           setSession(response.data);
-          setResearcherId(resolvedResearcherId || null);
+          setResearcherId(committed);
           setSessionError(null);
         }
+        if (committed === undefined) return cached?.data ?? null;
         return response.data;
       } catch (requestError) {
+        if (sequence !== requestSequence.current || !await isResourceSessionCurrent(requestSession)) return cached?.data ?? null;
         if (!cached && mounted.current) setSessionError(getLrdErrorMessage(requestError));
         return cached?.data ?? null;
       } finally {
-        if (mounted.current) setLoading(false);
+        if (mounted.current && sequence === requestSequence.current) setLoading(false);
       }
     })();
 
@@ -80,14 +98,39 @@ export default function useLrdSession() {
 
   useEffect(() => { refetch(); }, [refetch]);
 
+  useEffect(() => subscribeAuthSession(() => {
+    requestSequence.current += 1;
+    inFlight.current = null;
+    if (!mounted.current) return;
+    setSession(null);
+    setRegistration(null);
+    setResearcherId(null);
+    setSessionError(null);
+    setLoading(true);
+    refetch({ force: true });
+  }), [refetch]);
+
   const connect = useCallback(async () => {
     if (mounted.current) { setConnecting(true); setConnectError(null); }
     try {
       // A non-empty body avoids IIS 411 Length Required in production.
-      const response = await registerLrdResearcher();
+      const requestSession = await captureAuthSession();
+      if (!requestSession) throw new Error("ไม่พบ session ของผู้ใช้");
+      const response = await registerLrdResearcher({
+        authSession: requestSession,
+        sessionSnapshot: true,
+      });
       if (!response.data?.registered) throw new Error(response.data?.message || "ลงทะเบียนนักวิจัยไม่สำเร็จ");
       if (!response.data?.researcher_id) throw new Error("ระบบไม่ส่งรหัสนักวิจัยกลับมา");
-      await setUserScopedValue(STORAGE_KEYS.LRD_RESEARCHER_ID, response.data.researcher_id);
+      const committed = await runWithSession(requestSession, async () => {
+        await setUserScopedValueForSession(
+          STORAGE_KEYS.LRD_RESEARCHER_ID,
+          requestSession,
+          response.data.researcher_id,
+        );
+        return true;
+      });
+      if (committed === undefined) throw new Error("Session changed");
       if (mounted.current) {
         setRegistration(response.data);
         setResearcherId(response.data.researcher_id);

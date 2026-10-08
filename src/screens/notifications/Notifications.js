@@ -10,12 +10,14 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   dismissNotification,
+  dismissNotifications,
   subscribeNotificationInbox,
   syncNotificationInboxFromBackend,
 } from "../../services/notificationService";
+import { captureAuthSession } from "../../services/authStorage";
 import { colors, radius, shadows, typography } from "../../theme/tokens";
 
-const NotifItem = ({ item, onPress, onDelete, index }) => (
+const NotifItem = ({ item, onPress, onDelete, index, selectionMode, selected, onToggle }) => (
   <Animated.View entering={FadeInRight.delay(index * 50).springify().damping(16)}>
     <TouchableOpacity
       className="rounded-[18px] p-[14px] flex-row gap-3 mb-2 overflow-hidden"
@@ -60,16 +62,34 @@ const NotifItem = ({ item, onPress, onDelete, index }) => (
         <Text className="text-[13px] leading-[20px]" style={{ color: colors.secondaryText, fontWeight: "400", letterSpacing: 0 }} numberOfLines={2}>{item.body}</Text>
         <Text className="text-[12px] mt-[2px]" style={{ color: colors.textSoft, fontWeight: "400", lineHeight: 18, letterSpacing: 0 }}>{item.time}</Text>
       </View>
-      <TouchableOpacity
-        className="w-9 h-9 rounded-xl items-center justify-center self-center"
-        style={{ backgroundColor: colors.surfaceMuted }}
-        onPress={onDelete}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="ลบการแจ้งเตือน"
-      >
-        <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-      </TouchableOpacity>
+      {selectionMode ? (
+        <TouchableOpacity
+          className="w-9 h-9 rounded-xl items-center justify-center self-center"
+          style={{ backgroundColor: selected ? colors.primarySoft : colors.surfaceMuted }}
+          onPress={onToggle}
+          hitSlop={8}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: selected }}
+          accessibilityLabel={selected ? "ยกเลิกการเลือกการแจ้งเตือน" : "เลือกการแจ้งเตือน"}
+        >
+          <Ionicons
+            name={selected ? "checkmark-circle" : "ellipse-outline"}
+            size={22}
+            color={selected ? colors.primary : colors.textMuted}
+          />
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          className="w-9 h-9 rounded-xl items-center justify-center self-center"
+          style={{ backgroundColor: colors.surfaceMuted }}
+          onPress={onDelete}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="ลบการแจ้งเตือน"
+        >
+          <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   </Animated.View>
 );
@@ -79,6 +99,9 @@ export default function NotificationsScreen({ navigation }) {
   const { top } = useSafeAreaInsets();
   const [notifications, setNotifications] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [deleting, setDeleting] = useState(false);
 
   const refreshInbox = useCallback(async (showIndicator = false) => {
     if (showIndicator) setRefreshing(true);
@@ -109,7 +132,35 @@ export default function NotificationsScreen({ navigation }) {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const markAllRead = () => markAllNotificationsRead();
-  const deleteNotification = useCallback((item) => {
+  const notificationIds = useMemo(() => notifications.map((item) => String(item.id)), [notifications]);
+  const allSelected = notificationIds.length > 0 && selectedIds.length === notificationIds.length;
+
+  useEffect(() => {
+    const available = new Set(notificationIds);
+    setSelectedIds((current) => current.filter((id) => available.has(String(id))));
+  }, [notificationIds]);
+
+  const toggleSelectionMode = () => {
+    setSelectionMode((current) => {
+      if (current) setSelectedIds([]);
+      return !current;
+    });
+  };
+
+  const toggleSelected = useCallback((id) => {
+    const normalizedId = String(id);
+    setSelectedIds((current) => current.includes(normalizedId)
+      ? current.filter((value) => value !== normalizedId)
+      : [...current, normalizedId]);
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds(allSelected ? [] : notificationIds);
+  }, [allSelected, notificationIds]);
+
+  const deleteNotification = useCallback(async (item) => {
+    const session = await captureAuthSession();
+    if (!session) return;
     Alert.alert(
       t("notifications.deleteTitle"),
       t("notifications.deleteConfirm"),
@@ -118,16 +169,50 @@ export default function NotificationsScreen({ navigation }) {
         {
           text: t("notifications.deleteAction"),
           style: "destructive",
-          onPress: () => dismissNotification(item.id),
+          onPress: () => dismissNotification(item.id, session).catch(() => {
+            Alert.alert(t("notifications.deleteFailedTitle"), t("notifications.deleteFailed"));
+          }),
         },
       ],
     );
   }, [t]);
+
+  const deleteSelectedNotifications = useCallback(async () => {
+    if (selectedIds.length === 0) return;
+    const session = await captureAuthSession();
+    if (!session) return;
+    Alert.alert(
+      t("notifications.deleteSelectedTitle"),
+      t("notifications.deleteSelectedConfirm", { count: selectedIds.length }),
+      [
+        { text: t("notifications.deleteCancel"), style: "cancel" },
+        {
+          text: t("notifications.deleteAction"),
+          style: "destructive",
+          onPress: async () => {
+            if (deleting) return;
+            setDeleting(true);
+            try {
+              await dismissNotifications(selectedIds, session);
+              setSelectedIds([]);
+              setSelectionMode(false);
+            } catch (_) {
+              Alert.alert(t("notifications.deleteFailedTitle"), t("notifications.deleteFailed"));
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [deleting, selectedIds, t]);
   const openNotification = (item) => {
     markNotificationRead(item.id);
-    if (item.data?.type === "announcement" && item.data?.announcement_id != null) {
+    const announcementId = item.data?.announcement_id ?? item.data?.announcementId;
+    if (item.data?.type === "announcement" && announcementId != null) {
       navigation.navigate("AnnouncementDetail", {
-        announcementId: item.data.announcement_id,
+        announcementId,
+        notificationId: item.id,
       });
       return;
     }
@@ -188,19 +273,63 @@ export default function NotificationsScreen({ navigation }) {
               </View>
             )}
           </View>
-          {unreadCount > 0 ? (
+          {selectionMode ? (
             <TouchableOpacity
               className="rounded-full px-3 py-[5px]"
               style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-              onPress={markAllRead}
+              onPress={toggleSelectionMode}
+              accessibilityRole="button"
             >
-              <Text className="text-white" style={{ ...typography.button, fontSize: 14, lineHeight: 20 }}>{t("notifications.markAllRead")}</Text>
+              <Text className="text-white" style={{ ...typography.button, fontSize: 14, lineHeight: 20 }}>{t("notifications.cancelSelect")}</Text>
             </TouchableOpacity>
+          ) : notifications.length > 0 ? (
+            <View className="flex-row items-center gap-2">
+              {unreadCount > 0 && (
+                <TouchableOpacity
+                  className="rounded-full px-2 py-[5px]"
+                  style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+                  onPress={markAllRead}
+                >
+                  <Text className="text-white" style={{ ...typography.button, fontSize: 13, lineHeight: 20 }}>{t("notifications.markAllRead")}</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                className="rounded-full px-2 py-[5px]"
+                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+                onPress={toggleSelectionMode}
+                accessibilityRole="button"
+              >
+                <Text className="text-white" style={{ ...typography.button, fontSize: 13, lineHeight: 20 }}>{t("notifications.select")}</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <View className="w-20" />
           )}
         </View>
       </LinearGradient>
+
+      {selectionMode && (
+        <View className="flex-row items-center justify-between px-4 py-3" style={{ backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+          <TouchableOpacity className="flex-row items-center gap-2" onPress={toggleSelectAll} accessibilityRole="button">
+            <Ionicons name={allSelected ? "checkmark-circle" : "ellipse-outline"} size={22} color={colors.primary} />
+            <Text style={{ ...typography.body, color: colors.primary, fontWeight: "600", fontSize: 14, lineHeight: 20 }}>
+              {allSelected ? t("notifications.clearSelection") : t("notifications.selectAll")}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="flex-row items-center gap-2 rounded-full px-3 py-2"
+            style={{ backgroundColor: selectedIds.length > 0 ? colors.primarySoft : colors.surfaceMuted, opacity: selectedIds.length > 0 ? 1 : 0.55 }}
+            onPress={deleteSelectedNotifications}
+            disabled={selectedIds.length === 0 || deleting}
+            accessibilityRole="button"
+          >
+            <Ionicons name="trash-outline" size={17} color={colors.primary} />
+            <Text style={{ ...typography.body, color: colors.primary, fontWeight: "600", fontSize: 13, lineHeight: 18 }}>
+              {deleting ? t("notifications.deleting") : t("notifications.deleteSelected")}{selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Body */}
       <FlatList
@@ -241,7 +370,17 @@ export default function NotificationsScreen({ navigation }) {
               </Text>
             );
           }
-          return <NotifItem item={item} onPress={() => openNotification(item)} onDelete={() => deleteNotification(item)} index={index} />;
+          return (
+            <NotifItem
+              item={item}
+              onPress={() => (selectionMode ? toggleSelected(item.id) : openNotification(item))}
+              onDelete={() => deleteNotification(item)}
+              onToggle={() => toggleSelected(item.id)}
+              selectionMode={selectionMode}
+              selected={selectedIds.includes(String(item.id))}
+              index={index}
+            />
+          );
         }}
       />
     </View>

@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { SECURE_KEYS, STORAGE_KEYS } from "../config";
+import { isSameSessionSnapshot } from "../utils/sessionResourceState";
 
 const LEGACY_AUTH_KEYS = [STORAGE_KEYS.TOKEN, STORAGE_KEYS.TOKEN_TYPE];
 const webSession = {
@@ -52,6 +53,9 @@ export async function isAuthSessionCurrent(session) {
   if (!session || session.generation !== generation) return false;
   const token = await readToken();
   return session.generation === generation && token === session.token;
+}
+export async function isResourceSessionCurrent(session) {
+  return isSameSessionSnapshot(session, await captureAuthSession());
 }
 export const runWithSession = (session, operation) => enqueue(async () => {
   if (!await isAuthSessionCurrent(session)) return undefined;
