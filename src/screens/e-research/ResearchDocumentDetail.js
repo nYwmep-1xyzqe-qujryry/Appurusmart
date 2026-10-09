@@ -37,6 +37,9 @@ const projectRows = (item, te) => [
   [te("project.titleEn"), getResearchTitleEn(item)],
   [te("project.field"), item.field_name || item.work_name || item.work_id],
   [te("project.funding"), item.fund_name || item.funding_source || item.fund_id],
+  // The record's owner. The web research report names them above the
+  // contributors, and the endpoint returns researcher_name for every row.
+  [te("project.owner"), item.researcher_name || item.researcherName],
   [te("project.keywords"), item.keyword],
   [te("project.objective"), item.objective],
   [te("project.abstract"), item.abstract],
