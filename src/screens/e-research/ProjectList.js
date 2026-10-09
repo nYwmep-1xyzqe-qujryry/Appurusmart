@@ -8,6 +8,13 @@ import { LRD_ENDPOINTS, LRD_VISIBLE_SCOPE } from "../../services/lrdApi";
 import useLrdSession from "../../hook/useLrdSession";
 import { sanitizeAcademicText } from "../../utils/inputSanitize";
 import { useEResearchText } from "./i18n";
+import {
+  getResearchLockedReason,
+  getResearchTitleTh,
+  getResearchYear,
+  isResearchEditable,
+  isResearchMemberRole,
+} from "./researchFields";
 
 export default function ProjectList({ navigation, route }) {
   const { te } = useEResearchText();
@@ -20,7 +27,7 @@ export default function ProjectList({ navigation, route }) {
   const scrollRef = useRef(null);
   const perPage = 20;
   const { researcherId, loading: sessionLoading } = useLrdSession();
-  const { items, total, loading, error, cacheInfo, remove, refetch } = useLrdResource(LRD_ENDPOINTS.projects, {
+  const { items, total, loading, error, cacheInfo, remove, refetch } = useLrdResource(LRD_ENDPOINTS.researches, {
     // โหมดจัดการเป็นของฉัน ส่วนโหมดสืบค้นเป็นข้อมูลที่บัญชีนี้มีสิทธิ์เห็น
     params: { scope: searchMode ? LRD_VISIBLE_SCOPE : "mine", page, per_page: perPage, ...(query ? { q: query } : {}) },
     skip: sessionLoading,
@@ -140,7 +147,13 @@ export default function ProjectList({ navigation, route }) {
             </View>
           ) : (
             items.map((item, index) => {
-              const canManage = !searchMode && isOwnedByCurrentUser(item);
+              const owned = isOwnedByCurrentUser(item);
+              // A record bound to an LRD proposal, or one this researcher only
+              // contributes to, is read-only even in the management list.
+              const canManage = !searchMode && owned && isResearchEditable(item, owned);
+              const lockedReason = !searchMode && owned && !canManage
+                ? getResearchLockedReason(item)
+                : "";
               return (
               <View key={item.id} className="flex-row items-center px-[14px] py-3 border-t border-[#eef1f4]">
                 <Text className="text-[14px] font-bold text-[#1f2a2e] flex-1">{(page - 1) * perPage + index + 1}</Text>
@@ -149,11 +162,16 @@ export default function ProjectList({ navigation, route }) {
                   onPress={() => navigation.navigate("ResearchDocumentDetail", { type: "project", item })}
                   activeOpacity={0.7}
                   accessibilityRole="button"
-                  accessibilityLabel={`${te("common.viewDetails")} ${item.projectname || ""}`}
+                  accessibilityLabel={`${te("common.viewDetails")} ${getResearchTitleTh(item)}`}
                 >
-                  <Text className="text-[14px] font-semibold text-[#1f2a2e]" numberOfLines={2}>{item.projectname || item.titleTh || "-"}</Text>
+                  <Text className="text-[14px] font-semibold text-[#1f2a2e]" numberOfLines={2}>{getResearchTitleTh(item) || "-"}</Text>
+                  {isResearchMemberRole(item) ? (
+                    <View className="self-start rounded-full bg-[#eef1f0] px-2 py-[2px] mt-[3px]">
+                      <Text className="text-[11px] font-bold text-[#5d6b65]">{te("project.roleMember")}</Text>
+                    </View>
+                  ) : null}
                   <Text className="text-[12px] text-[#5F7069] mt-[2px]">
-                    {te("project.yearLine", { year: item.year_id || item.year || "-" })}
+                    {te("project.yearLine", { year: getResearchYear(item) || "-" })}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -181,6 +199,18 @@ export default function ProjectList({ navigation, route }) {
                     <Ionicons name="trash-outline" size={16} color="#df4c4b" />
                   </TouchableOpacity>
                     </>
+                  ) : lockedReason ? (
+                    // The record is the researcher's own but the backend locked
+                    // it; showing why beats a bare padlock the user cannot act on.
+                    <TouchableOpacity
+                      className="min-h-[44px] items-center justify-center px-1"
+                      onPress={() => Alert.alert(te("project.lockedTitle"), lockedReason)}
+                      accessibilityRole="button"
+                      accessibilityLabel={lockedReason}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="lock-closed-outline" size={17} color="#a8631a" />
+                    </TouchableOpacity>
                   ) : (
                     <Ionicons name="lock-closed-outline" size={17} color="#5F7069" />
                   )}

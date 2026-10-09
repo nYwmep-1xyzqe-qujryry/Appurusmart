@@ -14,7 +14,7 @@ import {
 import { captureAuthSession, isResourceSessionCurrent, runWithSession, subscribeAuthSession } from "../services/authStorage";
 
 const EMPTY_CACHE_INFO = { source: "none", updatedAt: null, stale: false, refreshError: null };
-const ORDERED_ENDPOINTS = new Set([LRD_ENDPOINTS.projects, LRD_ENDPOINTS.papers]);
+const ORDERED_ENDPOINTS = new Set([LRD_ENDPOINTS.researches, LRD_ENDPOINTS.papers]);
 
 const orderResourceRows = (endpoint, rows) => (
   ORDERED_ENDPOINTS.has(endpoint) ? orderLrdRowsByCreation(rows) : rows

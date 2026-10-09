@@ -21,10 +21,10 @@ async function main() {
   const lrdResponse = load("src/utils/lrdResponse.js");
   const notified = [];
   const unsubscribe = changes.subscribeLrdChange((endpoint) => notified.push(endpoint));
-  changes.notifyLrdChange("/info/lrd/projects");
+  changes.notifyLrdChange("/info/lrd/researches");
   unsubscribe();
   changes.notifyLrdChange("/info/lrd/papers");
-  assert.deepEqual(notified, ["/info/lrd/projects"], "only active listeners receive LRD mutations");
+  assert.deepEqual(notified, ["/info/lrd/researches"], "only active listeners receive LRD mutations");
 
   const state = [];
   const effects = [];
@@ -52,7 +52,7 @@ async function main() {
         pending.push({ endpoint, config, resolve, reject });
       }),
       getLrdErrorMessage: (error) => error.message,
-      LRD_ENDPOINTS: { projects: "/info/lrd/projects", papers: "/info/lrd/papers" },
+      LRD_ENDPOINTS: { researches: "/info/lrd/researches", papers: "/info/lrd/papers" },
       patchLrd: async () => ({ data: {} }),
       postLrd: async () => ({ data: { data: { id: 3 } } }),
     },
@@ -96,7 +96,7 @@ async function main() {
     },
   }).default;
 
-  const resource = hook("/info/lrd/projects", {
+  const resource = hook("/info/lrd/researches", {
     params: { scope: "mine", page: 1, per_page: 1 },
     loadOnFocus: false,
     refetchAfterMutation: false,
@@ -137,7 +137,7 @@ async function main() {
   const stopListening = changes.subscribeLrdChange((endpoint) => mutationEvents.push(endpoint));
   await resource.create({ projectname: "fixture" });
   stopListening();
-  assert.deepEqual(mutationEvents, ["/info/lrd/projects"], "successful create invalidates sibling counters");
+  assert.deepEqual(mutationEvents, ["/info/lrd/researches"], "successful create invalidates sibling counters");
 
   cleanups.forEach((cleanup) => cleanup());
   console.log("LRD resource freshness tests OK");

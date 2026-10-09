@@ -185,15 +185,15 @@ export default function EResearch({ navigation }) {
   const { items: education, loading: educationLoading, refetch: refetchEducation } = useLrdResource(LRD_ENDPOINTS.educations, { skip: !canLoadLrd, loadOnFocus: false });
   const { items: expertise, loading: expertiseLoading, refetch: refetchExpertise } = useLrdResource(LRD_ENDPOINTS.expertises, { skip: !canLoadLrd, loadOnFocus: false });
   const counterParams = { page: 1, per_page: 1 };
-  const { total: projectsTotal, loading: projectsLoading, error: projectsError, refetch: refetchProjects } = useLrdResource(LRD_ENDPOINTS.projects, { params: { ...counterParams, scope: "mine" }, skip: !canLoadLrd, loadOnFocus: false });
+  const { total: projectsTotal, loading: projectsLoading, error: projectsError, refetch: refetchProjects } = useLrdResource(LRD_ENDPOINTS.researches, { params: { ...counterParams, scope: "mine" }, skip: !canLoadLrd, loadOnFocus: false });
   const { total: articlesTotal, loading: articlesLoading, error: articlesError, refetch: refetchArticles } = useLrdResource(LRD_ENDPOINTS.papers, { params: { ...counterParams, scope: "mine" }, skip: !canLoadLrd, loadOnFocus: false });
-  const { total: otherProjectsTotal, loading: otherProjectsLoading, error: otherProjectsError, refetch: refetchOtherProjects } = useLrdResource(LRD_ENDPOINTS.projects, { params: { ...counterParams, scope: LRD_VISIBLE_SCOPE }, skip: !canLoadLrd, loadOnFocus: false });
+  const { total: otherProjectsTotal, loading: otherProjectsLoading, error: otherProjectsError, refetch: refetchOtherProjects } = useLrdResource(LRD_ENDPOINTS.researches, { params: { ...counterParams, scope: LRD_VISIBLE_SCOPE }, skip: !canLoadLrd, loadOnFocus: false });
   const { total: otherArticlesTotal, loading: otherArticlesLoading, error: otherArticlesError, refetch: refetchOtherArticles } = useLrdResource(LRD_ENDPOINTS.papers, { params: { ...counterParams, scope: LRD_VISIBLE_SCOPE }, skip: !canLoadLrd, loadOnFocus: false });
 
   useEffect(() => {
     if (!canLoadLrd) return undefined;
     return subscribeLrdChange((endpoint) => {
-      if (endpoint === LRD_ENDPOINTS.projects) {
+      if (endpoint === LRD_ENDPOINTS.researches) {
         void Promise.allSettled([
           refetchProjects({ force: true }),
           refetchOtherProjects({ force: true }),

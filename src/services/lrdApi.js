@@ -14,7 +14,11 @@ export const LRD_ENDPOINTS = {
   faculties: "/info/lrd/facultys",
   branches: "/info/lrd/branchs",
   paperIndexes: "/info/lrd/paperindexs",
-  projects: "/info/lrd/projects",
+  // Research records live in `researchs` and carry the abstract, objective,
+  // contributors and local experts. The older /info/lrd/projects endpoint
+  // remains available for area-based projects with BCG/SDG, which this app
+  // does not show.
+  researches: "/info/lrd/researches",
   papers: "/info/lrd/papers",
   researcherMe: "/info/lrd/researcher/me",
   educations: "/info/lrd/researcher/me/educations",

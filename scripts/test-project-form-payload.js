@@ -1,10 +1,9 @@
-// Guards the e-Research project save contract.
+// Guards the e-Research research save contract.
 //
-// GET /projects (list and detail) omits columns the API still accepts on
-// save — budget, bcg, sdg — so those fields hydrate blank in the edit form
-// even when the stored record holds a value. PUT/PATCH merges absent keys
-// but writes an explicit null, so sending that blankness back as null
-// erased the user's data on every edit.
+// PUT/PATCH merges absent keys but writes an explicit null, so sending a
+// blank optional field back as null erases whatever the record holds. A
+// field the response omits hydrates blank, which made every edit a silent
+// delete of the columns the user had not retyped.
 //
 // The test drives the payload builder from ProjectForm.js itself rather
 // than a copy, so reintroducing `|| null` on the update path fails here.
@@ -26,10 +25,6 @@ const buildPayloadFactory = () => {
     "ProjectForm must build its payload through the documented optional()/delete block",
   );
   const body = source.slice(start, end);
-  assert.ok(
-    /UNSUPPORTED_PROJECT_COLUMNS/.test(body),
-    "the payload must withhold columns the projects table does not have",
-  );
   assert.ok(
     !/\|\|\s*null/.test(body),
     "the update payload must not coerce an empty optional field to null",
@@ -71,8 +66,8 @@ async function main() {
     "no key may carry null on update; null clears the column",
   );
   // Required fields still travel.
-  assert.strictEqual(editPayload.projectname, "โครงการทดสอบ");
-  assert.strictEqual(editPayload.year_id, 2568);
+  assert.strictEqual(editPayload.title_th, "โครงการทดสอบ");
+  assert.strictEqual(editPayload.createyear, "2568");
   assert.strictEqual(editPayload.keyword, "คำสำคัญ");
 
   // 2. The user's real edits to supported columns must still be sent.
@@ -96,35 +91,17 @@ async function main() {
     "whitespace-only input is treated as untouched, not as a deliberate clear",
   );
 
-  // 5. Columns that do not exist in lrdsystem2.projects are never sent, on
-  //    create or update. The backend drops unknown keys without erroring, so
-  //    sending them would hide the fact that the data is going nowhere.
-  const unsupported = [
-    "projectname_eng",
-    "objective",
-    "abstract",
-    "contributor",
-    "local_expert",
-  ];
-  const typedEverything = {
-    ...blankForm,
-    titleEn: "An English title",
-    objective: "วัตถุประสงค์",
-    abstract: "บทคัดย่อ",
-    contributors: "ผู้ร่วมวิจัย",
-    localExperts: "ผู้เชี่ยวชาญ",
-  };
-  [editing, null].forEach((mode) => {
-    const payload = buildPayload(typedEverything, mode);
-    unsupported.forEach((key) => {
-      assert.ok(
-        !(key in payload),
-        `${key} has no column and must not be sent (${mode ? "update" : "create"})`,
-      );
-    });
-    // The supported fields must still survive the filtering.
-    assert.strictEqual(payload.projectname, "โครงการทดสอบ");
-    assert.strictEqual(payload.keyword, "คำสำคัญ");
+  // 5. The payload speaks the researches endpoint's own field names.
+  const named = buildPayload(
+    { ...blankForm, abstract: "บทคัดย่อ", titleEn: "An English title" },
+    editing,
+  );
+  assert.strictEqual(named.title_th, "โครงการทดสอบ", "title_th carries the Thai title");
+  assert.strictEqual(named.createyear, "2568", "createyear is a string B.E. year");
+  assert.strictEqual(named.title_eng, "An English title", "title_eng carries the English title");
+  assert.strictEqual(named.abstract, "บทคัดย่อ", "abstract is stored now and must be sent");
+  ["projectname", "projectname_eng", "year_id"].forEach((legacy) => {
+    assert.ok(!(legacy in named), `${legacy} is the projects-era name and must not be sent`);
   });
 
   console.log("Project form payload tests OK");

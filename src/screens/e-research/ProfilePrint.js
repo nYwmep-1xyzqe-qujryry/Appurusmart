@@ -19,6 +19,7 @@ import {
   getLabel,
 } from "./mockOptions";
 import { useEResearchText } from "./i18n";
+import { getResearchTitleTh, getResearchYear } from "./researchFields";
 
 const InfoRow = ({ icon, label, value }) => (
   <View className="flex-row items-start gap-2 py-[6px]">
@@ -92,7 +93,7 @@ export default function ProfilePrint({ navigation }) {
   const [profile, setProfile] = useState({});
   const { items: education } = useLrdResource(LRD_ENDPOINTS.educations);
   const { items: expertise } = useLrdResource(LRD_ENDPOINTS.expertises);
-  const { items: projects } = useLrdResource(LRD_ENDPOINTS.projects);
+  const { items: projects } = useLrdResource(LRD_ENDPOINTS.researches);
   const { items: articles } = useLrdResource(LRD_ENDPOINTS.papers);
 
   useEffect(() => {
@@ -134,10 +135,10 @@ export default function ProfilePrint({ navigation }) {
       item.university,
     ].filter(Boolean).join(" · "));
     const expertiseRows = expertise.map((item) => [item.nameTh, item.nameEn].filter(Boolean).join(" / "));
-    const projectRows = projects.map((item) => `${item.year_id || "-"} — ${item.projectname || "-"}`);
+    const projectRows = projects.map((item) => `${getResearchYear(item) || "-"} — ${getResearchTitleTh(item) || "-"}`);
     const collaboratorRows = projects
       .filter((item) => item.role === "contributor" || item.is_contributor || item.project_role === "co-researcher")
-      .map((item) => `${item.year_id || "-"} — ${item.projectname || "-"}`);
+      .map((item) => `${getResearchYear(item) || "-"} — ${getResearchTitleTh(item) || "-"}`);
     const articleRows = articles.map((item) => `${item.publicyear || "-"} — ${item.title_th || item.title_eng || "-"}`);
     const renderList = (rows) => rows.length
       ? `<ul>${rows.map((row) => `<li>${escapeHtml(row)}</li>`).join("")}</ul>`
@@ -293,7 +294,7 @@ export default function ProfilePrint({ navigation }) {
             ) : (
               projects.map((p) => (
                 <Text key={p.id} className="text-[13px] text-[#33483f] py-[3px]" numberOfLines={1}>
-                  • {p.year_id} — {p.projectname}
+                  • {getResearchYear(p)} — {getResearchTitleTh(p)}
                 </Text>
               ))
             )}

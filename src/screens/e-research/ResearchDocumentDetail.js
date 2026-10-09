@@ -8,6 +8,7 @@ import AppHeader from "../../components/AppHeader";
 import useLrdSession from "../../hook/useLrdSession";
 import { LRD_API_BASE_URL } from "../../config";
 import { useEResearchText } from "./i18n";
+import { getResearchTitleEn, getResearchTitleTh, getResearchYear } from "./researchFields";
 
 const escapeHtml = (value) => String(value ?? "")
   .replace(/&/g, "&amp;")
@@ -28,10 +29,12 @@ const makePdfFilename = (value, fallback) => {
   return `${safeName || fallback}.pdf`;
 };
 
+// BCG and SDG belong to the area-based projects endpoint, not to research
+// records, so they are not listed here.
 const projectRows = (item, te) => [
-  [te("date.yearShort"), item.year_id],
-  [te("project.titleTh"), item.projectname],
-  [te("project.titleEn"), item.projectname_eng || item.title_eng],
+  [te("date.yearShort"), getResearchYear(item)],
+  [te("project.titleTh"), getResearchTitleTh(item)],
+  [te("project.titleEn"), getResearchTitleEn(item)],
   [te("project.field"), item.field_name || item.work_name || item.work_id],
   [te("project.funding"), item.fund_name || item.funding_source || item.fund_id],
   [te("project.keywords"), item.keyword],
@@ -40,8 +43,6 @@ const projectRows = (item, te) => [
   [te("project.contributors"), item.contributor || item.contributors],
   [te("project.localExperts"), item.local_expert || item.localExperts],
   [te("project.budget"), item.budget],
-  ["BCG", item.bcg],
-  ["SDG", item.sdg],
 ];
 
 const paperRows = (item, te) => [
@@ -72,7 +73,7 @@ export default function ResearchDocumentDetail({ navigation, route }) {
   const { researcherId } = useLrdSession();
   const isOwner = researcherId && String(item.researcher_id) === String(researcherId);
   const isPaper = type === "paper";
-  const title = isPaper ? item.title_th : item.projectname;
+  const title = isPaper ? item.title_th : getResearchTitleTh(item);
   const rows = (isPaper ? paperRows(item, te) : projectRows(item, te)).filter(([, value]) => value !== null && value !== undefined && value !== "");
   const documentUrl = isPaper ? resolveDocumentUrl(item) : null;
 

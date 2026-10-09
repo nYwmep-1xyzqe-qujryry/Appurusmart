@@ -33,7 +33,7 @@ export default function ProjectForm({ navigation, route }) {
   const canEdit = !editingItem || !researcherId || (
     String(editingItem.researcher_id) === String(researcherId)
   );
-  const { create, update, saving } = useLrdResource(LRD_ENDPOINTS.projects, {
+  const { create, update, saving } = useLrdResource(LRD_ENDPOINTS.researches, {
     loadOnFocus: false,
     refetchAfterMutation: false,
   });
@@ -50,11 +50,11 @@ export default function ProjectForm({ navigation, route }) {
       ? {
           ...emptyForm,
           ...editingItem,
-          year: String(editingItem.year_id ?? editingItem.year ?? ""),
+          year: String(getResearchYear(editingItem)),
           field: String(editingItem.work_id ?? editingItem.field ?? ""),
           fundingSource: String(editingItem.fund_id ?? editingItem.funding_source_id ?? ""),
-          titleTh: editingItem.projectname ?? editingItem.titleTh ?? "",
-          titleEn: editingItem.projectname_eng ?? editingItem.title_eng ?? editingItem.titleEn ?? "",
+          titleTh: getResearchTitleTh(editingItem),
+          titleEn: getResearchTitleEn(editingItem),
           keywords: editingItem.keyword ?? editingItem.keywords ?? "",
           objective: editingItem.objective ?? "",
           abstract: editingItem.abstract ?? "",
@@ -99,27 +99,17 @@ export default function ProjectForm({ navigation, route }) {
         if (text) return text;
         return editingItem ? undefined : null;
       };
-      // lrdsystem2.projects has no column for these yet, and the backend drops
-      // an unknown key silently rather than erroring, so anything typed here
-      // was never stored. Sending them regardless would keep that failure
-      // invisible; withheld, the request carries only what the table can hold.
-      // The inputs stay on screen and keep their values for the session — the
-      // fields are wanted, the columns are what is missing. Remove a name from
-      // this list as soon as its column ships.
-      const UNSUPPORTED_PROJECT_COLUMNS = [
-        "projectname_eng",
-        "objective",
-        "abstract",
-        "contributor",
-        "local_expert",
-      ];
+
       const budgetText = String(form.budget ?? "").trim();
+      // The researches endpoint accepts the legacy names too, but sending its
+      // own keeps the request readable against the table it writes to.
+      // createyear is a 4-digit B.E. year carried as a string.
       const payload = {
-        projectname: form.titleTh.trim(),
-        year_id: Number(form.year),
+        title_th: form.titleTh.trim(),
+        createyear: String(form.year),
         work_id: Number(form.field),
         fund_id: Number(form.fundingSource),
-        projectname_eng: optional(form.titleEn),
+        title_eng: optional(form.titleEn),
         keyword: form.keywords.trim(),
         objective: optional(form.objective),
         abstract: optional(form.abstract),
@@ -129,7 +119,6 @@ export default function ProjectForm({ navigation, route }) {
       };
       // undefined would survive into the request body as a dropped key only by
       // accident of the serializer; remove it here so the contract is explicit.
-      UNSUPPORTED_PROJECT_COLUMNS.forEach((key) => delete payload[key]);
       Object.keys(payload).forEach((key) => {
         if (payload[key] === undefined) delete payload[key];
       });
@@ -141,7 +130,15 @@ export default function ProjectForm({ navigation, route }) {
         { text: te("common.ok"), onPress: () => navigation.goBack() },
       ]);
     } catch (err) {
-      Alert.alert(te("common.saveFailed"), err.message ?? te("common.tryAgain"));
+      // The backend rejects an edit to a record bound to an LRD proposal with
+      // 409 and an explanatory message; that message is the useful thing to
+      // show, not a generic failure.
+      const conflict = err?.response?.status === 409;
+      const serverMessage = err?.response?.data?.message;
+      Alert.alert(
+        conflict ? te("project.lockedTitle") : te("common.saveFailed"),
+        serverMessage || err.message || te("common.tryAgain"),
+      );
     }
   };
 
@@ -177,16 +174,6 @@ export default function ProjectForm({ navigation, route }) {
           <InlineDropdown label={te("project.field")} value={form.field} options={researchFieldOptions} onSelect={(v) => set("field", v)} required searchable />
           <InlineDropdown label={te("project.funding")} value={form.fundingSource} options={fundingSourceOptions} onSelect={(v) => set("fundingSource", v)} required searchable compact />
           <FormField ref={titleThRef} label={te("project.titleTh")} value={form.titleTh} onChangeText={(v) => set("titleTh", v)} required onSubmitEditing={() => titleEnRef.current?.focus()} />
-          {/* The five fields below have no column in lrdsystem2.projects yet,
-              so the backend accepts the request and quietly discards them.
-              Saying so here is the only way a user can tell; without it the
-              save reports success and the text is gone on the next open. */}
-          <View className="mx-4 mb-1 mt-2 flex-row items-start rounded-xl bg-[#fff8e6] border border-[#f0d9a0] px-3 py-[10px]">
-            <Ionicons name="information-circle-outline" size={18} color="#a8631a" style={{ marginTop: 1 }} />
-            <Text className="flex-1 ml-2 text-[13px] leading-[19px] text-[#7a4a12]">
-              {te("project.pendingColumns")}
-            </Text>
-          </View>
           <FormField ref={titleEnRef} label={te("project.titleEn")} value={form.titleEn} onChangeText={(v) => set("titleEn", v)} onSubmitEditing={() => keywordsRef.current?.focus()} />
           <FormField ref={keywordsRef} label={te("project.keywords")} value={form.keywords} onChangeText={(v) => set("keywords", v)} placeholder={te("project.keywordsPlaceholder")} required onSubmitEditing={() => objectiveRef.current?.focus()} />
           <FormField ref={objectiveRef} label={te("project.objective")} value={form.objective} onChangeText={(v) => set("objective", v)} multiline returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => abstractRef.current?.focus()} />
