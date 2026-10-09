@@ -142,6 +142,10 @@ export default function useLrdResource(endpoint, options = {}) {
               rows: rows.length,
               source: "api",
               ...(diagnosticOwnerId == null ? {} : { ownership: summarizeLrdOwnership(rows, diagnosticOwnerId) }),
+              // Key names only. Which fields the endpoint returns is the thing
+              // that has to be checked against the web report; the values are
+              // personal data and never belong in a log.
+              fields: rows[0] ? Object.keys(rows[0]).sort() : [],
             });
           }
           if (!active() || !(await sameAccount())) return cached?.data?.items ?? [];
