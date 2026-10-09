@@ -150,7 +150,7 @@ export default function useLrdResource(endpoint, options = {}) {
               // what type, is what distinguishes "the endpoint omits it" from
               // "the screen cannot read it". The values are personal data.
               shapes: rows.slice(0, 3).map((row) => Object.fromEntries(
-                ["contributor", "researcher_name", "isced_id", "abstract", "keyword"]
+                ["contributor", "members", "researcher_name", "isced_id", "abstract", "keyword", "objective", "local_expert", "expert"]
                   .map((key) => {
                     const value = row?.[key];
                     return [key, Array.isArray(value)
