@@ -71,8 +71,12 @@ const projectRows = (item, te) => [
   [te("project.keywords"), item.keyword],
   [te("project.objective"), item.objective],
   [te("project.abstract"), item.abstract],
-  [te("project.contributors"), nameList(item.contributor ?? item.contributors)],
+  // The endpoint carries the contributor list as `contributor` and, since the
+  // backend joined the relation, also as `members`. Either may be the filled
+  // one depending on how the record was created, so whichever has names wins.
+  [te("project.contributors"), nameList(item.contributor ?? item.contributors) || nameList(item.members)],
   [te("project.localExperts"), nameList(item.local_expert ?? item.expert ?? item.localExperts)],
+  [te("project.proposal"), item.propose],
   [te("project.budget"), item.budget],
 ];
 
