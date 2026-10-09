@@ -32,6 +32,7 @@ const projectRows = (item, te) => [
   [te("date.yearShort"), item.year_id],
   [te("project.titleTh"), item.projectname],
   [te("project.titleEn"), item.projectname_eng || item.title_eng],
+  [te("project.field"), item.field_name || item.work_name || item.work_id],
   [te("project.funding"), item.fund_name || item.funding_source || item.fund_id],
   [te("project.keywords"), item.keyword],
   [te("project.objective"), item.objective],
