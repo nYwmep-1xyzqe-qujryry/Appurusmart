@@ -45,7 +45,8 @@ const projectRows = (item, te) => [
 
 const paperRows = (item, te) => [
   [te("article.publishYear"), item.publicyear],
-  [te("article.funding"), item.paperindex_name || item.paperindexname || item.paperindex_id],
+  [te("article.documentType"), item.paperindex_name || item.paperindexname || item.paperindex_id],
+  [te("article.funding"), item.fund_name || item.fund_id],
   [te("article.titleTh"), item.title_th],
   [te("article.titleEn"), item.title_eng],
   [te("article.journal"), item.source],
