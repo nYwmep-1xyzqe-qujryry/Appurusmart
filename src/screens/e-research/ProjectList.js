@@ -159,7 +159,7 @@ export default function ProjectList({ navigation, route }) {
                 <Text className="text-[14px] font-bold text-[#1f2a2e] flex-1">{(page - 1) * perPage + index + 1}</Text>
                 <TouchableOpacity
                   className="flex-[3] pr-2 min-h-[44px] justify-center"
-                  onPress={() => navigation.navigate("ResearchDocumentDetail", { type: "project", item })}
+                  onPress={() => navigation.navigate("ResearchDocumentDetail", { type: "project", item, searchMode })}
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel={`${te("common.viewDetails")} ${getResearchTitleTh(item)}`}
@@ -176,7 +176,7 @@ export default function ProjectList({ navigation, route }) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   className="flex-1 min-h-[44px] items-center justify-center"
-                  onPress={() => navigation.navigate("ResearchDocumentDetail", { type: "project", item })}
+                  onPress={() => navigation.navigate("ResearchDocumentDetail", { type: "project", item, searchMode })}
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel={te("common.viewDetails")}

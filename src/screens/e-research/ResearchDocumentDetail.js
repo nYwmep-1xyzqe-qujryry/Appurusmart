@@ -74,8 +74,16 @@ export default function ResearchDocumentDetail({ navigation, route }) {
   const isOwner = researcherId && String(item.researcher_id) === String(researcherId);
   const isPaper = type === "paper";
   const title = isPaper ? item.title_th : getResearchTitleTh(item);
-  const rows = (isPaper ? paperRows(item, te) : projectRows(item, te)).filter(([, value]) => value !== null && value !== undefined && value !== "");
-  const documentUrl = isPaper ? resolveDocumentUrl(item) : null;
+  // The budget is the one field the search view withholds: a researcher may
+  // read someone else's record, but not what it was funded for.
+  const searchMode = route.params?.searchMode === true;
+  const hiddenLabels = searchMode && !isPaper ? [te("project.budget")] : [];
+  const rows = (isPaper ? paperRows(item, te) : projectRows(item, te))
+    .filter(([label, value]) => value !== null && value !== undefined && value !== ""
+      && !hiddenLabels.includes(label));
+  // Research records carry a pdf_url too, so the attachment is reachable for
+  // both kinds rather than papers alone.
+  const documentUrl = resolveDocumentUrl(item);
 
   const buildHtml = () => `<!doctype html>
     <html lang="th"><head><meta charset="utf-8"><style>
