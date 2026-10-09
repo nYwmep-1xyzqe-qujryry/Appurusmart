@@ -39,7 +39,10 @@ const researchFieldLabel = (item) => {
   const id = item?.isced_id ?? item?.work_id ?? item?.field_name;
   if (id === null || id === undefined || id === "") return "";
   const match = RESEARCH_FIELD_OPTIONS.find((option) => String(option.id) === String(id));
-  return match ? match.label : String(id);
+  // Stored ISCED codes are broad-field numbers such as 4000, which the form's
+  // short list does not cover. Showing the bare number tells the reader
+  // nothing, so an unresolved code is left out and the row drops away.
+  return match ? match.label : "";
 };
 
 const escapeHtml = (value) => String(value ?? "")
