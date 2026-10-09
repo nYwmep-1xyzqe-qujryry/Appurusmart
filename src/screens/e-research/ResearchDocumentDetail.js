@@ -32,6 +32,10 @@ const nameList = (value) => {
 };
 
 const researchFieldLabel = (item) => {
+  // The endpoint resolves the ISCED category for us now; the local list is
+  // only a fallback for a row that predates that.
+  const named = String(item?.isced_name ?? "").trim();
+  if (named) return named;
   const id = item?.isced_id ?? item?.work_id ?? item?.field_name;
   if (id === null || id === undefined || id === "") return "";
   const match = RESEARCH_FIELD_OPTIONS.find((option) => String(option.id) === String(id));
@@ -76,6 +80,8 @@ const projectRows = (item, te) => [
   // one depending on how the record was created, so whichever has names wins.
   [te("project.contributors"), nameList(item.contributor ?? item.contributors) || nameList(item.members)],
   [te("project.localExperts"), nameList(item.local_expert ?? item.expert ?? item.localExperts)],
+  [te("project.fundType"), item.fundtype_name],
+  [te("project.tagGroup"), item.taggroup_name],
   [te("project.proposal"), item.propose],
   [te("project.budget"), item.budget],
 ];
