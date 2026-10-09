@@ -104,6 +104,13 @@ async function main() {
     assert.ok(!(legacy in named), `${legacy} is the projects-era name and must not be sent`);
   });
 
+  // 6. The research field is an ISCED category. The projects table keyed it
+  //    as work_id, which `researchs` has no column for — sending that name
+  //    would be dropped in silence, exactly as the old columns were.
+  const fielded = buildPayload({ ...blankForm, field: "7" }, editing);
+  assert.strictEqual(fielded.isced_id, 7, "the research field is sent as isced_id");
+  assert.ok(!("work_id" in fielded), "work_id is the projects-era name and must not be sent");
+
   console.log("Project form payload tests OK");
 }
 

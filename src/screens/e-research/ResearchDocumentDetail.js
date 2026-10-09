@@ -9,6 +9,17 @@ import useLrdSession from "../../hook/useLrdSession";
 import { LRD_API_BASE_URL } from "../../config";
 import { useEResearchText } from "./i18n";
 import { getResearchTitleEn, getResearchTitleTh, getResearchYear } from "./researchFields";
+import { RESEARCH_FIELD_OPTIONS } from "./mockOptions";
+
+// The endpoint returns the research field as an ISCED id, so the screen
+// resolves it against the same list the form offers. An id with no match
+// still shows, rather than leaving the row blank.
+const researchFieldLabel = (item) => {
+  const id = item?.isced_id ?? item?.work_id ?? item?.field_name;
+  if (id === null || id === undefined || id === "") return "";
+  const match = RESEARCH_FIELD_OPTIONS.find((option) => String(option.id) === String(id));
+  return match ? match.label : String(id);
+};
 
 const escapeHtml = (value) => String(value ?? "")
   .replace(/&/g, "&amp;")
@@ -35,7 +46,7 @@ const projectRows = (item, te) => [
   [te("date.yearShort"), getResearchYear(item)],
   [te("project.titleTh"), getResearchTitleTh(item)],
   [te("project.titleEn"), getResearchTitleEn(item)],
-  [te("project.field"), item.field_name || item.work_name || item.work_id],
+  [te("project.field"), researchFieldLabel(item)],
   [te("project.funding"), item.fund_name || item.funding_source || item.fund_id],
   // The record's owner. The web research report names them above the
   // contributors, and the endpoint returns researcher_name for every row.
@@ -44,7 +55,7 @@ const projectRows = (item, te) => [
   [te("project.objective"), item.objective],
   [te("project.abstract"), item.abstract],
   [te("project.contributors"), item.contributor || item.contributors],
-  [te("project.localExperts"), item.local_expert || item.localExperts],
+  [te("project.localExperts"), item.local_expert || item.expert || item.localExperts],
   [te("project.budget"), item.budget],
 ];
 

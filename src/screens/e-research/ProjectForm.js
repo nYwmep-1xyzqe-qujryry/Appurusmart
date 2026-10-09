@@ -51,7 +51,7 @@ export default function ProjectForm({ navigation, route }) {
           ...emptyForm,
           ...editingItem,
           year: String(getResearchYear(editingItem)),
-          field: String(editingItem.work_id ?? editingItem.field ?? ""),
+          field: String(editingItem.isced_id ?? editingItem.work_id ?? editingItem.field ?? ""),
           fundingSource: String(editingItem.fund_id ?? editingItem.funding_source_id ?? ""),
           titleTh: getResearchTitleTh(editingItem),
           titleEn: getResearchTitleEn(editingItem),
@@ -107,7 +107,9 @@ export default function ProjectForm({ navigation, route }) {
       const payload = {
         title_th: form.titleTh.trim(),
         createyear: String(form.year),
-        work_id: Number(form.field),
+        // The research field is an ISCED category; researches stores it as
+        // isced_id, not the work_id the projects table used.
+        isced_id: Number(form.field),
         fund_id: Number(form.fundingSource),
         title_eng: optional(form.titleEn),
         keyword: form.keywords.trim(),
