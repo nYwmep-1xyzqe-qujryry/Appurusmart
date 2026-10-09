@@ -146,6 +146,21 @@ export default function useLrdResource(endpoint, options = {}) {
               // that has to be checked against the web report; the values are
               // personal data and never belong in a log.
               fields: rows[0] ? Object.keys(rows[0]).sort() : [],
+              // Shape, never content: whether a field arrived empty, and as
+              // what type, is what distinguishes "the endpoint omits it" from
+              // "the screen cannot read it". The values are personal data.
+              shapes: rows.slice(0, 3).map((row) => Object.fromEntries(
+                ["contributor", "researcher_name", "isced_id", "abstract", "keyword"]
+                  .map((key) => {
+                    const value = row?.[key];
+                    return [key, Array.isArray(value)
+                      ? `array(${value.length})`
+                      : value === null ? "null"
+                        : value === undefined ? "absent"
+                          : value === "" ? "empty"
+                            : `${typeof value}(${String(value).length})`];
+                  }),
+              )),
             });
           }
           if (!active() || !(await sameAccount())) return cached?.data?.items ?? [];

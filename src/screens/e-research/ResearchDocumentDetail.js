@@ -14,6 +14,23 @@ import { RESEARCH_FIELD_OPTIONS } from "./mockOptions";
 // The endpoint returns the research field as an ISCED id, so the screen
 // resolves it against the same list the form offers. An id with no match
 // still shows, rather than leaving the row blank.
+// A name list may arrive as a string or as an array of names or of row
+// objects, depending on how the endpoint serialises the relation. A bare
+// array would render as "[object Object]" or vanish, so it is flattened to
+// the same comma-separated form the web report uses.
+const nameList = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => (entry && typeof entry === "object"
+        ? entry.name ?? entry.fullname ?? entry.researcher_name ?? entry.title ?? ""
+        : entry))
+      .map((entry) => String(entry ?? "").trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+  return String(value ?? "").trim();
+};
+
 const researchFieldLabel = (item) => {
   const id = item?.isced_id ?? item?.work_id ?? item?.field_name;
   if (id === null || id === undefined || id === "") return "";
@@ -50,12 +67,12 @@ const projectRows = (item, te) => [
   [te("project.funding"), item.fund_name || item.funding_source || item.fund_id],
   // The record's owner. The web research report names them above the
   // contributors, and the endpoint returns researcher_name for every row.
-  [te("project.owner"), item.researcher_name || item.researcherName],
+  [te("project.owner"), nameList(item.researcher_name ?? item.researcherName)],
   [te("project.keywords"), item.keyword],
   [te("project.objective"), item.objective],
   [te("project.abstract"), item.abstract],
-  [te("project.contributors"), item.contributor || item.contributors],
-  [te("project.localExperts"), item.local_expert || item.expert || item.localExperts],
+  [te("project.contributors"), nameList(item.contributor ?? item.contributors)],
+  [te("project.localExperts"), nameList(item.local_expert ?? item.expert ?? item.localExperts)],
   [te("project.budget"), item.budget],
 ];
 
@@ -67,7 +84,7 @@ const paperRows = (item, te) => [
   [te("article.titleEn"), item.title_eng],
   [te("article.journal"), item.source],
   [te("article.keywords"), item.keyword],
-  [te("article.contributors"), item.contributor],
+  [te("article.contributors"), nameList(item.contributor)],
   [te("article.abstract"), item.abstract],
   [te("article.url"), item.url],
   [te("article.reference"), item.reference],
