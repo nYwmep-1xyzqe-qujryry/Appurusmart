@@ -1,6 +1,6 @@
 import axios from "axios";
 import { INFO_API_BASE_URL } from "../config";
-import { attachRequestSession, handleUnauthorized } from "./sessionRequest";
+import { attachRequestSession, handleUnauthorized, tryRefreshForRequest } from "./sessionRequest";
 import { getSafeLrdErrorDetails, summarizeLrdParams } from "../utils/lrdDiagnostics";
 
 // API สำหรับข้อมูล Expert/LRD โดยเฉพาะ ใช้ token เดียวกับ URU Smart API
@@ -71,6 +71,12 @@ infoApi.interceptors.response.use(
     return response;
   },
   async (error) => {
+    // Info shares the access token, so it lapses here at the same moment and
+    // is renewed the same way. Without this the e-research screens would be
+    // the one place a live session still read as signed out.
+    if (await tryRefreshForRequest(error)) {
+      return infoApi.request({ ...error.config, authSession: null, skipAuthRefresh: true });
+    }
     await handleUnauthorized(error);
     if (__DEV__ && !error.config?.suppressErrorLog) {
       if (isLrdRequest(error.config)) {

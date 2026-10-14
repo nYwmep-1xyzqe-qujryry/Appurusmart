@@ -56,6 +56,7 @@ const testLrdResource = require("./test-lrd-resource");
 const testLrdSession = require("./test-lrd-session");
 const testProjectFormPayload = require("./test-project-form-payload");
 const testSessionFeedback = require("./test-session-feedback");
+const testTokenRefresh = require("./test-token-refresh");
 
 const parsed = thaiDate.parseISOToDate("2024-10-26");
 assert.equal(parsed.getFullYear(), 2024);
@@ -2250,6 +2251,7 @@ Promise.resolve()
   .then(testLrdSession)
   .then(testProjectFormPayload)
   .then(testSessionFeedback)
+  .then(testTokenRefresh)
   .then(testInboxLockOrdering)
   .then(testInboxMutationOrdering)
   .then(testPushRegistrationRecovery)

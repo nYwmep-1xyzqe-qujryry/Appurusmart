@@ -1,4 +1,5 @@
 import { captureAuthSession, isAuthSessionCurrent, invalidateAuthSession } from "./authStorage";
+import { refreshAuthSession } from "./tokenRefresh";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { STORAGE_KEYS } from "../config";
 import { getCurrentUserId, clearCurrentUserId } from "./userSecurityKeys";
@@ -41,6 +42,16 @@ export async function attachRequestSession(config) {
     throw error;
   }
   return config;
+}
+
+// Returns true when the request should be retried against a renewed session.
+// A 401 is only final once the refresh token has also been refused.
+export async function tryRefreshForRequest(error) {
+  if (error.response?.status !== 401) return false;
+  if (error.config?.skipAuthRefresh) return false;
+  const session = error.config?.authSession ?? await captureAuthSession();
+  if (!session) return false;
+  return refreshAuthSession(session);
 }
 
 export async function handleUnauthorized(error) {

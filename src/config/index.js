@@ -51,6 +51,10 @@ export const STORAGE_KEYS = {
 // SecureStore keys — เก็บข้อมูล sensitive
 export const SECURE_KEYS = {
   AUTH_TOKEN: "auth_token",
+  // Exchanged for a new access token when the old one lapses. It is a
+  // long-lived credential, so it lives beside the access token in the
+  // keychain rather than in AsyncStorage.
+  REFRESH_TOKEN: "refresh_token",
   // PIN/biometric token เป็น per-account เสมอ — ใช้ prefix นี้ต่อด้วย user
   // identifier เป็น key จริง เช่น "biometric_token:16" (ดู userSecurityKeys.js)
   BIOMETRIC_TOKEN_PREFIX: "biometric_token",

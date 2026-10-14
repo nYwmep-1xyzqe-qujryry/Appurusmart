@@ -1,6 +1,6 @@
 import axios from "axios";
 import { API_BASE_URL } from "../config";
-import { attachRequestSession, handleUnauthorized } from "./sessionRequest";
+import { attachRequestSession, handleUnauthorized, tryRefreshForRequest } from "./sessionRequest";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -46,6 +46,13 @@ api.interceptors.response.use(
   async (error) => {
     const status = error.response?.status;
     const errorLabel = status ?? error.code ?? "NETWORK_ERROR";
+
+    // A 401 means the access token lapsed, not that the user is gone: the
+    // refresh token decides that. Retried once, with skipAuthRefresh set so a
+    // second 401 on the retry ends the session instead of looping.
+    if (await tryRefreshForRequest(error)) {
+      return api.request({ ...error.config, authSession: null, skipAuthRefresh: true });
+    }
 
     await handleUnauthorized(error);
 

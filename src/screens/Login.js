@@ -370,7 +370,10 @@ const Login = ({ navigation, route }) => {
       return;
     }
 
-    await saveAuthSession(data.token, data.user || {}, userId);
+    // data.token is the access token under its original name, kept so older
+    // builds still work. The refresh token is what lets this session outlive
+    // the access token's expiry without sending the user back here.
+    await saveAuthSession(data.token, data.user || {}, userId, data.refresh_token ?? "");
 
     // สร้าง/ตรวจ Expert profile ก่อนเปิด session หลัก เพื่อให้หน้า Expert
     // และ profile-search มองเห็นผู้ใช้ได้ตั้งแต่ยังไม่เคยบันทึกผลงาน

@@ -4,7 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTranslation } from "react-i18next";
 import { STORAGE_KEYS } from "../config";
 import { clearBiometricToken, setBiometricEnabled } from "../services/biometricService";
-import { captureAuthSession, invalidateAuthSession } from "../services/authStorage";
+import { captureAuthSession, invalidateAuthSession, getRefreshToken } from "../services/authStorage";
 import { clearCurrentUserId } from "../services/userSecurityKeys";
 import { getStoredPushToken, removeTokenFromBackend } from "../services/notificationService";
 import api from "../services/api";
@@ -56,7 +56,18 @@ export default function useCurrentUser(navigation) {
 
           const pushToken = await getStoredPushToken(session);
           await removeTokenFromBackend(pushToken, session);
-          try { await api.post("/auth/logout", null, { authSession: session, suppressAuthRedirect: true }); } catch (_) {}
+          // Sending the refresh token too lets the server drop it with the
+          // access token. Left behind it would stay valid for its full 60
+          // days on a device the user has signed out of. skipAuthRefresh
+          // keeps a 401 here from renewing the session being ended.
+          const refreshToken = await getRefreshToken();
+          try {
+            await api.post(
+              "/auth/logout",
+              refreshToken ? { refresh_token: refreshToken } : null,
+              { authSession: session, suppressAuthRedirect: true, skipAuthRefresh: true },
+            );
+          } catch (_) {}
           await invalidateAuthSession(session, async () => {
           await AsyncStorage.multiRemove([
             STORAGE_KEYS.USER,

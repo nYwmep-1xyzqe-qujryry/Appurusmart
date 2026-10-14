@@ -62,18 +62,36 @@ export const runWithSession = (session, operation) => enqueue(async () => {
   return operation();
 });
 
-export async function saveAuthSession(token, user, userId) {
+export async function saveAuthSession(token, user, userId, refreshToken) {
   const value = String(token || "");
   if (!value) throw new Error("Auth token is missing");
+  const refreshValue = refreshToken === undefined ? undefined : String(refreshToken || "");
 
   return enqueue(async () => {
   changed();
   if (Platform.OS === "web") {
     webSession.set(SECURE_KEYS.AUTH_TOKEN, value);
+    if (refreshValue !== undefined) {
+      if (refreshValue) webSession.set(SECURE_KEYS.REFRESH_TOKEN, refreshValue);
+      else webSession.remove(SECURE_KEYS.REFRESH_TOKEN);
+    }
   } else {
     await SecureStore.setItemAsync(SECURE_KEYS.AUTH_TOKEN, value, {
       keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });
+    // undefined means the caller had nothing to say about the refresh token,
+    // so the stored one stands. An empty string clears it. Writing the new
+    // one before the old is discarded anywhere else keeps a crash from
+    // leaving the device with an access token it cannot renew.
+    if (refreshValue !== undefined) {
+      if (refreshValue) {
+        await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, refreshValue, {
+          keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+        });
+      } else {
+        await SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN).catch(() => {});
+      }
+    }
   }
 
   await removeLegacyAuth();
@@ -84,6 +102,15 @@ export async function saveAuthSession(token, user, userId) {
     ]);
   }
   });
+}
+
+export async function getRefreshToken() {
+  if (Platform.OS === "web") return webSession.get(SECURE_KEYS.REFRESH_TOKEN) ?? null;
+  try {
+    return await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN);
+  } catch (_) {
+    return null;
+  }
 }
 
 export async function getAuthToken() {
@@ -109,8 +136,10 @@ async function clearStoredSession() {
   changed();
   if (Platform.OS === "web") {
     webSession.remove(SECURE_KEYS.AUTH_TOKEN);
+    webSession.remove(SECURE_KEYS.REFRESH_TOKEN);
   } else {
     await SecureStore.deleteItemAsync(SECURE_KEYS.AUTH_TOKEN).catch(() => {});
+    await SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN).catch(() => {});
   }
   await removeLegacyAuth();
 }
