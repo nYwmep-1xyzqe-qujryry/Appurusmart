@@ -55,6 +55,20 @@ async function main() {
   const timeout = /timeout: (\d+)/.exec(api);
   assert.ok(timeout && Number(timeout[1]) >= 30000, "the main client needs the same 30s budget as infoApi");
 
+  // The forced-expiry switch exists to test this path. It must stay behind
+  // both __DEV__ and an explicit env flag: __DEV__ alone would arm it for
+  // every developer, and the env flag alone would ship it.
+  assert.ok(
+    /const FORCE_SESSION_EXPIRED = __DEV__\s*\n\s*&& process\.env\.EXPO_PUBLIC_FORCE_SESSION_EXPIRED === "true";/.test(sessionRequest),
+    "the forced-expiry switch must require both __DEV__ and the env flag",
+  );
+  // A request-interceptor rejection skips the response interceptor, so the
+  // switch has to invoke the handler itself or it tests nothing.
+  assert.ok(
+    /await handleUnauthorized\(error\);/.test(sessionRequest),
+    "the forced 401 must run handleUnauthorized, not just abort the request",
+  );
+
   console.log("Session feedback tests OK");
 }
 
