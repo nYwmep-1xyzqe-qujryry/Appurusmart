@@ -201,6 +201,8 @@ const SSO_CAPTURE_SCRIPT = `
 `;
 
 const Login = ({ navigation, route }) => {
+  // handleUnauthorized sends the user here after a 401 cleared the session.
+  const sessionExpired = route?.params?.reason === "sessionExpired";
   const { t } = useTranslation();
   const { top } = useSafeAreaInsets();
   const PT = top + 16;
@@ -595,6 +597,17 @@ const Login = ({ navigation, route }) => {
           <Text style={{ ...typography.secondary, textAlign: "center", marginTop: 0 }}>
             {t("login.subtitle")}
           </Text>
+          {sessionExpired ? (
+            <View
+              className="flex-row items-start mt-4 px-3 py-[10px] rounded-xl"
+              style={{ backgroundColor: "#fff8e6", borderWidth: 1, borderColor: "#f0d9a0" }}
+            >
+              <Ionicons name="time-outline" size={17} color="#a8631a" style={{ marginTop: 1 }} />
+              <Text className="flex-1 ml-2 text-[13px] leading-[19px]" style={{ color: "#7a4a12" }}>
+                {t("login.sessionExpired")}
+              </Text>
+            </View>
+          ) : null}
         </Animated.View>
 
         {/* Card */}

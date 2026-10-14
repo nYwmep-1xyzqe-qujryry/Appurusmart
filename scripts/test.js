@@ -55,6 +55,7 @@ const notificationDeletion = loadModule("src/utils/notificationDeletion.js");
 const testLrdResource = require("./test-lrd-resource");
 const testLrdSession = require("./test-lrd-session");
 const testProjectFormPayload = require("./test-project-form-payload");
+const testSessionFeedback = require("./test-session-feedback");
 
 const parsed = thaiDate.parseISOToDate("2024-10-26");
 assert.equal(parsed.getFullYear(), 2024);
@@ -2248,6 +2249,7 @@ Promise.resolve()
   .then(testLrdResource)
   .then(testLrdSession)
   .then(testProjectFormPayload)
+  .then(testSessionFeedback)
   .then(testInboxLockOrdering)
   .then(testInboxMutationOrdering)
   .then(testPushRegistrationRecovery)

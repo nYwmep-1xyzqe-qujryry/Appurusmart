@@ -34,7 +34,11 @@ const StatItem = ({ item, value, loading, onPress }) => (
       <Ionicons name={item.icon} size={22} color="rgba(255,255,255,0.95)" />
     </LinearGradient>
     <Text className="text-[22px] font-black" style={{ color: item.color, fontVariant: ["tabular-nums"], letterSpacing: 0 }}>
-      {loading ? "—" : (value ?? 0)}
+      {/* useExpertCounts leaves a count null when its request failed, which is
+          not the same as a researcher having none: rendering that as 0 told
+          people their work had vanished. An unknown count keeps the dash the
+          loading state already uses. */}
+      {loading || value == null ? "—" : value}
     </Text>
     <Text
       className="text-[10px] font-semibold text-center mt-[2px]"

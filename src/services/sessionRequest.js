@@ -36,6 +36,11 @@ export async function handleUnauthorized(error) {
       await clearBiometricToken(userId);
       await setBiometricEnabled(userId, false);
     }
-    navigate("Login");
+    // A session that ran out looks, on screen, exactly like a request that
+    // returned nothing: the services grid empties and the counters read zero.
+    // Saying so on the login screen is what tells the two apart — without it
+    // the user has to discover by trial that force-quitting the app is the
+    // way back in.
+    navigate("Login", { reason: "sessionExpired" });
   });
 }

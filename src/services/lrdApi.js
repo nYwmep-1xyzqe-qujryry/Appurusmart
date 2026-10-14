@@ -4,7 +4,11 @@ import { createLrdRequestId, getSafeLrdErrorDetails } from "../utils/lrdDiagnost
 const withLrdConfig = (config = {}) => ({
   ...config,
   timeout: config.timeout ?? 30000,
-  suppressAuthRedirect: config.suppressAuthRedirect ?? true,
+  // These requests back screens the user opened, so a 401 here means the
+  // session is gone and they need to know. Suppressing it left the lists and
+  // counters empty with nothing said. A caller that polls in the background
+  // still opts out by passing true.
+  suppressAuthRedirect: config.suppressAuthRedirect ?? false,
   lrdRequestId: config.lrdRequestId ?? createLrdRequestId(),
 });
 

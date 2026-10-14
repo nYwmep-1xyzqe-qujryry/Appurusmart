@@ -4,7 +4,10 @@ import { attachRequestSession, handleUnauthorized } from "./sessionRequest";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  // Matches infoApi and lrdApi. At 10s an announcement image on a slow
+  // campus connection aborted mid-download and the card fell back to its
+  // placeholder, which read as a broken image rather than a slow one.
+  timeout: 30000,
   headers: {
     Accept: "application/json",
     "Content-Type": "application/json",

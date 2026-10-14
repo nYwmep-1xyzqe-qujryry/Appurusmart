@@ -6,6 +6,7 @@ export const th = {
     settings: 'ตั้งค่า',
   },
   login: {
+    sessionExpired: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
     title: 'ยินดีต้อนรับสู่ URUSmart',
     subtitle: 'ลงชื่อเข้าใช้บัญชีของคุณ',
     usernameLabel: 'ชื่อผู้ใช้ / อีเมล',
@@ -652,6 +653,7 @@ export const en = {
     settings: 'Settings',
   },
   login: {
+    sessionExpired: 'Your session has expired. Please sign in again.',
     title: 'Welcome to URUSmart',
     subtitle: 'Sign in to your account',
     usernameLabel: 'Username / Email',
