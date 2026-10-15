@@ -77,8 +77,12 @@ export async function saveAuthSession(token, user, userId, refreshToken, options
   const { renewal = false } = options;
 
   return enqueue(async () => {
-  if (renewal) listeners.forEach((listener) => listener());
-  else changed();
+  // A renewal is deliberately silent. Subscribers to this event treat it as
+  // "the account changed" and reset what they hold — currentUserStore
+  // publishes an empty user, which blanked the avatar on every renewal — and
+  // none of that applies when the same person keeps the same session. Only a
+  // sign-in, sign-out or account switch notifies.
+  if (!renewal) changed();
   if (Platform.OS === "web") {
     webSession.set(SECURE_KEYS.AUTH_TOKEN, value);
     if (refreshValue !== undefined) {

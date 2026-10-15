@@ -173,10 +173,17 @@ async function main() {
       !/token === session\.token/.test(authStorage),
       "session identity must not hinge on the token string, which a renewal rotates",
     );
+    // Subscribers to the auth event reset what they hold: currentUserStore
+    // publishes an empty user on it, which blanked the avatar after every
+    // renewal. A renewal changes no identity, so it must not fire the event.
     assert.ok(
       /const \{ renewal = false \} = options;/.test(authStorage)
-        && /if \(renewal\) listeners\.forEach/.test(authStorage),
-      "a renewal must notify listeners without advancing the generation",
+        && /if \(!renewal\) changed\(\);/.test(authStorage),
+      "a renewal must neither advance the generation nor notify subscribers",
+    );
+    assert.ok(
+      !/if \(renewal\) listeners\.forEach/.test(authStorage),
+      "a renewal must not notify auth subscribers",
     );
     const refreshSource = require("fs").readFileSync(MODULE, "utf8");
     assert.ok(
