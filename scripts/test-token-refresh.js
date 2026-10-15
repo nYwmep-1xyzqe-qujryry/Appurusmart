@@ -160,6 +160,31 @@ async function main() {
     assert.strictEqual(await mod.refreshAuthSession(session), false, "no refresh token means no request");
   }
 
+  // 7. A renewal keeps the session's identity. Treating the rotated token as
+  //    a new session made every snapshot taken before it look stale, and
+  //    runWithSession dropped the work holding one — which is why the profile
+  //    photo disappeared for a render after each renewal while the rest of
+  //    the account came back intact.
+  {
+    const authStorage = require("fs").readFileSync(
+      path.join(__dirname, "..", "src", "services", "authStorage.js"), "utf8",
+    );
+    assert.ok(
+      !/token === session\.token/.test(authStorage),
+      "session identity must not hinge on the token string, which a renewal rotates",
+    );
+    assert.ok(
+      /const \{ renewal = false \} = options;/.test(authStorage)
+        && /if \(renewal\) listeners\.forEach/.test(authStorage),
+      "a renewal must notify listeners without advancing the generation",
+    );
+    const refreshSource = require("fs").readFileSync(MODULE, "utf8");
+    assert.ok(
+      /\{ renewal: true \}/.test(refreshSource),
+      "the refresh must save its token as a renewal, not as a new session",
+    );
+  }
+
   console.log("Token refresh tests OK");
 }
 

@@ -38,7 +38,13 @@ const readTokens = (payload) => {
 // credential, and one copied out of a log is one the backend will treat as
 // stolen the next time it is used.
 const log = (event, detail) => {
-  if (__DEV__) console.log(`[Auth] ${event}`, detail ?? "");
+  // typeof guards the global: __DEV__ is injected by the React Native
+  // bundler and is simply absent under plain Node, where a bare reference
+  // throws — and the throw would be swallowed by the refresh's own catch,
+  // turning a logging detail into a silent refusal to renew.
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log(`[Auth] ${event}`, detail ?? "");
+  }
 };
 
 async function performRefresh(session) {
@@ -90,7 +96,13 @@ async function performRefresh(session) {
   // Passing the rotated refresh token through the same write keeps the pair
   // consistent: the device never holds a new access token beside the spent
   // refresh token it can no longer use.
-  await saveAuthSession(accessToken, undefined, userId ?? undefined, nextRefreshToken ?? "");
+  await saveAuthSession(
+    accessToken,
+    undefined,
+    userId ?? undefined,
+    nextRefreshToken ?? "",
+    { renewal: true },
+  );
   log("refresh succeeded", {
     expiresIn: response?.data?.expires_in ?? response?.data?.data?.expires_in,
     rotated: Boolean(nextRefreshToken),

@@ -50,9 +50,15 @@ export async function captureAuthSession() {
   return token ? { token, generation: version, userId } : null;
 }
 export async function isAuthSessionCurrent(session) {
-  if (!session || session.generation !== generation) return false;
-  const token = await readToken();
-  return session.generation === generation && token === session.token;
+  if (!session) return false;
+  // A refresh swaps the access token without the session changing hands, so
+  // identity is the generation counter, not the token string. Comparing the
+  // token made every snapshot taken before a renewal look stale, and work
+  // already in flight — the profile photo write among it — was dropped on
+  // the floor. The counter still advances on sign-in and sign-out, which are
+  // the transitions that genuinely end a session.
+  if (session.generation !== generation) return false;
+  return (await readToken()) != null;
 }
 export async function isResourceSessionCurrent(session) {
   return isSameSessionSnapshot(session, await captureAuthSession());
@@ -62,13 +68,17 @@ export const runWithSession = (session, operation) => enqueue(async () => {
   return operation();
 });
 
-export async function saveAuthSession(token, user, userId, refreshToken) {
+export async function saveAuthSession(token, user, userId, refreshToken, options = {}) {
   const value = String(token || "");
   if (!value) throw new Error("Auth token is missing");
   const refreshValue = refreshToken === undefined ? undefined : String(refreshToken || "");
+  // A renewal keeps the session's identity: callers holding a snapshot from
+  // before it are still operating on the same account and must keep running.
+  const { renewal = false } = options;
 
   return enqueue(async () => {
-  changed();
+  if (renewal) listeners.forEach((listener) => listener());
+  else changed();
   if (Platform.OS === "web") {
     webSession.set(SECURE_KEYS.AUTH_TOKEN, value);
     if (refreshValue !== undefined) {
