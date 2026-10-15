@@ -373,6 +373,15 @@ const Login = ({ navigation, route }) => {
     // data.token is the access token under its original name, kept so older
     // builds still work. The refresh token is what lets this session outlive
     // the access token's expiry without sending the user back here.
+    if (__DEV__) {
+      // Shape only. Seeing expires_in here is how a tester confirms the
+      // server's token lifetime took effect without reading any token.
+      console.log("[Auth] signed in", {
+        expiresIn: data.expires_in,
+        hasRefreshToken: Boolean(data.refresh_token),
+        refreshExpiresIn: data.refresh_expires_in,
+      });
+    }
     await saveAuthSession(data.token, data.user || {}, userId, data.refresh_token ?? "");
 
     // สร้าง/ตรวจ Expert profile ก่อนเปิด session หลัก เพื่อให้หน้า Expert

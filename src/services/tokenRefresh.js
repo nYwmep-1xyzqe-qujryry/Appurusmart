@@ -34,17 +34,29 @@ const readTokens = (payload) => {
   };
 };
 
+// Development only, and never the token values: a refresh token is a
+// credential, and one copied out of a log is one the backend will treat as
+// stolen the next time it is used.
+const log = (event, detail) => {
+  if (__DEV__) console.log(`[Auth] ${event}`, detail ?? "");
+};
+
 async function performRefresh(session) {
   const refreshToken = await getRefreshToken();
   // Nothing to exchange: a session predating this feature, or one whose
   // refresh token was already spent and cleared.
-  if (!refreshToken) return false;
+  if (!refreshToken) {
+    log("no refresh token stored — session ends here");
+    return false;
+  }
+  log("refreshing session");
 
   let response;
   try {
     response = await refreshClient.post("/auth/refresh", { refresh_token: refreshToken });
   } catch (error) {
     const status = error?.response?.status;
+    log("refresh rejected", { status: status ?? error?.code ?? "network" });
     if (status === 401 || status === 422) {
       // The token is spent, revoked or malformed. Clearing it stops a later
       // 401 from replaying the same dead token, which the backend would read
@@ -61,18 +73,28 @@ async function performRefresh(session) {
   }
 
   const { accessToken, refreshToken: nextRefreshToken } = readTokens(response?.data);
-  if (!accessToken) return false;
+  if (!accessToken) {
+    log("refresh response carried no access token");
+    return false;
+  }
 
   // The session may have been replaced while the request was in flight — a
   // logout, or a different account signing in. Writing now would restore a
   // session the user already left.
-  if (!await isAuthSessionCurrent(session)) return false;
+  if (!await isAuthSessionCurrent(session)) {
+    log("session was replaced mid-refresh — discarding the new token");
+    return false;
+  }
 
   const userId = await getCurrentUserId();
   // Passing the rotated refresh token through the same write keeps the pair
   // consistent: the device never holds a new access token beside the spent
   // refresh token it can no longer use.
   await saveAuthSession(accessToken, undefined, userId ?? undefined, nextRefreshToken ?? "");
+  log("refresh succeeded", {
+    expiresIn: response?.data?.expires_in ?? response?.data?.data?.expires_in,
+    rotated: Boolean(nextRefreshToken),
+  });
   return true;
 }
 
