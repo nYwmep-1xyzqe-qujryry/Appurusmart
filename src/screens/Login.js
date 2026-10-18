@@ -212,7 +212,11 @@ const SSO_CAPTURE_SCRIPT = `
 
       if (token) {
         sendPayload({ token: token });
-        return true;
+        // Not 'true': that would stop the timer on the attempt. Only the
+        // app's acknowledgement ends the loop, checked at the top of the
+        // next tick — a posted message that Android dropped leaves the flag
+        // unset and the token is sent again.
+        return false;
       }
 
       try {
@@ -223,7 +227,7 @@ const SSO_CAPTURE_SCRIPT = `
             if (document.body) document.body.style.opacity = '0';
           }
           sendPayload(raw);
-          return true;
+          return false;
         }
       } catch (error) {}
 

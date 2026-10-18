@@ -88,6 +88,22 @@ async function main() {
     /window\.__uruSsoDelivered = true/.test(login),
     "the app must acknowledge the token so the retry stops",
   );
+  // The timer clears on capture() returning true, so capture() must report
+  // delivery rather than attempt. Returning true right after sendPayload
+  // stopped the loop on the first post — reinstating the original bug with
+  // the acknowledgement flag present but never consulted again.
+  const captureBody = /function capture\(\) \{[\s\S]*?\n    \}/.exec(login);
+  assert.ok(captureBody, "the capture function must be present");
+  const trueReturns = captureBody[0].match(/return true;/g) || [];
+  assert.strictEqual(
+    trueReturns.length,
+    1,
+    "capture() may report true only for the acknowledgement check, not for a send",
+  );
+  assert.ok(
+    /if \(window\.__uruSsoDelivered\) return true;/.test(captureBody[0]),
+    "capture() must report true on acknowledgement",
+  );
   // The retry predates a security pass that narrowed where a token may come
   // from; restoring it must not bring back the broader sweep.
   assert.ok(
