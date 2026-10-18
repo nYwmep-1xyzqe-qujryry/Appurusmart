@@ -160,23 +160,12 @@ async function main() {
     "the resolver must be told which SSO attempt is on screen",
   );
 
-  // Diagnostics exist because a release APK prints no __DEV__ logs. They must
-  // record what happened, never what was carried.
+  // The diagnostic trail was scaffolding for finding the Android failure and
+  // came out once the cause was confirmed on a device. Nothing should put it
+  // back without a reason: it logged navigation on every SSO event.
   assert.ok(
-    /ssoDiagnostics = \{ enabled: __DEV__/.test(login)
-      && /if \(!__DEV__ \|\| !ssoDiagnostics\.enabled\) return;/.test(login),
-    "the diagnostic trail must be unavailable in a release bundle",
-  );
-  const recorder = /const recordSsoDiagnostic[\s\S]*?\n\};/.exec(login);
-  assert.ok(recorder, "the diagnostic recorder must be present");
-  assert.ok(
-    !/search|hash|\bdata\b|token/i.test(recorder[0]),
-    "diagnostics must not record query strings, fragments, message bodies or tokens",
-  );
-  assert.ok(
-    /host: parsed \? parsed\.hostname : ""/.test(recorder[0])
-      && /path: parsed \? parsed\.pathname : ""/.test(recorder[0]),
-    "diagnostics record host and path only",
+    !/ssoDiagnostics|recordSsoDiagnostic/.test(login),
+    "the SSO diagnostic scaffolding must stay removed",
   );
 
   console.log("Session feedback tests OK");

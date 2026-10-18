@@ -110,31 +110,6 @@ const sanitizeSsoUrlForLog = (url = "") => {
   return parsed.toString();
 };
 
-// A release APK prints no __DEV__ logs, which is exactly where this failure
-// lives, so the SSO flow keeps a short in-memory trail that a development
-// build can surface. It records what happened and where, never what was
-// carried: host and path only — no query, no fragment, no message body, no
-// token. Opt-in, capped, and held in memory only.
-export const ssoDiagnostics = { enabled: __DEV__, events: [] };
-const SSO_DIAGNOSTIC_LIMIT = 40;
-
-const recordSsoDiagnostic = (category, url, detail = {}) => {
-  // __DEV__ is false in a release bundle, so the trail cannot be collected
-  // from a production APK — diagnosing one means installing a development
-  // build and reading sanitized logcat.
-  if (!__DEV__ || !ssoDiagnostics.enabled) return;
-  const parsed = parseUrl(url);
-  ssoDiagnostics.events.push({
-    at: Date.now(),
-    category,
-    host: parsed ? parsed.hostname : "",
-    path: parsed ? parsed.pathname : "",
-    blank: !url || String(url).toLowerCase() === "about:blank",
-    ...detail,
-  });
-  if (ssoDiagnostics.events.length > SSO_DIAGNOSTIC_LIMIT) ssoDiagnostics.events.shift();
-};
-
 const debugSso = (label, url) => {
   if (__DEV__) console.log(`[SSO] ${label}:`, sanitizeSsoUrlForLog(url));
 };
@@ -579,7 +554,6 @@ const Login = ({ navigation, route }) => {
     Keyboard.dismiss();
     ssoHandledRef.current = false;
     ssoGenerationRef.current += 1;
-    ssoDiagnostics.events.length = 0;
     clearSsoCallbackContext();
     ssoCurrentUrlRef.current = SSO_REDIRECT_URL;
     setHideSsoContent(false);
@@ -618,12 +592,6 @@ const Login = ({ navigation, route }) => {
     const source = resolveSsoMessage(eventUrl, {
       context: ssoCallbackContextRef.current,
       ssoGeneration: ssoGenerationRef.current,
-    });
-    recordSsoDiagnostic("message", eventUrl, {
-      kind: source.kind,
-      trusted: source.trusted,
-      usedContext: source.usedContext,
-      generation: ssoGenerationRef.current,
     });
     if (!source.trusted) {
       if (__DEV__) {
@@ -865,9 +833,6 @@ const Login = ({ navigation, route }) => {
                   );
                 }
                 clearSsoCallbackContext();
-                recordSsoDiagnostic("blocked", request.url, {
-                  generation: ssoGenerationRef.current,
-                });
                 return false;
               }
               ssoCurrentUrlRef.current = request.url;
@@ -875,10 +840,7 @@ const Login = ({ navigation, route }) => {
               // proof: arriving at a credential page sets it, and moving to any
               // other page clears it, so a context cannot outlive the page it
               // describes.
-              recordSsoDiagnostic("navigate", request.url, {
-                action: applySsoNavigationStart(request.url),
-                ssoGeneration: ssoGenerationRef.current,
-              });
+              applySsoNavigationStart(request.url);
               // ดัก token จาก URL ตรงๆ (Android มักไม่ fire onMessage)
               const urlToken = extractTokenFromUrl(request.url);
               if (urlToken && !ssoHandledRef.current) {
@@ -904,10 +866,7 @@ const Login = ({ navigation, route }) => {
               const url = event.nativeEvent?.url;
               debugSso("load start", url);
               ssoCurrentUrlRef.current = url || ssoCurrentUrlRef.current;
-              recordSsoDiagnostic("load-start", url, {
-                action: applySsoNavigationStart(url),
-                ssoGeneration: ssoGenerationRef.current,
-              });
+              applySsoNavigationStart(url);
               setSsoPageLoading(true);
               const urlToken = extractTokenFromUrl(url);
               if (urlToken && !ssoHandledRef.current) {
@@ -929,9 +888,6 @@ const Login = ({ navigation, route }) => {
               // Deliberately does not touch callback context: this fires with
               // the url of the page that finished, and the identity
               // provider's can arrive after the callback page has started.
-              recordSsoDiagnostic("load-end", url, {
-                ssoGeneration: ssoGenerationRef.current,
-              });
               setSsoPageLoading(false);
               const urlToken = extractTokenFromUrl(url);
               if (urlToken && !ssoHandledRef.current) {
