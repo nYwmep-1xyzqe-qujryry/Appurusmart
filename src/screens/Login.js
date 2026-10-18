@@ -39,6 +39,9 @@ import {
   extractSsoToken,
   isTrustedSsoCallbackUrl,
   isTrustedSsoMessageUrl as isTrustedSsoMessageSourceUrl,
+  resolveSsoMessageSource,
+  nextSsoCallbackContext,
+  isSsoCallbackContextLive,
 } from "../utils/ssoSecurity";
 
 const API_URL = API_BASE_URL;
@@ -107,6 +110,31 @@ const sanitizeSsoUrlForLog = (url = "") => {
   return parsed.toString();
 };
 
+// A release APK prints no __DEV__ logs, which is exactly where this failure
+// lives, so the SSO flow keeps a short in-memory trail that a development
+// build can surface. It records what happened and where, never what was
+// carried: host and path only — no query, no fragment, no message body, no
+// token. Opt-in, capped, and held in memory only.
+export const ssoDiagnostics = { enabled: __DEV__, events: [] };
+const SSO_DIAGNOSTIC_LIMIT = 40;
+
+const recordSsoDiagnostic = (category, url, detail = {}) => {
+  // __DEV__ is false in a release bundle, so the trail cannot be collected
+  // from a production APK — diagnosing one means installing a development
+  // build and reading sanitized logcat.
+  if (!__DEV__ || !ssoDiagnostics.enabled) return;
+  const parsed = parseUrl(url);
+  ssoDiagnostics.events.push({
+    at: Date.now(),
+    category,
+    host: parsed ? parsed.hostname : "",
+    path: parsed ? parsed.pathname : "",
+    blank: !url || String(url).toLowerCase() === "about:blank",
+    ...detail,
+  });
+  if (ssoDiagnostics.events.length > SSO_DIAGNOSTIC_LIMIT) ssoDiagnostics.events.shift();
+};
+
 const debugSso = (label, url) => {
   if (__DEV__) console.log(`[SSO] ${label}:`, sanitizeSsoUrlForLog(url));
 };
@@ -135,6 +163,14 @@ const isTrustedSsoNavigationUrl = (url = "") => {
 const isTrustedSsoMessageUrl = (url = "") => {
   return isTrustedSsoMessageSourceUrl(url, getSsoBackendHost(), __DEV__, getSsoBackendPort());
 };
+
+const resolveSsoMessage = (eventUrl, context) => resolveSsoMessageSource(
+  eventUrl,
+  context,
+  getSsoBackendHost(),
+  __DEV__,
+  getSsoBackendPort(),
+);
 
 const isSsoCallbackUrl = (url = "") =>
   isTrustedSsoCallbackUrl(url, getSsoBackendHost(), __DEV__, getSsoBackendPort());
@@ -263,6 +299,33 @@ const Login = ({ navigation, route }) => {
   const ssoTimeoutRef = useRef(null);
   const ssoHandledRef = useRef(false);
   const ssoCurrentUrlRef = useRef(SSO_REDIRECT_URL);
+  // Proof that the WebView is sitting on a backend credential page, which is
+  // what lets an origin-only or blank message source be believed. Set from
+  // top-level navigation only, and stamped with the SSO attempt it belongs to
+  // so an event from an abandoned attempt cannot authorize a later one.
+  const ssoGenerationRef = useRef(0);
+  const ssoCallbackContextRef = useRef(null);
+
+  const clearSsoCallbackContext = () => { ssoCallbackContextRef.current = null; };
+
+  // The single place navigation may change the proof. Blank events leave it
+  // untouched; a credential page sets it; anything else revokes it.
+  // Only a navigation-start event may change authorization. onLoadEnd is
+  // deliberately excluded: it fires with the url of the page that finished,
+  // and the identity provider's can land after the callback page has already
+  // started, which would clear the proof the incoming message needs.
+  const applySsoNavigationStart = (url) => {
+    const next = nextSsoCallbackContext(
+      url,
+      ssoCallbackContextRef.current,
+      ssoGenerationRef.current,
+      getSsoBackendHost(),
+      __DEV__,
+      getSsoBackendPort(),
+    );
+    ssoCallbackContextRef.current = next.context;
+    return next.action;
+  };
   const ssoAccessToken = getSsoAccessTokenFromRoute(route);
 
   // ── Entrance animations ──
@@ -515,6 +578,9 @@ const Login = ({ navigation, route }) => {
   const openSsoLogin = () => {
     Keyboard.dismiss();
     ssoHandledRef.current = false;
+    ssoGenerationRef.current += 1;
+    ssoDiagnostics.events.length = 0;
+    clearSsoCallbackContext();
     ssoCurrentUrlRef.current = SSO_REDIRECT_URL;
     setHideSsoContent(false);
     setSsoPageLoading(true);
@@ -535,6 +601,7 @@ const Login = ({ navigation, route }) => {
   };
 
   const closeSsoLogin = () => {
+    clearSsoCallbackContext();
     if (ssoTimeoutRef.current) {
       clearTimeout(ssoTimeoutRef.current);
       ssoTimeoutRef.current = null;
@@ -547,15 +614,31 @@ const Login = ({ navigation, route }) => {
   const handleSsoMessage = async (event) => {
     if (ssoHandledRef.current) return;
 
-    const sourceUrl = event.nativeEvent?.url || ssoCurrentUrlRef.current || "";
-    if (!isTrustedSsoMessageUrl(sourceUrl)) {
+    const eventUrl = event.nativeEvent?.url ?? "";
+    const source = resolveSsoMessage(eventUrl, {
+      context: ssoCallbackContextRef.current,
+      ssoGeneration: ssoGenerationRef.current,
+    });
+    recordSsoDiagnostic("message", eventUrl, {
+      kind: source.kind,
+      trusted: source.trusted,
+      usedContext: source.usedContext,
+      generation: ssoGenerationRef.current,
+    });
+    if (!source.trusted) {
       if (__DEV__) {
         console.warn(
           "[SSO] rejected WebView message from:",
-          sanitizeSsoUrlForLog(sourceUrl),
+          sanitizeSsoUrlForLog(source.url),
         );
       }
       return;
+    }
+    if (__DEV__ && source.viaFallback) {
+      console.log(
+        "[SSO] blank message origin resolved to:",
+        sanitizeSsoUrlForLog(source.url),
+      );
     }
 
     const payload = parseSsoMessage(event.nativeEvent?.data);
@@ -781,9 +864,21 @@ const Login = ({ navigation, route }) => {
                     sanitizeSsoUrlForLog(request.url),
                   );
                 }
+                clearSsoCallbackContext();
+                recordSsoDiagnostic("blocked", request.url, {
+                  generation: ssoGenerationRef.current,
+                });
                 return false;
               }
               ssoCurrentUrlRef.current = request.url;
+              // Navigation is the only thing that may establish or revoke the
+              // proof: arriving at a credential page sets it, and moving to any
+              // other page clears it, so a context cannot outlive the page it
+              // describes.
+              recordSsoDiagnostic("navigate", request.url, {
+                action: applySsoNavigationStart(request.url),
+                ssoGeneration: ssoGenerationRef.current,
+              });
               // ดัก token จาก URL ตรงๆ (Android มักไม่ fire onMessage)
               const urlToken = extractTokenFromUrl(request.url);
               if (urlToken && !ssoHandledRef.current) {
@@ -809,6 +904,10 @@ const Login = ({ navigation, route }) => {
               const url = event.nativeEvent?.url;
               debugSso("load start", url);
               ssoCurrentUrlRef.current = url || ssoCurrentUrlRef.current;
+              recordSsoDiagnostic("load-start", url, {
+                action: applySsoNavigationStart(url),
+                ssoGeneration: ssoGenerationRef.current,
+              });
               setSsoPageLoading(true);
               const urlToken = extractTokenFromUrl(url);
               if (urlToken && !ssoHandledRef.current) {
@@ -827,6 +926,12 @@ const Login = ({ navigation, route }) => {
               const url = event.nativeEvent?.url;
               debugSso("load end", url);
               ssoCurrentUrlRef.current = url || ssoCurrentUrlRef.current;
+              // Deliberately does not touch callback context: this fires with
+              // the url of the page that finished, and the identity
+              // provider's can arrive after the callback page has started.
+              recordSsoDiagnostic("load-end", url, {
+                ssoGeneration: ssoGenerationRef.current,
+              });
               setSsoPageLoading(false);
               const urlToken = extractTokenFromUrl(url);
               if (urlToken && !ssoHandledRef.current) {

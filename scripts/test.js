@@ -153,6 +153,138 @@ assert.equal(
   null,
   "tokens on non-callback paths are rejected",
 );
+
+// What Android actually delivers as a message source, and what each form is
+// allowed to prove. react-native-webview 13.16.1 passes
+// sourceOrigin.toString() (RNCWebView.java:256) — an origin with no path —
+// and the same field can arrive empty or as "about:blank". None of those are
+// credential URLs, so the only valid SSO message was being discarded.
+//
+// An origin proves the page is on the backend, not that it is the callback,
+// so it is believed only while navigation has established that the WebView is
+// on a credential page in this same SSO attempt.
+{
+  const HOST = "urusmart.uru.ac.th";
+  const CALLBACK = "https://urusmart.uru.ac.th/auth/callback?code=abc";
+  const ENTRY = "https://urusmart.uru.ac.th/auth/redirect";
+  const ORIGIN = "https://urusmart.uru.ac.th";
+  const IDP = "https://uruportal.uru.ac.th/oauth_login?client_id=urusmart";
+
+  // { context, ssoGeneration, navigationGeneration } is what the screen holds.
+  const ctx = (url, ssoGeneration = 1) => ({
+    context: url === null ? null : { url, ssoGeneration },
+    ssoGeneration: 1,
+  });
+  const resolve = (eventUrl, context) => ssoSecurity.resolveSsoMessageSource(eventUrl, context, HOST);
+
+  // A credential URL stands alone.
+  assert.equal(resolve(CALLBACK, null).trusted, true, "a full callback url needs no context");
+  assert.equal(resolve(CALLBACK, null).kind, "url", "a full callback url is classified as such");
+  assert.equal(resolve(ENTRY, null).trusted, true, "the entry path is a credential url");
+
+  // Origin-only: the Android case. Valid only with live context.
+  assert.equal(resolve(ORIGIN, ctx(CALLBACK)).trusted, true, "an origin with callback context is accepted");
+  assert.equal(resolve(ORIGIN, ctx(CALLBACK)).kind, "origin", "the origin case is reported");
+  assert.equal(resolve(ORIGIN, ctx(CALLBACK)).usedContext, true, "the origin case records that it leaned on context");
+  assert.equal(resolve(ORIGIN, null).trusted, false, "an origin alone proves nothing");
+  assert.equal(resolve(ORIGIN, ctx(IDP)).trusted, false, "context must itself be a credential page");
+  assert.equal(resolve(ORIGIN, ctx("https://urusmart.uru.ac.th/profile")).trusted, false, "a non-credential backend page is not context");
+
+  // Blank sources.
+  assert.equal(resolve("about:blank", ctx(CALLBACK)).trusted, true, "about:blank with context is accepted");
+  assert.equal(resolve("", ctx(CALLBACK)).trusted, true, "an empty source with context is accepted");
+  assert.equal(resolve("ABOUT:BLANK", ctx(CALLBACK)).trusted, true, "the blank check ignores case");
+  assert.equal(resolve("about:blank", null).trusted, false, "about:blank without context is rejected");
+  assert.equal(resolve("", null).trusted, false, "an empty source without context is rejected");
+
+  // A stale attempt must not authorize the current one.
+  assert.equal(resolve(ORIGIN, ctx(CALLBACK, 2, 1)).trusted, false, "context from an earlier SSO attempt is refused");
+  assert.equal(resolve("about:blank", ctx(CALLBACK, 2, 1)).trusted, false, "a blank source cannot use stale context");
+
+  // Hosts that may never hand this screen a token.
+  assert.equal(resolve(IDP, ctx(CALLBACK)).trusted, false, "the identity provider is rejected outright");
+  assert.equal(resolve("https://uruportal.uru.ac.th", ctx(CALLBACK)).trusted, false, "another uru.ac.th origin is rejected");
+  assert.equal(resolve("https://evil.example.test/auth/callback", ctx(CALLBACK)).trusted, false, "an external host is rejected");
+  assert.equal(resolve("https://evil.example.test", ctx(CALLBACK)).trusted, false, "an external origin is rejected");
+  assert.equal(resolve("http://urusmart.uru.ac.th/auth/callback", ctx(CALLBACK)).trusted, false, "http is rejected when https is required");
+  assert.equal(
+    ssoSecurity.resolveSsoMessageSource(ORIGIN, ctx(CALLBACK), HOST, false, "8443").trusted,
+    false,
+    "the wrong port is rejected",
+  );
+
+  // An "origin" carrying a payload is not an origin.
+  assert.equal(ssoSecurity.isTrustedSsoOrigin(ORIGIN, HOST), true, "a bare origin is recognised");
+  assert.equal(ssoSecurity.isTrustedSsoOrigin(CALLBACK, HOST), false, "a url with a path is not an origin");
+  assert.equal(ssoSecurity.isTrustedSsoOrigin("https://urusmart.uru.ac.th/?token=x", HOST), false, "an origin with a query is refused");
+  assert.equal(ssoSecurity.isTrustedSsoOrigin("https://urusmart.uru.ac.th/#token=x", HOST), false, "an origin with a fragment is refused");
+
+  // Android reports an opaque origin — a sandboxed or cross-origin frame — as
+  // the literal "null". That names a sender this screen must not believe, so
+  // it is not an absent origin and must not borrow the context.
+  assert.equal(resolve("null", ctx(CALLBACK)).trusted, false, "an opaque origin is rejected");
+  assert.equal(resolve("null", ctx(CALLBACK)).kind, "untrusted", "an opaque origin is not classified as blank");
+  assert.equal(resolve("undefined", ctx(CALLBACK)).trusted, false, "the string 'undefined' is rejected");
+  assert.equal(resolve("file:///android_asset/x.html", ctx(CALLBACK)).trusted, false, "a file url is rejected");
+  assert.equal(resolve("content://com.example/x", ctx(CALLBACK)).trusted, false, "a content url is rejected");
+
+  // Every branch answers with the same shape, so a caller cannot read a
+  // missing field as false.
+  for (const [src, context] of [[CALLBACK, null], [ORIGIN, ctx(CALLBACK)], ["about:blank", ctx(CALLBACK)], ["about:blank", null], [IDP, ctx(CALLBACK)]]) {
+    const r = resolve(src, context);
+    assert.deepEqual(
+      Object.keys(r).sort(),
+      ["generation", "kind", "trusted", "url", "usedContext", "viaFallback"],
+      "every resolver branch returns the same shape",
+    );
+    assert.equal(typeof r.url, "string", "the resolved url is always a string");
+  }
+  assert.equal(resolve(ORIGIN, ctx(CALLBACK)).url, CALLBACK, "an accepted origin resolves to the context page");
+  assert.equal(resolve("about:blank", ctx(CALLBACK)).url, CALLBACK, "an accepted blank resolves to the context page");
+
+  // Navigation decides the context: blank events are not evidence of leaving.
+  const nav = (url, current, ssoGeneration = 1) =>
+    ssoSecurity.nextSsoCallbackContext(url, current, ssoGeneration, HOST);
+  const live = { url: CALLBACK, ssoGeneration: 1 };
+
+  assert.equal(nav(CALLBACK, null).action, "set", "arriving at the callback sets context");
+  assert.equal(nav(ENTRY, null).action, "set", "the entry path sets context");
+  assert.equal(nav(CALLBACK, null).context.ssoGeneration, 1, "context carries the SSO generation");
+  assert.equal(nav("", live).action, "ignore", "an empty navigation url is not evidence of anything");
+  assert.equal(nav("", live).context, live, "an empty navigation url leaves context intact");
+  assert.equal(nav("about:blank", live).action, "ignore", "about:blank between documents leaves context intact");
+  assert.equal(nav("about:blank", live).context, live, "about:blank must not erase valid context");
+  assert.equal(nav(IDP, live).action, "clear", "navigating to the identity provider revokes context");
+  assert.equal(nav("https://urusmart.uru.ac.th/profile", live).action, "clear", "a non-credential backend page revokes context");
+  assert.equal(nav("https://evil.example.test/auth/callback", live).action, "clear", "an external host revokes context");
+  assert.equal(nav("not a url", live).action, "clear", "a malformed url revokes context");
+  assert.equal(nav(IDP, live).context, null, "a revoked context is emptied");
+
+  // There is no event-ordering guard, and none is possible from JS: a counter
+  // stamped when the React callback arrives records when the app heard about
+  // a navigation, not when the WebView began it, so a delayed event would
+  // receive a newer number than the context it should not touch. Ordering is
+  // handled by restricting which callbacks may write context at all —
+  // navigation-start only, never onLoadEnd, which carries the url of the page
+  // that finished (RNCWebViewClient.java:53).
+  assert.equal(nav(IDP, live).action, "clear", "a navigation away from the callback revokes context");
+
+  // Liveness rests on the SSO generation, which the app itself controls.
+  const ctxGen1 = { url: CALLBACK, ssoGeneration: 1 };
+  assert.equal(ssoSecurity.isSsoCallbackContextLive(ctxGen1, 1, HOST), true, "context is live within its attempt");
+  assert.equal(ssoSecurity.isSsoCallbackContextLive(ctxGen1, 2, HOST), false, "context dies when the attempt changes");
+  assert.equal(ssoSecurity.isSsoCallbackContextLive(null, 1, HOST), false, "no context is not live context");
+  assert.equal(
+    ssoSecurity.isSsoCallbackContextLive({ url: IDP, ssoGeneration: 1 }, 1, HOST),
+    false,
+    "context must still name a credential page",
+  );
+
+  // Three attempts in a row: a message carrying the first attempt's context
+  // must not start a login in the third.
+  const stale = { context: { url: CALLBACK, ssoGeneration: 1 }, ssoGeneration: 3 };
+  assert.equal(resolve(ORIGIN, stale).trusted, false, "context from two attempts ago is refused");
+}
 assert.equal(profilePdfSanitizer.isSafePdfResourceUrl("https://cdn.example.test/photo.webp", { image: true }), true);
 assert.equal(profilePdfSanitizer.isSafePdfResourceUrl("javascript:alert(1)", { image: true }), false);
 assert.equal(profilePdfSanitizer.isSafePdfResourceUrl("data:text/html;base64,SGk=", { image: true }), false);

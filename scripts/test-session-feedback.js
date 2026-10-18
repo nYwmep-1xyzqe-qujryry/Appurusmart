@@ -111,6 +111,74 @@ async function main() {
     "the capture script must not read tokens out of web storage",
   );
 
+  // The context is proof that the WebView is on a credential page, so only
+  // navigation may set it and leaving such a page must revoke it. A generic
+  // "last url seen" ref cannot serve: it keeps pointing at the identity
+  // provider for most of the flow.
+  // One helper decides what navigation does to the context, so the three
+  // callbacks cannot drift apart — an earlier version cleared context inline
+  // and an about:blank event between documents erased the proof a message was
+  // about to need. The decision itself is tested against ssoSecurity.
+  // onShouldStartLoadWithRequest, onLoadStart and onLoadEnd — three uses
+  // besides the definition.
+  // Authorization changes on navigation start only. onLoadEnd fires with the
+  // url of the page that finished, so the identity provider's can arrive
+  // after the callback page has started — letting it write context would
+  // clear the proof the incoming message needs. The decision logic itself is
+  // tested against ssoSecurity; this only pins which callbacks may call it.
+  assert.strictEqual(
+    (login.match(/\bapplySsoNavigationStart\(/g) || []).length,
+    2,
+    "only onShouldStartLoadWithRequest and onLoadStart may change callback context",
+  );
+  const loadEnd = /onLoadEnd=\{\(event\) => \{[\s\S]*?\n            \}\}/.exec(login);
+  assert.ok(loadEnd, "the onLoadEnd handler must be present");
+  assert.ok(
+    !/applySsoNavigationStart/.test(loadEnd[0]),
+    "onLoadEnd must not change authorization context",
+  );
+  assert.ok(
+    !/setSsoCallbackContext|isSsoCredentialUrl/.test(login),
+    "navigation must not set context through an ad-hoc path",
+  );
+  assert.ok(
+    /ssoGenerationRef\.current \+= 1;[\s\S]{0,200}?clearSsoCallbackContext\(\);/.test(login),
+    "a new SSO attempt must take a fresh generation and drop stale context",
+  );
+  // No synthetic event-ordering counter: one stamped when the React callback
+  // arrives cannot tell a delayed old event from a current one.
+  assert.ok(
+    !/navigationGeneration/.test(login),
+    "ordering must not rest on a counter the native event does not carry",
+  );
+  assert.ok(
+    /const closeSsoLogin = \(\) => \{\s*\n\s*clearSsoCallbackContext\(\);/.test(login),
+    "closing the SSO modal must clear the callback context",
+  );
+  assert.ok(
+    /context: ssoCallbackContextRef\.current,\s*\n\s*ssoGeneration: ssoGenerationRef\.current,/.test(login),
+    "the resolver must be told which SSO attempt is on screen",
+  );
+
+  // Diagnostics exist because a release APK prints no __DEV__ logs. They must
+  // record what happened, never what was carried.
+  assert.ok(
+    /ssoDiagnostics = \{ enabled: __DEV__/.test(login)
+      && /if \(!__DEV__ \|\| !ssoDiagnostics\.enabled\) return;/.test(login),
+    "the diagnostic trail must be unavailable in a release bundle",
+  );
+  const recorder = /const recordSsoDiagnostic[\s\S]*?\n\};/.exec(login);
+  assert.ok(recorder, "the diagnostic recorder must be present");
+  assert.ok(
+    !/search|hash|\bdata\b|token/i.test(recorder[0]),
+    "diagnostics must not record query strings, fragments, message bodies or tokens",
+  );
+  assert.ok(
+    /host: parsed \? parsed\.hostname : ""/.test(recorder[0])
+      && /path: parsed \? parsed\.pathname : ""/.test(recorder[0]),
+    "diagnostics record host and path only",
+  );
+
   console.log("Session feedback tests OK");
 }
 
