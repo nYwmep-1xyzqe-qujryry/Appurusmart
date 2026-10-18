@@ -1030,8 +1030,15 @@ export async function removeTokenFromBackend(token, session = null, { clearLocal
   session ??= await captureAuthSession();
   if (!session) return false;
   try {
+    // skipAuthRefresh because this runs during logout: renewing the session
+    // here spends the refresh token that logout is about to hand the server
+    // for revocation, so the server would be told to revoke a token the
+    // device no longer holds and the replacement would outlive the sign-out.
     await api.delete("/push-token", {
-      data: getDeletePushTokenPayload(token), authSession: session, suppressAuthRedirect: true,
+      data: getDeletePushTokenPayload(token),
+      authSession: session,
+      suppressAuthRedirect: true,
+      skipAuthRefresh: true,
     });
     return true;
   } catch {

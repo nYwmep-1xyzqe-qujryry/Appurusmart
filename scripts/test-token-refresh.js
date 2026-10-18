@@ -192,6 +192,30 @@ async function main() {
     );
   }
 
+  // 8. Logout must not renew. Every request it makes carries skipAuthRefresh,
+  //    because a renewal there spends the refresh token logout is about to
+  //    hand the server for revocation — leaving a live token behind on a
+  //    device that has signed out.
+  {
+    const fs = require("fs");
+    const logout = fs.readFileSync(
+      path.join(__dirname, "..", "src", "hook", "useCurrentUser.js"), "utf8",
+    );
+    assert.ok(
+      /skipAuthRefresh: true/.test(logout),
+      "the logout request must not trigger a refresh",
+    );
+    const notifications = fs.readFileSync(
+      path.join(__dirname, "..", "src", "services", "notificationService.js"), "utf8",
+    );
+    const deleteCall = /api\.delete\("\/push-token",[\s\S]{0,260}?\}\);/.exec(notifications);
+    assert.ok(deleteCall, "the push-token delete call must be present");
+    assert.ok(
+      /skipAuthRefresh: true/.test(deleteCall[0]),
+      "removing the push token runs during logout and must not refresh either",
+    );
+  }
+
   console.log("Token refresh tests OK");
 }
 
