@@ -99,9 +99,19 @@ export async function saveAuthSession(token, user, userId, refreshToken, options
     // leaving the device with an access token it cannot renew.
     if (refreshValue !== undefined) {
       if (refreshValue) {
-        await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, refreshValue, {
-          keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-        });
+        // A keychain write can fail on its own — a locked device, a vendor
+        // keystore that refuses the item — and letting that throw would take
+        // the whole sign-in down with it even though the access token is
+        // already stored. Losing the refresh token costs renewal, not the
+        // session: the user stays signed in and is asked to sign in again
+        // when the access token eventually lapses.
+        try {
+          await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, refreshValue, {
+            keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+          });
+        } catch (_) {
+          await SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN).catch(() => {});
+        }
       } else {
         await SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN).catch(() => {});
       }
