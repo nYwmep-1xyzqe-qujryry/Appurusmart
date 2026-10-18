@@ -57,7 +57,14 @@ api.interceptors.response.use(
     await handleUnauthorized(error);
 
     if (__DEV__ && !error.config?.suppressErrorLog) {
-      console.warn(`[API] ${errorLabel} ${error.config?.method?.toUpperCase()} ${error.config?.url}`, error.message);
+      // hasAuthorization distinguishes a token the server rejected from a
+      // request that carried none — the same 401 either way, but a different
+      // bug. The header's value is a credential and is never logged.
+      console.warn(
+        `[API] ${errorLabel} ${error.config?.method?.toUpperCase()} ${error.config?.url}`,
+        error.message,
+        { hasAuthorization: Boolean(error.config?.headers?.Authorization) },
+      );
     }
 
     return Promise.reject(error);

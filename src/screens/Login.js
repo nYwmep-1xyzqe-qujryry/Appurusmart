@@ -168,12 +168,15 @@ const HIDE_SSO_CALLBACK_SCRIPT = `
 // would accept a token planted by any script that ran on that origin.
 const SSO_CAPTURE_SCRIPT = `
   (function () {
-    var sent = false;
     var attempts = 0;
 
     function sendPayload(value) {
-      if (sent || !value || !window.ReactNativeWebView) return;
-      sent = true;
+      // Acknowledged, not merely attempted. Latching on the call instead
+      // would defeat the retry in the very case it exists for: Android can
+      // accept postMessage and drop the message, raising nothing, so a send
+      // that returned is not a send that arrived. The app sets
+      // window.__uruSsoDelivered once it has the token.
+      if (window.__uruSsoDelivered || !value || !window.ReactNativeWebView) return;
       window.ReactNativeWebView.postMessage(
         typeof value === 'string' ? value : JSON.stringify(value)
       );
@@ -194,7 +197,7 @@ const SSO_CAPTURE_SCRIPT = `
     }
 
     function capture() {
-      if (sent) return true;
+      if (window.__uruSsoDelivered) return true;
       attempts += 1;
 
       var href = String(window.location.href || '');
@@ -557,6 +560,12 @@ const Login = ({ navigation, route }) => {
     }
     if (!payload?.token) return;
 
+    // Tells the page's retry loop the token arrived, so it stops resending.
+    // Without this the loop would keep posting for its full thirty seconds
+    // even on a successful sign-in.
+    ssoWebViewRef.current?.injectJavaScript(
+      "window.__uruSsoDelivered = true; true;",
+    );
     ssoHandledRef.current = true;
     if (ssoTimeoutRef.current) {
       clearTimeout(ssoTimeoutRef.current);

@@ -77,9 +77,16 @@ async function main() {
     /var timer = setInterval\(/.test(login) && /attempts >= 120/.test(login),
     "the SSO capture script must keep retrying until the token is delivered",
   );
+  // The loop must stop on acknowledgement, not on having attempted a send:
+  // Android can accept postMessage and drop the message without raising, so
+  // latching on the call would abandon the retry in the one case it is for.
   assert.ok(
-    /if \(sent \|\| !value/.test(login),
-    "the retry must send the token only once",
+    /if \(window\.__uruSsoDelivered \|\| !value/.test(login),
+    "the retry must keep sending until the app confirms it has the token",
+  );
+  assert.ok(
+    /window\.__uruSsoDelivered = true/.test(login),
+    "the app must acknowledge the token so the retry stops",
   );
   // The retry predates a security pass that narrowed where a token may come
   // from; restoring it must not bring back the broader sweep.
