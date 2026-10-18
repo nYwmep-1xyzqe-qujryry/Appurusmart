@@ -156,44 +156,83 @@ const HIDE_SSO_CALLBACK_SCRIPT = `
   true;
 `;
 
+// Android's WebView routinely drops the first postMessage: the bridge is not
+// always ready when the callback page runs its script, and the message is
+// discarded with no error. The page is polled until the token is through, or
+// for thirty seconds, which is what made Android sign-in reliable before. The
+// guard keeps it to a single send.
+//
+// Token sources stay deliberately narrow — the query string, the fragment and
+// a JSON body — so this reads only what the backend put on its own callback
+// page. An earlier version also swept localStorage and sessionStorage, which
+// would accept a token planted by any script that ran on that origin.
 const SSO_CAPTURE_SCRIPT = `
   (function () {
+    var sent = false;
+    var attempts = 0;
+
     function sendPayload(value) {
-      if (!value || !window.ReactNativeWebView) return;
+      if (sent || !value || !window.ReactNativeWebView) return;
+      sent = true;
       window.ReactNativeWebView.postMessage(
         typeof value === 'string' ? value : JSON.stringify(value)
       );
     }
 
-    var href = String(window.location.href || '');
-    var isCallback =
-      href.indexOf('/auth/callback') !== -1 ||
-      href.indexOf('token=') !== -1 ||
-      href.indexOf('access_token=') !== -1;
+    function readTokenFromParams(raw) {
+      try {
+        var params = new URLSearchParams(raw || '');
+        return (
+          params.get('token') ||
+          params.get('access_token') ||
+          params.get('ssoToken') ||
+          params.get('passportToken')
+        );
+      } catch (error) {
+        return null;
+      }
+    }
 
-    try {
-      var params = new URLSearchParams(window.location.search || '');
+    function capture() {
+      if (sent) return true;
+      attempts += 1;
+
+      var href = String(window.location.href || '');
+      var isCallback =
+        href.indexOf('/auth/callback') !== -1 ||
+        href.indexOf('token=') !== -1 ||
+        href.indexOf('access_token=') !== -1;
+
       var token =
-        params.get('token') ||
-        params.get('access_token') ||
-        params.get('ssoToken') ||
-        params.get('passportToken');
+        readTokenFromParams(window.location.search) ||
+        readTokenFromParams(String(window.location.hash || '').replace(/^#/, ''));
+
       if (token) {
         sendPayload({ token: token });
         return true;
       }
-    } catch (error) {}
 
-    try {
-      var raw = (document.body && document.body.innerText || '').trim();
-      if (raw && raw.charAt(0) === '{' && raw.indexOf('"token"') !== -1) {
-        if (!isCallback) {
-          document.documentElement.style.opacity = '0';
-          if (document.body) document.body.style.opacity = '0';
+      try {
+        var raw = (document.body && document.body.innerText || '').trim();
+        if (raw && raw.charAt(0) === '{' && raw.indexOf('"token"') !== -1) {
+          if (!isCallback) {
+            document.documentElement.style.opacity = '0';
+            if (document.body) document.body.style.opacity = '0';
+          }
+          sendPayload(raw);
+          return true;
         }
-        sendPayload(raw);
+      } catch (error) {}
+
+      return false;
+    }
+
+    capture();
+    var timer = setInterval(function () {
+      if (capture() || attempts >= 120) {
+        clearInterval(timer);
       }
-    } catch (error) {}
+    }, 250);
 
     return true;
   })();

@@ -69,6 +69,25 @@ async function main() {
     "the forced 401 must run handleUnauthorized, not just abort the request",
   );
 
+  // Android's WebView drops the first postMessage often enough that a single
+  // send is not reliable: without the retry the callback never reaches the
+  // app and sign-in hangs until the 45s timeout. This has regressed once
+  // already, silently, as part of an unrelated change.
+  assert.ok(
+    /var timer = setInterval\(/.test(login) && /attempts >= 120/.test(login),
+    "the SSO capture script must keep retrying until the token is delivered",
+  );
+  assert.ok(
+    /if \(sent \|\| !value/.test(login),
+    "the retry must send the token only once",
+  );
+  // The retry predates a security pass that narrowed where a token may come
+  // from; restoring it must not bring back the broader sweep.
+  assert.ok(
+    !/(local|session)Storage\.getItem/.test(login),
+    "the capture script must not read tokens out of web storage",
+  );
+
   console.log("Session feedback tests OK");
 }
 
