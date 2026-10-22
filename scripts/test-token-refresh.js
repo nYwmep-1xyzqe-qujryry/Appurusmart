@@ -216,6 +216,35 @@ async function main() {
     );
   }
 
+  // 9. The retry after a successful refresh must carry the renewed token.
+  //    Backend records showed the opposite: refresh returned 200 and a new
+  //    token pair, the app never used the new refresh token, and the session
+  //    ended at the login screen. A retry that re-sends the replaced token —
+  //    or, with the snapshot emptied, no Authorization at all — answers 401
+  //    again and ends a session the server had just renewed.
+  {
+    const fs = require("fs");
+    for (const file of ["api.js", "infoApi.js"]) {
+      const source = fs.readFileSync(
+        path.join(__dirname, "..", "src", "services", file), "utf8",
+      );
+      const retry = /if \(await tryRefreshForRequest\(error\)\) \{[\s\S]*?\n    \}/.exec(source);
+      assert.ok(retry, `${file} must retry after a refresh`);
+      assert.ok(
+        /Authorization: _staleAuth/.test(retry[0]) && /\n\s*headers,/.test(retry[0]),
+        `${file} must strip the stale header and send the stripped set`,
+      );
+      assert.ok(
+        /sessionSnapshot: false/.test(retry[0]),
+        `${file} must clear the snapshot so the retry picks up the renewed session`,
+      );
+      assert.ok(
+        /skipAuthRefresh: true/.test(retry[0]),
+        `${file} must not refresh again on the retry`,
+      );
+    }
+  }
+
   console.log("Token refresh tests OK");
 }
 

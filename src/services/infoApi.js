@@ -75,7 +75,22 @@ infoApi.interceptors.response.use(
     // is renewed the same way. Without this the e-research screens would be
     // the one place a live session still read as signed out.
     if (await tryRefreshForRequest(error)) {
-      return infoApi.request({ ...error.config, authSession: null, skipAuthRefresh: true });
+      // The retry must carry the renewed token, and nothing of the attempt
+      // that failed. authSession: null alone was not enough: a request made
+      // with sessionSnapshot keeps using its own captured session, so the
+      // retry either re-sent the token the refresh had just replaced or, with
+      // the snapshot emptied, sent no Authorization header at all. Either way
+      // it answered 401 again and ended a session the server had just
+      // renewed. Dropping the stale header and the snapshot flag lets the
+      // request interceptor attach the current token.
+      const { Authorization: _staleAuth, ...headers } = error.config.headers ?? {};
+      return infoApi.request({
+        ...error.config,
+        headers,
+        authSession: null,
+        sessionSnapshot: false,
+        skipAuthRefresh: true,
+      });
     }
     await handleUnauthorized(error);
     if (__DEV__ && !error.config?.suppressErrorLog) {
