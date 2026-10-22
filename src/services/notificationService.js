@@ -457,11 +457,19 @@ async function fetchNotificationInbox(session) {
     // Captured before the request so a mutation that commits while it is in
     // flight can be detected at commit time.
     const revisionAtStart = getInboxRevision(session);
+    // Five seconds was short enough that a slow connection aborted the
+    // request while the session renewal it had just triggered was still in
+    // flight: the token arrived, but this caller had already given up and
+    // fell back to the cached inbox. The renewal client allows thirty, so
+    // waiting the same amount lets the retry actually land. This only delays
+    // an inbox refresh — a push banner is delivered by the OS and does not
+    // pass through here.
+    const INBOX_SYNC_TIMEOUT_MS = 30000;
     const [inboxResult, announcementsResult] = await Promise.allSettled([
       api.get("/notifications", {
         authSession: session,
         params: { page: 1, per_page: NOTIFICATION_INBOX_LIMIT },
-        timeout: 5000,
+        timeout: INBOX_SYNC_TIMEOUT_MS,
         suppressErrorLog: true,
         suppressAuthRedirect: true,
       }),
@@ -469,7 +477,7 @@ async function fetchNotificationInbox(session) {
       // must never remove or change the read state of an inbox notification.
       api.get("/announcements", {
         authSession: session,
-        timeout: 5000,
+        timeout: INBOX_SYNC_TIMEOUT_MS,
         suppressErrorLog: true,
         suppressAuthRedirect: true,
       }),

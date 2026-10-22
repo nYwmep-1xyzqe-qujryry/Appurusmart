@@ -245,6 +245,27 @@ async function main() {
     }
   }
 
+  // 10. A caller must outlive the renewal it can trigger. The inbox sync ran
+  //     with a five-second budget against a thirty-second refresh client, so
+  //     a slow connection aborted it while the renewal was still in flight:
+  //     the token arrived and the caller had already fallen back to cache.
+  {
+    const fs = require("fs");
+    const notifications = fs.readFileSync(
+      path.join(__dirname, "..", "src", "services", "notificationService.js"), "utf8",
+    );
+    const refreshSource = fs.readFileSync(MODULE, "utf8");
+    const refreshBudget = Number(/timeout: (\d+)/.exec(refreshSource)?.[1]);
+    assert.ok(refreshBudget > 0, "the refresh client must declare a timeout");
+
+    const syncBudget = Number(/const INBOX_SYNC_TIMEOUT_MS = (\d+);/.exec(notifications)?.[1]);
+    assert.ok(syncBudget > 0, "the inbox sync must declare its timeout once");
+    assert.ok(
+      syncBudget >= refreshBudget,
+      "the inbox sync must not abort before the renewal it triggers can finish",
+    );
+  }
+
   console.log("Token refresh tests OK");
 }
 
