@@ -109,7 +109,16 @@ export async function saveAuthSession(token, user, userId, refreshToken, options
           await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, refreshValue, {
             keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
           });
-        } catch (_) {
+        } catch (error) {
+          // Swallowing this silently made a device that cannot keep a refresh
+          // token look identical to one that never received it: the user
+          // signs in, everything works, and the session ends at the access
+          // token's expiry with nothing explaining why. The name only — a
+          // keystore error carries no token, but the message can name the
+          // item.
+          if (__DEV__) {
+            console.warn("[Auth] refresh token could not be stored:", error?.name ?? "unknown");
+          }
           await SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN).catch(() => {});
         }
       } else {
@@ -132,7 +141,12 @@ export async function getRefreshToken() {
   if (Platform.OS === "web") return webSession.get(SECURE_KEYS.REFRESH_TOKEN) ?? null;
   try {
     return await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN);
-  } catch (_) {
+  } catch (error) {
+    // A read that throws is not the same as a session with no refresh token,
+    // and the two were indistinguishable from the outside.
+    if (__DEV__) {
+      console.warn("[Auth] refresh token could not be read:", error?.name ?? "unknown");
+    }
     return null;
   }
 }

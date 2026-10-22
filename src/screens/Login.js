@@ -28,7 +28,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { onLoginSuccess } from "../services/notificationService";
 import { API_BASE_URL, STORAGE_KEYS } from "../config";
-import { saveAuthSession, captureAuthSession, runWithSession } from "../services/authStorage";
+import { saveAuthSession, captureAuthSession, runWithSession, getRefreshToken } from "../services/authStorage";
 import { checkSupport, getBiometricPresentation, isBiometricEnabled, hasBiometricToken, biometricTokenMatches, saveBiometricToken, setBiometricEnabled, clearBiometricToken } from "../services/biometricService";
 import { isPinSet } from "../services/pinService";
 import { resolveUserId } from "../services/userSecurityKeys";
@@ -467,6 +467,13 @@ const Login = ({ navigation, route }) => {
       });
     }
     await saveAuthSession(data.token, data.user || {}, userId, data.refresh_token ?? "");
+    if (__DEV__ && data.refresh_token) {
+      // The server sent one; this says whether the device kept it. A failure
+      // here is why a session can end at the access token's expiry instead of
+      // renewing, and it is otherwise invisible until that happens hours later.
+      const stored = await getRefreshToken();
+      console.log("[Auth] refresh token stored:", Boolean(stored));
+    }
 
     // สร้าง/ตรวจ Expert profile ก่อนเปิด session หลัก เพื่อให้หน้า Expert
     // และ profile-search มองเห็นผู้ใช้ได้ตั้งแต่ยังไม่เคยบันทึกผลงาน
