@@ -30,6 +30,11 @@ const normalizeInterestOptions = (rows) =>
     })
     .filter(Boolean);
 
+// Exported so the list can be warmed before a screen needs it: a form that
+// opens while this is still in flight cannot tell an entry chosen from the
+// list apart from one typed by hand, and reopens the wrong input.
+export const prefetchInterestOptions = () => fetchInterestOptions().catch(() => []);
+
 const fetchInterestOptions = async () => {
   if (cache) return cache;
   if (!inflight) {
@@ -41,6 +46,8 @@ const fetchInterestOptions = async () => {
         cache = normalizeInterestOptions(rows);
         return cache;
       })
+      // A rejection deliberately leaves the cache unset, so the next screen
+      // retries rather than inheriting an empty list.
       .finally(() => {
         inflight = null;
       });

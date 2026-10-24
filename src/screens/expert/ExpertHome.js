@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import AppHeader from "../../components/AppHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import useMenuCounts from "../../hook/useMenuCounts";
-import useInterestOptions from "../../hook/useInterestOptions";
+import useInterestOptions, { prefetchInterestOptions } from "../../hook/useInterestOptions";
 import useExpertGroupOptions from "../../hook/useExpertGroupOptions";
 import SheetDropdown from "../../components/expert/SheetDropdown";
 import { colors } from "../../theme/tokens";
@@ -336,6 +336,14 @@ const ExpertHome = ({ navigation }) => {
   const PERSONAL_MENUS = getPersonalMenus(t);
   const EXPERT_MENUS = getExpertMenus(t);
   const { counts, loading: countsLoading, refetch: refetchCounts } = useMenuCounts();
+
+  // Warm the interest list on entering the section. The hook that fetches it
+  // sits in the search panel, which only mounts once search is opened, so a
+  // user going straight to the interests form met an empty list — and the
+  // form cannot then tell an entry chosen from the list apart from one typed
+  // by hand, reopening it in the wrong input. The result is cached for the
+  // app's lifetime, so this costs one request at most.
+  useEffect(() => { prefetchInterestOptions(); }, []);
 
   // เตรียม Expert profile ก่อนโหลดข้อมูลของโมดูลทุกครั้งที่เปิดหน้า Expert
   // backend จะอ่านเจ้าของจาก Bearer token; frontend ไม่ส่ง owner/id_card ใด ๆ
