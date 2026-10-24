@@ -336,9 +336,16 @@ const buildProfilePdfHtml = ({
           table-layout: fixed;
           margin-bottom: 7px;
           page-break-inside: auto;
+          break-inside: auto;
         }
+        /* break-inside is the modern spelling and the one this renderer
+           honours; page-break-inside stays for older engines. Both are needed
+           on the cells as well: declaring it on the row alone still let a tall
+           cell split, which is how a research title ended up half on one page
+           and half on the next with no border closing either half. */
         tr {
           page-break-inside: avoid;
+          break-inside: avoid;
           page-break-after: auto;
         }
         th,
@@ -347,11 +354,14 @@ const buildProfilePdfHtml = ({
           padding: 4px 5px;
           vertical-align: top;
           word-break: break-word;
+          page-break-inside: avoid;
+          break-inside: avoid;
         }
         th {
           font-weight: 700;
           text-align: center;
-          background: #f3f4f6;
+          background: #e8eef5;
+          color: #1f2937;
         }
         /* Repeats the header row when a table runs past a page break, so a
            continued table still says what its columns mean. */

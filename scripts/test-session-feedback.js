@@ -191,6 +191,18 @@ async function main() {
     /h2 \{[^}]*page-break-after: avoid;/.test(profilePdf),
     "a section heading must not be stranded from its table",
   );
+  // A row that splits across a break leaves both halves without a closing
+  // border — a research title ran half onto the next page that way. The rule
+  // is needed on the cells too: on the row alone a tall cell still split.
+  assert.ok(
+    /tr \{[^}]*break-inside: avoid;/.test(profilePdf),
+    "a table row must not split across a page break",
+  );
+  assert.ok(
+    /td \{[^}]*break-inside: avoid;/.test(profilePdf)
+      || /th,\s*\n\s*td \{[^}]*break-inside: avoid;/.test(profilePdf),
+    "the no-split rule must reach the cells, not just the row",
+  );
 
   console.log("Session feedback tests OK");
 }
