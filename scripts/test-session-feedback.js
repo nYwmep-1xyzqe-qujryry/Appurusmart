@@ -168,18 +168,13 @@ async function main() {
     "the SSO diagnostic scaffolding must stay removed",
   );
 
-  // The profile PDF is framed like a printed sheet. The frame is a fixed
-  // element because @page borders are unsupported here and a border on body
-  // draws once around the whole flow — every page after the first would come
-  // out unframed and cut open at the break.
+  // A fixed frame was tried and removed: in WebKit's print path it anchors
+  // to the first page, and its bottom edge then draws a stray rule partway
+  // down every later page, cutting across whatever row sat there.
   const profilePdf = read("src", "screens", "expert", "ProfileDetail.js");
   assert.ok(
-    /<div class="page-frame"><\/div>/.test(profilePdf),
-    "the PDF must carry the frame element",
-  );
-  assert.ok(
-    /\.page-frame \{[^}]*position: fixed;/.test(profilePdf),
-    "the frame must be fixed so it repeats on every printed page",
+    !/page-frame/.test(profilePdf),
+    "a fixed frame draws a stray line on later pages and must stay out",
   );
   // A continued table that drops its header stops saying what its columns are.
   assert.ok(
@@ -198,10 +193,15 @@ async function main() {
     /tr \{[^}]*break-inside: avoid;/.test(profilePdf),
     "a table row must not split across a page break",
   );
+  // WebKit ignores break-inside on a table row however it is spelled, but
+  // honours it on a block element, so each cell wraps its text in one.
   assert.ok(
-    /td \{[^}]*break-inside: avoid;/.test(profilePdf)
-      || /th,\s*\n\s*td \{[^}]*break-inside: avoid;/.test(profilePdf),
-    "the no-split rule must reach the cells, not just the row",
+    /\.cell \{[^}]*display: block;[^}]*break-inside: avoid;/s.test(profilePdf),
+    "cell content must sit in a block that refuses to break",
+  );
+  assert.ok(
+    /<div class="cell">/.test(profilePdf),
+    "every cell must render that wrapper",
   );
   // Print drops background colours unless asked to keep them, so a tinted
   // header looked right on screen and came out white on paper.

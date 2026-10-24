@@ -206,7 +206,7 @@ const renderPdfRows = (cols, rows) => `
     <tbody>
       ${rows.map((row) => `
         <tr>
-          ${row.map((cell) => `<td>${escapeHtml(cell || "-")}</td>`).join("")}
+          ${row.map((cell) => `<td><div class="cell">${escapeHtml(cell || "-")}</div></td>`).join("")}
         </tr>
       `).join("")}
     </tbody>
@@ -251,22 +251,13 @@ const buildProfilePdfHtml = ({
     <head>
       <meta charset="utf-8" />
       <style>
-        /* The border is painted by a fixed frame rather than on the page
-           box: @page borders are not supported by the renderer, and a border
-           on body or a wrapper div draws once around the whole flow, leaving
-           every page after the first unframed and cut open at the break. A
-           fixed element repeats on each printed page, which is what gives the
-           document its sheet-like look. */
-        @page { margin: 12mm 9mm; }
-        .page-frame {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          border: 1px solid #9ca3af;
-          pointer-events: none;
-        }
+        /* A fixed frame was tried and removed: in WebKit's print path it
+           anchors to the first page and its bottom edge then lands partway
+           down every later page, drawing a stray rule across whatever row sat
+           there. There is no element that repeats per printed page here, so
+           the sheet-like boundary comes from the tables' own borders plus a
+           generous page margin rather than from a drawn frame. */
+        @page { margin: 14mm 11mm; }
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
           color: #111827;
@@ -342,15 +333,22 @@ const buildProfilePdfHtml = ({
           page-break-inside: auto;
           break-inside: auto;
         }
-        /* break-inside is the modern spelling and the one this renderer
-           honours; page-break-inside stays for older engines. Both are needed
-           on the cells as well: declaring it on the row alone still let a tall
-           cell split, which is how a research title ended up half on one page
-           and half on the next with no border closing either half. */
+        /* WebKit, which expo-print uses, ignores break-inside on a table row
+           however it is spelled — a tall row still split, leaving a research
+           title half on one page and half on the next with no border closing
+           either half. It does honour the rule on a block element, so each
+           cell wraps its text in one and the row is held together by its
+           tallest cell refusing to break. The row rules stay for engines that
+           do respect them. */
         tr {
           page-break-inside: avoid;
           break-inside: avoid;
           page-break-after: auto;
+        }
+        .cell {
+          display: block;
+          page-break-inside: avoid;
+          break-inside: avoid;
         }
         th,
         td {
@@ -385,7 +383,6 @@ const buildProfilePdfHtml = ({
       </style>
     </head>
     <body>
-      <div class="page-frame"></div>
       <h1>${escapeHtml(title)}</h1>
       <div class="profile">
         <div class="photo-wrap">
