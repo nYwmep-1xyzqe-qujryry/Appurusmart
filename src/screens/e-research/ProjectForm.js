@@ -11,6 +11,11 @@ import { LRD_ENDPOINTS } from "../../services/lrdApi";
 import useLrdSession from "../../hook/useLrdSession";
 import { FUNDING_SOURCE_OPTIONS, RESEARCH_FIELD_OPTIONS } from "./mockOptions";
 import { useEResearchText, withPlaceholder } from "./i18n";
+import {
+  getResearchTitleEn,
+  getResearchTitleTh,
+  getResearchYear,
+} from "./researchFields";
 
 const emptyForm = {
   year: "",
