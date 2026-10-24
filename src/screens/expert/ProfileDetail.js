@@ -556,27 +556,6 @@ export default function ProfileDetail({ navigation, route }) {
         console.log("[ProfileDetail] relation counts:", Object.fromEntries(
           rels.map((key) => [key, Array.isArray(data?.[key]) ? data[key].length : null]),
         ));
-        // Which identity fields the endpoint actually sent, by name only. A
-        // row rendering as "-" is either a field this app does not read or a
-        // value the server did not send, and the two need different fixes.
-        const identity = Object.keys(data ?? {}).filter((key) => (
-          /pos|fac|dep|major|unit|phone|tel|mobile|contact/i.test(key)
-        ));
-        // "has value" hid the case that matters: a field holding an object
-        // whose shape the resolver cannot read resolves to empty and renders
-        // as "-" while looking present here. Report the type and, for an
-        // object, its keys — names only, never the contents.
-        console.log("[ProfileDetail] identity fields present:", Object.fromEntries(
-          identity.map((key) => {
-            const value = data[key];
-            if (value === null) return [key, "null"];
-            if (value === "") return [key, "empty"];
-            if (typeof value === "object") {
-              return [key, `object{${Object.keys(value).join(",")}}`];
-            }
-            return [key, `${typeof value}(len ${String(value).trim().length})`];
-          }),
-        ));
       }
       setProfile(data);
     } catch (e) {
