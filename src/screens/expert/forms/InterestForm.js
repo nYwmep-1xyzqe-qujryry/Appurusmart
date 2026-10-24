@@ -42,18 +42,31 @@ const InterestForm = ({ navigation }) => {
     setCustomInterest("");
   };
 
-  // The row's own text goes into the free-text box rather than the dropdown:
-  // an interest typed by hand has no option to select, and pre-selecting a
-  // matching option would silently rewrite a hand-written entry to the
-  // system's spelling of it.
+  // Which box the row reopens in depends on where it came from. The record
+  // keeps no marker — saving sends the text alone — so the list is asked
+  // whether it offers this exact wording: if it does, the row is reopened in
+  // the dropdown it was chosen from; if it does not, the text was typed and
+  // belongs in the free-text box, where pre-selecting a near match would
+  // quietly rewrite it to the system's spelling.
   const openEdit = (entry) => {
+    const title = getExpertTitle(entry);
+    const option = rawInterestOptions.find(
+      (candidate) => String(candidate.label).trim().toLowerCase() === title.trim().toLowerCase(),
+    );
     setEditingItem(entry);
-    setSelectedInterest("");
-    setCustomInterest(getExpertTitle(entry));
+    setSelectedInterest(option ? String(option.id) : "");
+    setCustomInterest(option ? "" : title);
   };
 
   const handleAdd = () => submitOnce(async () => {
-    const title = selectedInterest || customInterest.trim();
+    // selectedInterest holds the option's id, which equals its label only
+    // while the reference list sends no separate id. Saving it directly would
+    // store a number as the interest's name the moment one appears.
+    const selectedLabel = selectedInterest
+      ? (rawInterestOptions.find((option) => String(option.id) === String(selectedInterest))?.label
+        ?? selectedInterest)
+      : "";
+    const title = String(selectedLabel || customInterest).trim();
     if (!title) {
       Alert.alert(t("research.interest.validation"));
       return;
