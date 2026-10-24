@@ -41,6 +41,7 @@ const lrdDiagnostics = loadModule("src/utils/lrdDiagnostics.js");
 const lrdResourceState = loadModule("src/utils/lrdResourceState.js");
 const responseCount = loadModule("src/utils/responseCount.js");
 const services = loadModule("src/utils/services.js");
+const expertFields = loadModule("src/utils/expertFields.js");
 const refresh = loadModule("src/utils/refresh.js");
 const notificationInbox = loadModule("src/utils/notificationInbox.js");
 const announcementImageState = loadModule("src/utils/announcementImageState.js");
@@ -284,6 +285,47 @@ assert.equal(
   // must not start a login in the third.
   const stale = { context: { url: CALLBACK, ssoGeneration: 1 }, ssoGeneration: 3 };
   assert.equal(resolve(ORIGIN, stale).trusted, false, "context from two attempts ago is refused");
+}
+// /info/expert/profile replaced /profile/{id} and does not describe a person
+// the same way: the position arrives as a numeric id with its label in
+// position_name, so reading `position` printed "1" where a title belonged.
+// department_name_th is the trap — on this endpoint it holds the FACULTY, so
+// the PDF showed the faculty's name on the department row.
+{
+  const profile = {
+    position: 1,
+    position_name: "ศาสตราจารย์",
+    faculty_name_th: "คณะเทคโนโลยีอุตสาหกรรม",
+    department_name_th: "คณะเทคโนโลยีอุตสาหกรรม",
+    major_name_th: "วิศวกรรมคอมพิวเตอร์",
+    phone_work: "0862004911",
+  };
+  assert.equal(expertFields.getExpertPositionName(profile), "ศาสตราจารย์", "the position label wins over its id");
+  assert.equal(expertFields.getExpertFacultyName(profile), "คณะเทคโนโลยีอุตสาหกรรม", "the faculty reads from faculty_name_th");
+  assert.equal(expertFields.getExpertDepartmentName(profile), "วิศวกรรมคอมพิวเตอร์", "the department reads from major_name_th, not the faculty it is aliased to");
+  assert.equal(expertFields.getExpertPhone(profile), "0862004911", "the phone reads from phone_work");
+
+  // An id alone still shows: it is worse than a name, better than an empty row.
+  assert.equal(expertFields.getExpertPositionName({ position: 1 }), "1", "an id shows when no label was sent");
+  assert.equal(expertFields.getExpertPositionName({}), "", "nothing sent resolves to empty");
+
+  // Other endpoints describe the same person with their own spellings.
+  assert.equal(
+    expertFields.getExpertPositionName({ position_label: "อาจารย์" }),
+    "อาจารย์",
+    "the /me spelling still resolves",
+  );
+  assert.equal(
+    expertFields.getExpertDepartmentName({ program: "วิศวกรรมคอมพิวเตอร์" }),
+    "วิศวกรรมคอมพิวเตอร์",
+    "a department sent under another name still resolves",
+  );
+  // department_name_th must never answer for the department on this endpoint.
+  assert.equal(
+    expertFields.getExpertDepartmentName({ department_name_th: "คณะเทคโนโลยีอุตสาหกรรม" }),
+    "",
+    "department_name_th is the faculty here and must not fill the department",
+  );
 }
 assert.equal(profilePdfSanitizer.isSafePdfResourceUrl("https://cdn.example.test/photo.webp", { image: true }), true);
 assert.equal(profilePdfSanitizer.isSafePdfResourceUrl("javascript:alert(1)", { image: true }), false);

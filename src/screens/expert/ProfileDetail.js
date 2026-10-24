@@ -13,7 +13,12 @@ import AppHeader from "../../components/AppHeader";
 import StateView from "../../components/StateView";
 import { stripNamePrefix } from "../../utils/name";
 import { fixPhotoUrl } from "../../utils/image";
-import { getExpertLink, getExpertTitle, getExpertYear } from "../../utils/expertFields";
+import { getExpertLink, getExpertTitle, getExpertYear,
+  getExpertPositionName,
+  getExpertFacultyName,
+  getExpertDepartmentName,
+  getExpertPhone,
+} from "../../utils/expertFields";
 import infoApi from "../../services/infoApi";
 import { API_BASE_URL, INFO_API_BASE_URL } from "../../config";
 import { getAuthToken } from "../../services/authStorage";
@@ -558,9 +563,9 @@ export default function ProfileDetail({ navigation, route }) {
   // ── Field extraction ───────────────────────────────────────
   const name      = stripNamePrefix(profile.full_name_th ?? profile.full_name_en ?? profile.name ?? "");
   const nameEn    = profile.full_name_en ?? "";
-  const position  = profile.position ?? profile.academic_position ?? "";
-  const faculty   = profile.faculty_name_th ?? profile.faculty ?? "";
-  const dept      = profile.department_name_th ?? profile.unit_name_th ?? "";
+  const position  = getExpertPositionName(profile);
+  const faculty   = getExpertFacultyName(profile);
+  const dept      = getExpertDepartmentName(profile);
   const rawPhoto = [
     profile.picture_url, profile.photo_url, profile.photoUrl, profile.photo,
     profile.profile_photo_url, profile.profile_image, profile.image_url,
@@ -570,7 +575,7 @@ export default function ProfileDetail({ navigation, route }) {
   ].find((value) => /^https?:\/\//i.test(String(value ?? "").trim())) ?? "";
   const photoUrl = fixPhotoUrl(rawPhoto, INFO_API_BASE_URL);
   const email     = profile.email ?? "";
-  const phone     = profile.phone ?? profile.phone_work ?? profile.phone_number ?? profile.tel ?? "";
+  const phone     = getExpertPhone(profile);
   const affil     = [faculty, dept && dept !== faculty ? dept : ""].filter(Boolean).join(" · ");
 
   const expertises  = profile.expertises  ?? [];
