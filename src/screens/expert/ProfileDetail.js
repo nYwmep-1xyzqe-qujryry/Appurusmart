@@ -275,6 +275,10 @@ const buildProfilePdfHtml = ({
           /* Keeps the content clear of the frame on every page. */
           padding: 6mm 5mm;
           margin: 0;
+          /* Applies to everything printed, so a tint set anywhere survives
+             the renderer's default of dropping backgrounds. */
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
         h1 {
           text-align: center;
@@ -360,14 +364,20 @@ const buildProfilePdfHtml = ({
         th {
           font-weight: 700;
           text-align: center;
-          background: #e8eef5;
+          background: #e5e7eb;
           color: #1f2937;
+          /* Print drops background colours unless asked to keep them, which
+             is why the tinted header came out white on paper while looking
+             right on screen. */
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
         /* Repeats the header row when a table runs past a page break, so a
            continued table still says what its columns mean. */
         thead { display: table-header-group; }
         section {
           page-break-inside: auto;
+          break-inside: auto;
         }
         .tag-line {
           margin: 0 0 8px;

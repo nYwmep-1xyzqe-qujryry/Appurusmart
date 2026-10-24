@@ -203,6 +203,24 @@ async function main() {
       || /th,\s*\n\s*td \{[^}]*break-inside: avoid;/.test(profilePdf),
     "the no-split rule must reach the cells, not just the row",
   );
+  // Print drops background colours unless asked to keep them, so a tinted
+  // header looked right on screen and came out white on paper.
+  assert.ok(
+    /body \{[^}]*print-color-adjust: exact;/.test(profilePdf),
+    "the document must keep its backgrounds when printed",
+  );
+  assert.ok(
+    /th \{[^}]*print-color-adjust: exact;/.test(profilePdf),
+    "the header tint must survive printing even if the body rule is lost",
+  );
+  assert.ok(
+    /-webkit-print-color-adjust: exact;/.test(profilePdf),
+    "the webkit spelling is the one this renderer honours",
+  );
+  assert.ok(
+    /th \{[^}]*background: #[0-9a-f]{6};/i.test(profilePdf),
+    "column headers must carry a tint that sets them apart from the rows",
+  );
 
   console.log("Session feedback tests OK");
 }
