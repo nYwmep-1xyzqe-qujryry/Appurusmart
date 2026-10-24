@@ -24,9 +24,10 @@ import { sanitizeAcademicText } from "../../../utils/inputSanitize";
 
 const InterestForm = ({ navigation }) => {
   const { t } = useTranslation();
-  const { items, saving, create, remove } = useResource("/interests");
+  const { items, saving, create, update, remove } = useResource("/interests");
   const { confirm, ConfirmDialog } = useConfirm();
   const submitOnce = useSubmitLock();
+  const [editingItem, setEditingItem] = useState(null);
   const [selectedInterest, setSelectedInterest] = useState("");
   const [customInterest, setCustomInterest] = useState("");
   const { options: rawInterestOptions, loading: loadingOptions } = useInterestOptions();
@@ -35,30 +36,49 @@ const InterestForm = ({ navigation }) => {
     ...rawInterestOptions,
   ];
 
+  const resetForm = () => {
+    setEditingItem(null);
+    setSelectedInterest("");
+    setCustomInterest("");
+  };
+
+  // The row's own text goes into the free-text box rather than the dropdown:
+  // an interest typed by hand has no option to select, and pre-selecting a
+  // matching option would silently rewrite a hand-written entry to the
+  // system's spelling of it.
+  const openEdit = (entry) => {
+    setEditingItem(entry);
+    setSelectedInterest("");
+    setCustomInterest(getExpertTitle(entry));
+  };
+
   const handleAdd = () => submitOnce(async () => {
     const title = selectedInterest || customInterest.trim();
     if (!title) {
       Alert.alert(t("research.interest.validation"));
       return;
     }
+    // The row being edited is not its own duplicate.
     if (
       items.some(
-        (item) => getExpertTitle(item).toLowerCase() === title.toLowerCase(),
+        (item) => item.id !== editingItem?.id
+          && getExpertTitle(item).toLowerCase() === title.toLowerCase(),
       )
     ) {
       Alert.alert(t("research.interest.duplicate"));
       return;
     }
     try {
-      await create({ name: title });
+      if (editingItem) await update(editingItem.id, { name: title });
+      else await create({ name: title });
     } catch (err) {
       Alert.alert(
         t("research.common.saveFail"),
         err.message ?? t("research.common.apiError"),
       );
+      return;
     }
-    setSelectedInterest("");
-    setCustomInterest("");
+    resetForm();
   });
 
   const handleDelete = (entry) => {
@@ -168,6 +188,7 @@ const InterestForm = ({ navigation }) => {
               <View
                 key={entry.id}
                 className="flex-row items-center px-4 py-3 border-b border-[#f0f4f7]"
+                style={editingItem?.id === entry.id ? { backgroundColor: "#ccf0e2" } : {}}
               >
                 <Text
                   className="text-[15px] font-bold text-[#1f2a2e] text-center leading-5"
@@ -178,7 +199,14 @@ const InterestForm = ({ navigation }) => {
                 <Text className="text-[15px] font-semibold text-[#1f2a2e] leading-5 flex-1">
                   {getExpertTitle(entry)}
                 </Text>
-                <View className="items-center" style={{ width: 60 }}>
+                <View className="flex-row gap-[6px]">
+                  <TouchableOpacity
+                    className="w-[34px] h-[34px] rounded-lg bg-[#fff0d6] items-center justify-center"
+                    onPress={() => openEdit(entry)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="create-outline" size={17} color="#a8631a" />
+                  </TouchableOpacity>
                   <TouchableOpacity
                     className="w-[34px] h-[34px] rounded-lg bg-[#fde7e7] items-center justify-center"
                     onPress={() => handleDelete(entry)}
@@ -259,9 +287,11 @@ const InterestForm = ({ navigation }) => {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Ionicons name="add-circle" size={18} color="#fff" />
+                  <Ionicons name={editingItem ? "create" : "add-circle"} size={18} color="#fff" />
                   <Text className="text-white text-[15px] font-black">
-                    {t("research.interest.addForm")}
+                    {editingItem
+                      ? t("research.interest.editForm")
+                      : t("research.interest.addForm")}
                   </Text>
                 </>
               )}
@@ -273,10 +303,10 @@ const InterestForm = ({ navigation }) => {
                   title: t("research.common.resetFormTitle"),
                   message: t("research.common.resetFormMessage"),
                   icon: "refresh",
-                  onConfirm: () => {
-                    setSelectedInterest("");
-                    setCustomInterest("");
-                  },
+                  // Also leaves edit mode: clearing the fields while still
+                  // bound to a row would make the next save overwrite that
+                  // row with whatever was typed next.
+                  onConfirm: resetForm,
                 })
               }
               activeOpacity={0.85}
