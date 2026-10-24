@@ -6,6 +6,14 @@ const toDisplayText = (value) => {
       value.title,
       value.reference,
       value.label,
+      // A contact or lookup sent as an object states its content under one of
+      // these instead, and reading only the four above turned such a field
+      // into an empty row that looked like missing data.
+      value.value,
+      value.text,
+      value.number,
+      value.th,
+      value.en,
     );
   }
   return String(value).trim();
