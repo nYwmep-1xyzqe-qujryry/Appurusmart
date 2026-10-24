@@ -511,6 +511,17 @@ export default function ProfileDetail({ navigation, route }) {
         console.log("[ProfileDetail] relation counts:", Object.fromEntries(
           rels.map((key) => [key, Array.isArray(data?.[key]) ? data[key].length : null]),
         ));
+        // Which identity fields the endpoint actually sent, by name only. A
+        // row rendering as "-" is either a field this app does not read or a
+        // value the server did not send, and the two need different fixes.
+        const identity = Object.keys(data ?? {}).filter((key) => (
+          /pos|fac|dep|major|unit|phone|tel|mobile|contact/i.test(key)
+        ));
+        console.log("[ProfileDetail] identity fields present:", Object.fromEntries(
+          identity.map((key) => [key, data[key] === null ? "null"
+            : data[key] === "" ? "empty"
+              : typeof data[key] === "object" ? "object" : "has value"]),
+        ));
       }
       setProfile(data);
     } catch (e) {
