@@ -251,48 +251,71 @@ const buildProfilePdfHtml = ({
     <head>
       <meta charset="utf-8" />
       <style>
-        @page { margin: 14mm 10mm; }
+        /* The border is painted by a fixed frame rather than on the page
+           box: @page borders are not supported by the renderer, and a border
+           on body or a wrapper div draws once around the whole flow, leaving
+           every page after the first unframed and cut open at the break. A
+           fixed element repeats on each printed page, which is what gives the
+           document its sheet-like look. */
+        @page { margin: 12mm 9mm; }
+        .page-frame {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          border: 1px solid #9ca3af;
+          pointer-events: none;
+        }
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
           color: #111827;
           font-size: 12px;
           line-height: 1.45;
+          /* Keeps the content clear of the frame on every page. */
+          padding: 6mm 5mm;
+          margin: 0;
         }
         h1 {
           text-align: center;
-          font-size: 18px;
-          margin: 0 0 14px;
+          font-size: 16px;
+          font-weight: 700;
+          margin: 0 0 12px;
         }
         h2 {
-          font-size: 13px;
-          margin: 14px 0 7px;
-          color: #222;
+          font-size: 12px;
+          font-weight: 700;
+          margin: 12px 0 5px;
+          color: #111827;
+          /* A heading stranded at the foot of a page reads as a label for
+             whatever follows it, which is the next section's table. */
+          page-break-after: avoid;
         }
         .profile {
           display: table;
           width: 100%;
-          margin-bottom: 12px;
+          margin-bottom: 10px;
         }
         .photo-wrap {
           display: table-cell;
-          width: 178px;
+          width: 96px;
           vertical-align: top;
         }
         .photo {
-          width: 160px;
-          height: 120px;
+          width: 84px;
+          height: 108px;
           object-fit: cover;
           border: 1px solid #d1d5db;
         }
         .info {
           display: table-cell;
           vertical-align: top;
-          padding-left: 12px;
+          padding-left: 10px;
         }
         .info-title {
-          font-size: 14px;
+          font-size: 12px;
           font-weight: 700;
-          margin-bottom: 6px;
+          margin-bottom: 4px;
         }
         .row {
           display: table-row;
@@ -303,8 +326,9 @@ const buildProfilePdfHtml = ({
           padding: 2px 0;
         }
         .label {
-          width: 90px;
-          font-weight: 700;
+          width: 72px;
+          font-weight: 400;
+          color: #374151;
         }
         table {
           width: 100%;
@@ -319,16 +343,19 @@ const buildProfilePdfHtml = ({
         }
         th,
         td {
-          border: 1px solid #666;
-          padding: 5px 6px;
+          border: 1px solid #9ca3af;
+          padding: 4px 5px;
           vertical-align: top;
           word-break: break-word;
         }
         th {
           font-weight: 700;
           text-align: center;
-          background: #f7f7f7;
+          background: #f3f4f6;
         }
+        /* Repeats the header row when a table runs past a page break, so a
+           continued table still says what its columns mean. */
+        thead { display: table-header-group; }
         section {
           page-break-inside: auto;
         }
@@ -338,6 +365,7 @@ const buildProfilePdfHtml = ({
       </style>
     </head>
     <body>
+      <div class="page-frame"></div>
       <h1>${escapeHtml(title)}</h1>
       <div class="profile">
         <div class="photo-wrap">

@@ -168,6 +168,30 @@ async function main() {
     "the SSO diagnostic scaffolding must stay removed",
   );
 
+  // The profile PDF is framed like a printed sheet. The frame is a fixed
+  // element because @page borders are unsupported here and a border on body
+  // draws once around the whole flow — every page after the first would come
+  // out unframed and cut open at the break.
+  const profilePdf = read("src", "screens", "expert", "ProfileDetail.js");
+  assert.ok(
+    /<div class="page-frame"><\/div>/.test(profilePdf),
+    "the PDF must carry the frame element",
+  );
+  assert.ok(
+    /\.page-frame \{[^}]*position: fixed;/.test(profilePdf),
+    "the frame must be fixed so it repeats on every printed page",
+  );
+  // A continued table that drops its header stops saying what its columns are.
+  assert.ok(
+    /thead \{ display: table-header-group; \}/.test(profilePdf),
+    "a table split across pages must repeat its header row",
+  );
+  // A heading alone at the foot of a page labels the wrong section.
+  assert.ok(
+    /h2 \{[^}]*page-break-after: avoid;/.test(profilePdf),
+    "a section heading must not be stranded from its table",
+  );
+
   console.log("Session feedback tests OK");
 }
 
