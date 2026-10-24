@@ -257,14 +257,18 @@ const buildProfilePdfHtml = ({
            there. There is no element that repeats per printed page here, so
            the sheet-like boundary comes from the tables' own borders plus a
            generous page margin rather than from a drawn frame. */
-        @page { margin: 14mm 11mm; }
+        @page { margin: 10mm 9mm; }
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
           color: #111827;
           font-size: 12px;
           line-height: 1.45;
-          /* Keeps the content clear of the frame on every page. */
-          padding: 6mm 5mm;
+          /* The page margin already holds the content off the edge; padding
+             here is added to it, and the pair cost roughly 40mm of every
+             page. A row that cannot fit the remaining space moves whole to
+             the next one, so each millimetre lost widens the gap left
+             behind. */
+          padding: 0;
           margin: 0;
           /* Applies to everything printed, so a tint set anywhere survives
              the renderer's default of dropping backgrounds. */
