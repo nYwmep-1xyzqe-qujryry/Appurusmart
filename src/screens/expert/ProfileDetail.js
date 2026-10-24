@@ -273,8 +273,12 @@ const buildProfilePdfHtml = ({
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
           color: #111827;
-          font-size: 12px;
-          line-height: 1.45;
+          font-size: 11px;
+          /* Rows move whole to the next page rather than being cut, so every
+             line a cell does not need is space another row could have used.
+             Thai sets tall because of its vowel marks, and 1.45 left visible
+             air between lines of a wrapped title. */
+          line-height: 1.3;
           /* The page margin already holds the content off the edge; padding
              here is added to it, and the pair cost roughly 40mm of every
              page. A row that cannot fit the remaining space moves whole to
@@ -364,7 +368,7 @@ const buildProfilePdfHtml = ({
         th,
         td {
           border: 1px solid #9ca3af;
-          padding: 4px 5px;
+          padding: 3px 5px;
           vertical-align: top;
           word-break: break-word;
           page-break-inside: avoid;
