@@ -95,10 +95,26 @@ export const getExpertDepartmentName = (profile = {}) => firstNonEmpty(
   profile.department,
 );
 
-export const getExpertPhone = (profile = {}) => firstNonEmpty(
-  profile.phone_work,
-  profile.tel,
-  profile.mobile,
-  profile.phone,
-  profile.phone_number,
-);
+// A phone field can hold a placeholder rather than a number: this profile
+// carries "-" in both phone_work and tel while the real number sits in
+// mobile. Taking the first non-empty value therefore printed the placeholder
+// and hid a number the record actually had, so a candidate has to look like a
+// number before it wins — at least seven digits, which is the shortest
+// dialable form here, while keeping any spacing or punctuation it was
+// written with.
+const hasDialableDigits = (value) => (String(value ?? "").match(/\d/g) ?? []).length >= 7;
+
+export const getExpertPhone = (profile = {}) => {
+  const candidates = [
+    profile.phone_work,
+    profile.tel,
+    profile.mobile,
+    profile.phone,
+    profile.phone_number,
+  ];
+  const dialable = candidates.find((value) => hasDialableDigits(toDisplayText(value)));
+  // Nothing dialable: fall back to whatever was written, so a number in a
+  // shape this check does not expect still reaches the screen rather than
+  // silently becoming an empty row.
+  return dialable !== undefined ? toDisplayText(dialable) : firstNonEmpty(...candidates);
+};

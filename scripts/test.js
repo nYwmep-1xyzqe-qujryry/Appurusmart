@@ -305,6 +305,32 @@ assert.equal(
   assert.equal(expertFields.getExpertDepartmentName(profile), "วิศวกรรมคอมพิวเตอร์", "the department reads from major_name_th, not the faculty it is aliased to");
   assert.equal(expertFields.getExpertPhone(profile), "0862004911", "the phone reads from phone_work");
 
+  // A phone field can hold a placeholder rather than a number. This profile
+  // carries "-" in phone_work and tel while the real number sits in mobile,
+  // so taking the first non-empty value printed the placeholder and hid a
+  // number the record actually had.
+  assert.equal(
+    expertFields.getExpertPhone({ phone_work: "-", tel: "-", mobile: "0862004911" }),
+    "0862004911",
+    "a dialable number wins over a placeholder sitting in an earlier field",
+  );
+  assert.equal(
+    expertFields.getExpertPhone({ phone_work: "055411096", mobile: "0862004911" }),
+    "055411096",
+    "field order still decides between two real numbers",
+  );
+  assert.equal(
+    expertFields.getExpertPhone({ mobile: "086-200-4911" }),
+    "086-200-4911",
+    "punctuation a number was written with is preserved",
+  );
+  assert.equal(
+    expertFields.getExpertPhone({ phone_work: "-" }),
+    "-",
+    "with nothing dialable the written value still shows",
+  );
+  assert.equal(expertFields.getExpertPhone({}), "", "nothing sent resolves to empty");
+
   // An id alone still shows: it is worse than a name, better than an empty row.
   assert.equal(expertFields.getExpertPositionName({ position: 1 }), "1", "an id shows when no label was sent");
   assert.equal(expertFields.getExpertPositionName({}), "", "nothing sent resolves to empty");
