@@ -196,8 +196,19 @@ const escapeHtml = (value) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const renderPdfRows = (cols, rows) => `
+// Each column carries a width the screen table uses; the PDF ignored them,
+// and with table-layout: fixed that split the page evenly between six
+// columns. The title column — the only one holding a sentence — came out as
+// narrow as the one holding a row number, so a title wrapped into a dozen
+// lines and the row grew taller than the space left on the page.
+const renderPdfRows = (cols, rows) => {
+  const total = cols.reduce((sum, col) => sum + (Number(col.w) || 1), 0);
+  const widths = cols.map((col) => `${(((Number(col.w) || 1) / total) * 100).toFixed(2)}%`);
+  return `
   <table>
+    <colgroup>
+      ${widths.map((width) => `<col style="width:${width}" />`).join("")}
+    </colgroup>
     <thead>
       <tr>
         ${cols.map((col) => `<th>${escapeHtml(col.label)}</th>`).join("")}
@@ -206,12 +217,13 @@ const renderPdfRows = (cols, rows) => `
     <tbody>
       ${rows.map((row) => `
         <tr>
-          ${row.map((cell) => `<td><div class="cell">${escapeHtml(cell || "-")}</div></td>`).join("")}
+          ${row.map((cell) => `<td>${escapeHtml(cell || "-")}</td>`).join("")}
         </tr>
       `).join("")}
     </tbody>
   </table>
 `;
+};
 
 const renderPdfSection = ({ title, cols, rows }) => {
   if (!rows?.length) return "";
@@ -348,11 +360,6 @@ const buildProfilePdfHtml = ({
           page-break-inside: avoid;
           break-inside: avoid;
           page-break-after: auto;
-        }
-        .cell {
-          display: block;
-          page-break-inside: avoid;
-          break-inside: avoid;
         }
         th,
         td {

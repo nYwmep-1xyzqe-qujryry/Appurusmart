@@ -193,15 +193,19 @@ async function main() {
     /tr \{[^}]*break-inside: avoid;/.test(profilePdf),
     "a table row must not split across a page break",
   );
-  // WebKit ignores break-inside on a table row however it is spelled, but
-  // honours it on a block element, so each cell wraps its text in one.
+  // A block wrapper inside each cell was tried and removed: it let the text
+  // detach from its row, rendering a title in a borderless strip on the next
+  // page while the row it belonged to sat empty.
   assert.ok(
-    /\.cell \{[^}]*display: block;[^}]*break-inside: avoid;/s.test(profilePdf),
-    "cell content must sit in a block that refuses to break",
+    !/<div class="cell">/.test(profilePdf),
+    "cell text must not be wrapped in a block that can leave its row",
   );
+  // Columns declare widths the screen table uses. Without them table-layout:
+  // fixed splits the page evenly, so the title column was as narrow as the
+  // one holding a row number and a sentence wrapped into a dozen lines.
   assert.ok(
-    /<div class="cell">/.test(profilePdf),
-    "every cell must render that wrapper",
+    /<colgroup>/.test(profilePdf) && /col style="width:/.test(profilePdf),
+    "the PDF must give each column the width it declares",
   );
   // Print drops background colours unless asked to keep them, so a tinted
   // header looked right on screen and came out white on paper.
