@@ -1,6 +1,12 @@
 import axios from "axios";
 import { INFO_API_BASE_URL } from "../config";
-import { attachRequestSession, handleUnauthorized, tryRefreshForRequest } from "./sessionRequest";
+import {
+  attachRequestSession,
+  handleUnauthorized,
+  RefreshResult,
+  sessionChangedError,
+  tryRefreshForRequest,
+} from "./sessionRequest";
 import { getSafeLrdErrorDetails, summarizeLrdParams } from "../utils/lrdDiagnostics";
 
 // API สำหรับข้อมูล Expert/LRD โดยเฉพาะ ใช้ token เดียวกับ URU Smart API
@@ -74,25 +80,33 @@ infoApi.interceptors.response.use(
     // Info shares the access token, so it lapses here at the same moment and
     // is renewed the same way. Without this the e-research screens would be
     // the one place a live session still read as signed out.
-    if (await tryRefreshForRequest(error)) {
-      // The retry must carry the renewed token, and nothing of the attempt
-      // that failed. authSession: null alone was not enough: a request made
-      // with sessionSnapshot keeps using its own captured session, so the
-      // retry either re-sent the token the refresh had just replaced or, with
-      // the snapshot emptied, sent no Authorization header at all. Either way
-      // it answered 401 again and ended a session the server had just
-      // renewed. Dropping the stale header and the snapshot flag lets the
-      // request interceptor attach the current token.
+    const refresh = await tryRefreshForRequest(error);
+    if (refresh?.outcome === RefreshResult.RENEWED) {
+      // The retry must carry the renewed token, nothing of the attempt that
+      // failed, and no one else's session. Re-sending the old snapshot sent
+      // the token the refresh had just replaced, and it answered 401 again;
+      // dropping the snapshot let the retry take whoever was signed in by
+      // the time it went out. It is pinned instead to the snapshot the
+      // refresh produced — this session, this renewed token — and sent as a
+      // snapshot so the request interceptor cancels it if that session ends
+      // before it leaves.
       const { Authorization: _staleAuth, ...headers } = error.config.headers ?? {};
       return infoApi.request({
         ...error.config,
         headers,
-        authSession: null,
-        sessionSnapshot: false,
+        authSession: refresh.session,
+        sessionSnapshot: true,
         skipAuthRefresh: true,
       });
     }
-    await handleUnauthorized(error);
+    // The account this request belonged to has been left. Cancelled, not
+    // sent under the new account, and not a reason to sign that one out.
+    if (refresh?.outcome === RefreshResult.SUPERSEDED) return Promise.reject(sessionChangedError());
+    // Renewal was not possible right now — rate limited, a server or network
+    // failure — which says nothing about the session. The request fails as it
+    // would have offline; signing the user out over it would end a session
+    // with weeks left.
+    if (refresh?.outcome !== RefreshResult.UNAVAILABLE) await handleUnauthorized(error);
     if (__DEV__ && !error.config?.suppressErrorLog) {
       if (isLrdRequest(error.config)) {
         const details = getSafeLrdErrorDetails(error);

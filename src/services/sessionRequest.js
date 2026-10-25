@@ -1,5 +1,5 @@
 import { captureAuthSession, isAuthSessionCurrent, invalidateAuthSession } from "./authStorage";
-import { refreshAuthSession } from "./tokenRefresh";
+import { RefreshResult, refreshAuthSession } from "./tokenRefresh";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { STORAGE_KEYS } from "../config";
 import { getCurrentUserId, clearCurrentUserId } from "./userSecurityKeys";
@@ -19,13 +19,18 @@ import { clearPushRegistrationForUser } from "./pushRegistrationStorage";
 const FORCE_SESSION_EXPIRED = __DEV__
   && process.env.EXPO_PUBLIC_FORCE_SESSION_EXPIRED === "true";
 
+// How a request ends when the account it was made for is no longer signed in.
+// ERR_CANCELED is what screens already treat as "nothing to show", not as a
+// failure to report.
+const sessionChanged = () => Object.assign(new Error("Session changed"), { code: "ERR_CANCELED" });
+
 export async function attachRequestSession(config) {
   const hasSessionSnapshot = config.sessionSnapshot === true;
   const session = hasSessionSnapshot
     ? (config.authSession ?? null)
     : (config.authSession ?? await captureAuthSession());
   if ((config.authSession || hasSessionSnapshot) && session && !await isAuthSessionCurrent(session)) {
-    throw Object.assign(new Error("Session changed"), { code: "ERR_CANCELED" });
+    throw sessionChanged();
   }
   config.authSession = session;
   if (session) config.headers.Authorization = `Bearer ${session.token}`;
@@ -44,15 +49,28 @@ export async function attachRequestSession(config) {
   return config;
 }
 
-// Returns true when the request should be retried against a renewed session.
-// A 401 is only final once the refresh token has also been refused.
+export { RefreshResult };
+
+// Resolves to the refresh result ({ outcome, session }), or null when the
+// failure was not one a refresh can answer. A 401 is only final once the
+// refresh token has also been refused:
+//   RENEWED     retry under result.session — the renewed snapshot, never
+//               whoever happens to be signed in by the time the retry leaves
+//   UNAVAILABLE fail the request, keep the session
+//   SUPERSEDED  the request's account was left; cancel it, sign no one out
+//   REJECTED    and null leave the 401 to handleUnauthorized
+// The session is the one the request was sent with. A 401 on a request that
+// carried none says nothing about whoever is signed in now, so it renews no
+// one.
 export async function tryRefreshForRequest(error) {
-  if (error.response?.status !== 401) return false;
-  if (error.config?.skipAuthRefresh) return false;
-  const session = error.config?.authSession ?? await captureAuthSession();
-  if (!session) return false;
+  if (error.response?.status !== 401) return null;
+  if (error.config?.skipAuthRefresh) return null;
+  const session = error.config?.authSession;
+  if (!session) return null;
   return refreshAuthSession(session);
 }
+
+export const sessionChangedError = sessionChanged;
 
 export async function handleUnauthorized(error) {
   if (error.response?.status !== 401 || error.config?.suppressAuthRedirect) return;

@@ -68,21 +68,88 @@ export const runWithSession = (session, operation) => enqueue(async () => {
   return operation();
 });
 
+// A renewal's rotated pair, persisted so that the caller is told "stored" only
+// when both tokens are durably in the keychain. SecureStore writes each key on
+// its own — there is no transaction across the two — so the order decides
+// what a failure leaves behind:
+//
+//   1. The refresh token first. Once the server has answered 200 the old one
+//      is spent there; the new one is the only token that can renew this
+//      session, so it is the one that must not be lost.
+//   2. The access token only after the refresh token is confirmed.
+//
+// Each write is read back before it counts: a keystore that accepts a write
+// and keeps nothing is a failure like any other.
+//
+// What a failure leaves, and why it is the safest state available:
+//   refresh write fails  -> the old pair stands, untouched. Nothing is
+//                           deleted: the old refresh token is the only one
+//                           left on the device, spent or not.
+//   access write fails   -> the new refresh token beside the old access
+//                           token. Not a pair the caller retries with — it is
+//                           told the write failed — but the next 401 renews
+//                           with the refresh token the server actually holds.
+//                           Rolling the refresh token back would hand the
+//                           next renewal a token the server has already spent,
+//                           which it treats as theft.
+// Crash window that no ordering removes: killed after the server rotated the
+// pair but before step 1 lands, the device keeps only the spent refresh token,
+// and the next renewal ends the session with a 401.
+const PAIR_NOT_STORED = "TOKEN_PAIR_NOT_STORED";
+const writeVerified = async (key, value) => {
+  try {
+    await SecureStore.setItemAsync(key, value, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+    if ((await SecureStore.getItemAsync(key)) === value) return true;
+  } catch (_) {}
+  return false;
+};
+const writeRotatedPair = async (accessToken, refreshToken) => {
+  if (Platform.OS === "web") {
+    webSession.set(SECURE_KEYS.REFRESH_TOKEN, refreshToken);
+    webSession.set(SECURE_KEYS.AUTH_TOKEN, accessToken);
+    return;
+  }
+  // The message names which write failed and nothing else — no value.
+  if (!await writeVerified(SECURE_KEYS.REFRESH_TOKEN, refreshToken)) {
+    throw Object.assign(new Error("Renewed refresh token could not be stored"), { code: PAIR_NOT_STORED });
+  }
+  if (!await writeVerified(SECURE_KEYS.AUTH_TOKEN, accessToken)) {
+    throw Object.assign(new Error("Renewed access token could not be stored"), { code: PAIR_NOT_STORED });
+  }
+};
+
 export async function saveAuthSession(token, user, userId, refreshToken, options = {}) {
   const value = String(token || "");
   if (!value) throw new Error("Auth token is missing");
   const refreshValue = refreshToken === undefined ? undefined : String(refreshToken || "");
   // A renewal keeps the session's identity: callers holding a snapshot from
   // before it are still operating on the same account and must keep running.
-  const { renewal = false } = options;
+  // onlyIfCurrent names the session the write belongs to. It is checked
+  // inside the queue, where no sign-out or sign-in can slip between the
+  // check and the write: a refresh started by one account that finishes
+  // after another has signed in must not touch the new account's tokens.
+  // Resolves false when the write was skipped for that reason.
+  //
+  // requirePair is for a refresh's rotated tokens: both are written by
+  // writeRotatedPair, and the save rejects unless both are confirmed stored.
+  // Sign-in keeps its own, more forgiving path below.
+  const { renewal = false, onlyIfCurrent = null, requirePair = false } = options;
+  if (requirePair && !refreshValue) throw new Error("Refresh token is missing");
 
   return enqueue(async () => {
+  if (onlyIfCurrent && !await isAuthSessionCurrent(onlyIfCurrent)) return false;
   // A renewal is deliberately silent. Subscribers to this event treat it as
   // "the account changed" and reset what they hold — currentUserStore
   // publishes an empty user, which blanked the avatar on every renewal — and
   // none of that applies when the same person keeps the same session. Only a
   // sign-in, sign-out or account switch notifies.
   if (!renewal) changed();
+  if (requirePair) {
+    await writeRotatedPair(value, refreshValue);
+    return true;
+  }
   if (Platform.OS === "web") {
     webSession.set(SECURE_KEYS.AUTH_TOKEN, value);
     if (refreshValue !== undefined) {
@@ -134,13 +201,35 @@ export async function saveAuthSession(token, user, userId, refreshToken, options
       [STORAGE_KEYS.CURRENT_USER_ID, String(userId)],
     ]);
   }
+  return true;
   });
 }
 
-export async function getRefreshToken() {
+const readRefreshToken = async () => {
   if (Platform.OS === "web") return webSession.get(SECURE_KEYS.REFRESH_TOKEN) ?? null;
+  return (await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN)) ?? null;
+};
+
+// The newest token pair of one session, read inside the queue so that no
+// renewal, sign-out or sign-in can land between the check and the reads.
+// Resolves null once that session has ended — a caller holding account A
+// must never be handed account B's tokens. Rejects when the keychain cannot
+// be read: a read that failed is not a session without a refresh token, and
+// treating it as one would end a session over a storage hiccup. Neither value
+// is ever logged.
+export const readSessionCredentials = (session) => enqueue(async () => {
+  if (!await isAuthSessionCurrent(session)) return null;
+  const token = await readToken();
+  if (!token) return null;
+  return {
+    session: { token, generation: session.generation, userId: session.userId },
+    refreshToken: await readRefreshToken(),
+  };
+});
+
+export async function getRefreshToken() {
   try {
-    return await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN);
+    return await readRefreshToken();
   } catch (error) {
     // A read that throws is not the same as a session with no refresh token,
     // and the two were indistinguishable from the outside.

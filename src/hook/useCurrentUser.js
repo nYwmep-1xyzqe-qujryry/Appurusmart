@@ -4,10 +4,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTranslation } from "react-i18next";
 import { STORAGE_KEYS } from "../config";
 import { clearBiometricToken, setBiometricEnabled } from "../services/biometricService";
-import { captureAuthSession, invalidateAuthSession, getRefreshToken } from "../services/authStorage";
+import { captureAuthSession } from "../services/authStorage";
 import { clearCurrentUserId } from "../services/userSecurityKeys";
-import { getStoredPushToken, removeTokenFromBackend } from "../services/notificationService";
-import api from "../services/api";
+import { logoutSession } from "../services/sessionLogout";
 import { getCurrentUserSnapshot, subscribeCurrentUser, refreshCurrentUser } from "../services/currentUserStore";
 import { clearPushRegistrationForUser } from "../services/pushRegistrationStorage";
 
@@ -54,21 +53,12 @@ export default function useCurrentUser(navigation) {
           if (!session) return;
           const userId = session.userId;
 
-          const pushToken = await getStoredPushToken(session);
-          await removeTokenFromBackend(pushToken, session);
           // Sending the refresh token too lets the server drop it with the
           // access token. Left behind it would stay valid for its full 60
-          // days on a device the user has signed out of. skipAuthRefresh
-          // keeps a 401 here from renewing the session being ended.
-          const refreshToken = await getRefreshToken();
-          try {
-            await api.post(
-              "/auth/logout",
-              refreshToken ? { refresh_token: refreshToken } : null,
-              { authSession: session, suppressAuthRedirect: true, skipAuthRefresh: true },
-            );
-          } catch (_) {}
-          await invalidateAuthSession(session, async () => {
+          // days on a device the user has signed out of. logoutSession hands
+          // the server the newest pair, and clears this device whatever the
+          // server answers.
+          await logoutSession(session, async () => {
           await AsyncStorage.multiRemove([
             STORAGE_KEYS.USER,
             STORAGE_KEYS.NOTIFICATION_INBOX,

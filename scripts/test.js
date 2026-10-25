@@ -2445,6 +2445,8 @@ async function testPushRegistrationRecovery() {
   }
 }
 
+const markFinished = require("./settleGuard")("Tests");
+
 Promise.resolve()
   .then(testRefreshTaskSettlement)
   .then(testForegroundRefresh)
@@ -2458,7 +2460,10 @@ Promise.resolve()
   .then(testInboxMutationOrdering)
   .then(testPushRegistrationRecovery)
   .then(() => require("./test-notification-icon-plugin.js"))
-  .then(() => console.log("Tests OK"))
+  .then(() => {
+    markFinished();
+    console.log("Tests OK");
+  })
   .catch((error) => {
   console.error(error);
   process.exitCode = 1;
