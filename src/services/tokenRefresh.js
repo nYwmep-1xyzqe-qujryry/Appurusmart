@@ -69,7 +69,12 @@ async function performRefresh(session) {
       // as reuse and answer by revoking the device.
       const current = await captureAuthSession();
       if (current?.token) {
-        await saveAuthSession(current.token, undefined, undefined, "");
+        // renewal: true because this only drops the spent refresh token. The
+        // default write advances the session generation, which every snapshot
+        // taken before it is compared against — so clearing the token here
+        // invalidated the very requests waiting on this refresh, and they
+        // reported "session was replaced mid-refresh" and gave up.
+        await saveAuthSession(current.token, undefined, undefined, "", { renewal: true });
       }
       return false;
     }
@@ -112,12 +117,32 @@ async function performRefresh(session) {
 
 // Resolves true when the session now holds a fresh access token, false when
 // the caller should treat the session as finished.
+// How long a just-renewed session is trusted without renewing again. The
+// in-flight guard only merges refreshes that overlap; requests that fail one
+// after another each start their own, and a device whose clock or token the
+// server disagrees with can renew repeatedly while every retry still answers
+// 401. Five seconds is far below the token's lifetime, so an honest expiry
+// is never blocked, while a burst of failures is answered once.
+const RENEWAL_COOLDOWN_MS = 5000;
+let lastRenewalAt = 0;
+
 export function refreshAuthSession(session) {
   if (inFlight) return inFlight;
+  if (Date.now() - lastRenewalAt < RENEWAL_COOLDOWN_MS) {
+    log("renewed moments ago — not renewing again");
+    return Promise.resolve(false);
+  }
   inFlight = performRefresh(session)
+    .then((renewed) => {
+      if (renewed) lastRenewalAt = Date.now();
+      return renewed;
+    })
     .catch(() => false)
     .finally(() => { inFlight = null; });
   return inFlight;
 }
+
+// Login must not inherit the previous session's cooldown.
+export const resetRenewalCooldown = () => { lastRenewalAt = 0; };
 
 export const isRefreshInFlight = () => inFlight !== null;

@@ -29,6 +29,7 @@ import { useTranslation } from "react-i18next";
 import { onLoginSuccess } from "../services/notificationService";
 import { API_BASE_URL, STORAGE_KEYS } from "../config";
 import { saveAuthSession, captureAuthSession, runWithSession, getRefreshToken } from "../services/authStorage";
+import { resetRenewalCooldown } from "../services/tokenRefresh";
 import { checkSupport, getBiometricPresentation, isBiometricEnabled, hasBiometricToken, biometricTokenMatches, saveBiometricToken, setBiometricEnabled, clearBiometricToken } from "../services/biometricService";
 import { isPinSet } from "../services/pinService";
 import { resolveUserId } from "../services/userSecurityKeys";
@@ -466,6 +467,8 @@ const Login = ({ navigation, route }) => {
         refreshExpiresIn: data.refresh_expires_in,
       });
     }
+    // A fresh sign-in must not inherit the previous session's cooldown.
+    resetRenewalCooldown();
     await saveAuthSession(data.token, data.user || {}, userId, data.refresh_token ?? "");
     if (__DEV__ && data.refresh_token) {
       // The server sent one; this says whether the device kept it. A failure

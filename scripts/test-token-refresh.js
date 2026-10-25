@@ -91,9 +91,18 @@ async function main() {
       onSave: () => {},
     });
     await mod.refreshAuthSession(session);
+    // A second renewal moments later is refused by the cooldown: requests
+    // that fail one after another each reach for their own refresh, and a
+    // device the server keeps answering 401 would otherwise renew on every
+    // one of them.
     await mod.refreshAuthSession(session);
-    assert.strictEqual(posts, 2, "a refresh after the first settles must issue its own request");
+    assert.strictEqual(posts, 1, "a renewal moments after the last is not repeated");
     assert.strictEqual(mod.isRefreshInFlight(), false, "the in-flight slot is released");
+
+    // Past the cooldown the next failure may renew again.
+    mod.resetRenewalCooldown();
+    await mod.refreshAuthSession(session);
+    assert.strictEqual(posts, 2, "once the cooldown lapses a renewal is allowed");
   }
 
   // 3. A 401 from the refresh endpoint clears the dead token, so a later
@@ -114,6 +123,16 @@ async function main() {
     assert.strictEqual(await mod.refreshAuthSession(session), false, "a refused refresh ends the session");
     assert.strictEqual(saved.length, 1, "the spent refresh token is cleared");
     assert.strictEqual(saved[0][3], "", "clearing writes an empty refresh token");
+    // The write must be marked a renewal. The default advances the session
+    // generation, which every snapshot taken before it is compared against —
+    // so dropping the spent token here ended the very session the requests
+    // waiting on this refresh belonged to, and they reported "session was
+    // replaced mid-refresh" and gave up.
+    assert.deepStrictEqual(
+      saved[0][4],
+      { renewal: true },
+      "clearing a spent refresh token must not advance the session generation",
+    );
   }
 
   // 4. A network failure says nothing about the token, so it is kept.
