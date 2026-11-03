@@ -13,7 +13,8 @@ export const RefreshResult = Object.freeze({
   // Renewal is not possible right now: the request fails, the session stays,
   // and a later request renews.
   UNAVAILABLE: "unavailable",
-  // The server refused the refresh token (HTTP 401): the session is over.
+  // The session cannot continue: the server refused the refresh token (401),
+  // the device holds none, or a rotated one could not be stored.
   REJECTED: "rejected",
   // The session that asked has already ended — signed out, or replaced by
   // another account. Nothing was read, sent or written for it, and nothing
@@ -173,6 +174,10 @@ async function performRefresh(session) {
     if (status === 429) {
       notBefore.set(session.generation, Date.now() + rateLimitDelay(error.response.headers, Date.now()));
     }
+    // 422 means this request was malformed, and sending it again cannot change
+    // that. Stop asking for this session; the session itself stays. Signing in
+    // again, or restarting the app, clears the hold.
+    if (status === 422) notBefore.set(session.generation, Infinity);
     // 422 (the request itself was malformed), 403 (never sent by the
     // application; an IIS or proxy answer), 429, 5xx, a timeout, no network:
     // none of them says the token is dead. The token is kept, the request
@@ -188,8 +193,9 @@ async function performRefresh(session) {
     // replay, the server answers 401, and the session ends there, by the
     // server's decision rather than a guess here. Ending the session now
     // would sign out every user whose connection merely dropped.
-    // Logout after such a failure can only revoke the pair the device knows;
-    // see sessionLogout.js and docs/backend-session-revocation-handoff.md.
+    // Logout after such a failure still revokes the rotated pair: the server
+    // accepts the spent refresh token as naming its whole family. See
+    // docs/backend-session-revocation-handoff.md.
     return result(RefreshResult.UNAVAILABLE);
   }
 
@@ -215,11 +221,20 @@ async function performRefresh(session) {
       onlyIfCurrent: session,
       requirePair: true,
     });
-  } catch (_) {
-    // Not RENEWED: retrying under a token the device could not keep a
-    // matching refresh token for is what this guards against. Not REJECTED
-    // either — the server accepted the token; the keychain failed.
-    log("renewed tokens could not be stored — keeping the session");
+  } catch (error) {
+    if (error?.refreshTokenLost) {
+      // The server has rotated the pair, so the old refresh token is spent
+      // and the new one cannot be kept. The next renewal would present the
+      // spent token, and the server would end the session then anyway. End it
+      // now and revoke the pair this device cannot hold. Not waited on: the
+      // user is signed out either way.
+      log("rotated refresh token could not be stored — ending the session");
+      refreshClient.post("/auth/logout", { refresh_token: nextRefreshToken }).catch(() => {});
+      return result(RefreshResult.REJECTED);
+    }
+    // The refresh token is stored; only the access token is not. The next
+    // request answers 401 and renews with the stored refresh token.
+    log("renewed access token could not be stored — keeping the session");
     return result(RefreshResult.UNAVAILABLE);
   }
   if (saved === false) {

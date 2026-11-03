@@ -81,10 +81,12 @@ export const runWithSession = (session, operation) => enqueue(async () => {
 // Each write is read back before it counts: a keystore that accepts a write
 // and keeps nothing is a failure like any other.
 //
-// What a failure leaves, and why it is the safest state available:
-//   refresh write fails  -> the old pair stands, untouched. Nothing is
-//                           deleted: the old refresh token is the only one
-//                           left on the device, spent or not.
+// Each write gets a second attempt, since a keystore failure can be momentary.
+// What a failure after that leaves:
+//   refresh write fails  -> the old pair stands, untouched, and the error is
+//                           marked refreshTokenLost. The old refresh token is
+//                           already spent on the server, so the session cannot
+//                           renew again and the caller ends it.
 //   access write fails   -> the new refresh token beside the old access
 //                           token. Not a pair the caller retries with — it is
 //                           told the write failed — but the next 401 renews
@@ -97,12 +99,14 @@ export const runWithSession = (session, operation) => enqueue(async () => {
 // and the next renewal ends the session with a 401.
 const PAIR_NOT_STORED = "TOKEN_PAIR_NOT_STORED";
 const writeVerified = async (key, value) => {
-  try {
-    await SecureStore.setItemAsync(key, value, {
-      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-    });
-    if ((await SecureStore.getItemAsync(key)) === value) return true;
-  } catch (_) {}
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await SecureStore.setItemAsync(key, value, {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      });
+      if ((await SecureStore.getItemAsync(key)) === value) return true;
+    } catch (_) {}
+  }
   return false;
 };
 const writeRotatedPair = async (accessToken, refreshToken) => {
@@ -113,7 +117,10 @@ const writeRotatedPair = async (accessToken, refreshToken) => {
   }
   // The message names which write failed and nothing else — no value.
   if (!await writeVerified(SECURE_KEYS.REFRESH_TOKEN, refreshToken)) {
-    throw Object.assign(new Error("Renewed refresh token could not be stored"), { code: PAIR_NOT_STORED });
+    throw Object.assign(new Error("Renewed refresh token could not be stored"), {
+      code: PAIR_NOT_STORED,
+      refreshTokenLost: true,
+    });
   }
   if (!await writeVerified(SECURE_KEYS.AUTH_TOKEN, accessToken)) {
     throw Object.assign(new Error("Renewed access token could not be stored"), { code: PAIR_NOT_STORED });

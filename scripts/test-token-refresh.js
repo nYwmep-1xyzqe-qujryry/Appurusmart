@@ -313,23 +313,57 @@ async function main() {
       assert.strictEqual(h.state.sentToLogin, 0, "an unreadable refresh token keeps the session");
     }
 
-    // 3c. A renewal counts as stored only once both rotated tokens are in the
-    //     keychain. The refresh token is written first and the access token
-    //     only after it is confirmed; any failure reports UNAVAILABLE — no
-    //     retry, no sign-out, the session's identity unchanged.
+    // 3c. A 200 has already spent the old refresh token. If the new one cannot
+    //     be stored after a second attempt, the session cannot renew again: it
+    //     ends now, the user is told, and the pair the device cannot hold is
+    //     revoked with the refresh token alone.
+    for (const [label, options] of [
+      ["the new refresh token cannot be written", { failSecureWrite: (key, value) => key === "refresh_token" && value === "rA2" }],
+      ["the keychain accepts the new refresh token and keeps nothing", { dropSecureWrite: (key, value) => key === "refresh_token" && value === "rA2" }],
+    ]) {
+      const h = createHarness(
+        { refresh: async () => pair("tA2", "rA2"), resource: async () => 401 },
+        options,
+      );
+      await h.signIn("tA", "rA", "a");
+      const outcome = await within(h.request("api", "/r"));
+      assert.strictEqual(outcome.settled, "rejects", `${label}: the request fails`);
+      assert.deepStrictEqual(h.authorizationsFor("/r"), ["Bearer tA"], `${label}: nothing is retried`);
+      assert.deepStrictEqual(h.state.refreshesSent, ["rA"], `${label}: the spent token is not presented again`);
+      assert.deepStrictEqual(h.state.loginReasons, ["sessionExpired"], `${label}: the session ends with the expiry notice`);
+      assert.deepStrictEqual(h.tokens(), [null, null], `${label}: no token is left behind`);
+      assert.deepStrictEqual(
+        h.state.logoutCalls,
+        [{ authorization: null, body: { refresh_token: "rA2" } }],
+        `${label}: the pair the device cannot hold is revoked`,
+      );
+    }
+    // A momentary keychain failure is survived by the second attempt.
+    {
+      let failures = 1;
+      const h = createHarness(
+        {
+          refresh: async () => pair("tA2", "rA2"),
+          resource: async (auth) => (auth === "Bearer tA2" ? 200 : 401),
+        },
+        {
+          failSecureWrite: (key, value) => {
+            if (key !== "refresh_token" || value !== "rA2" || failures === 0) return false;
+            failures -= 1;
+            return true;
+          },
+        },
+      );
+      await h.signIn("tA", "rA", "a");
+      const outcome = await within(h.request("api", "/r"));
+      assert.strictEqual(outcome.settled, "resolves", "a second write attempt saves the session");
+      assert.deepStrictEqual(h.tokens(), ["tA2", "rA2"], "and both tokens are stored");
+      assert.strictEqual(h.state.sentToLogin, 0, "and the user stays signed in");
+    }
+
+    // 3d. The access token alone failing keeps the session: the refresh token
+    //     the server holds is stored, and the next 401 renews with it.
     const storageFailures = [
-      {
-        label: "the new refresh token cannot be written",
-        options: { failSecureWrite: (key, value) => key === "refresh_token" && value === "rA2" },
-        // Nothing was written: the old pair stands, and the old refresh token
-        // was not deleted on the way.
-        left: ["tA", "rA"],
-      },
-      {
-        label: "the keychain accepts the new refresh token and keeps nothing",
-        options: { dropSecureWrite: (key, value) => key === "refresh_token" && value === "rA2" },
-        left: ["tA", "rA"],
-      },
       {
         label: "the new access token cannot be written",
         options: { failSecureWrite: (key, value) => key === "auth_token" && value === "tA2" },
@@ -384,6 +418,7 @@ async function main() {
     }
     // A's renewal write fails while B signs in: B's pair is untouched.
     {
+      let switched = false;
       const h = createHarness(
         {
           refresh: async (sent) => (sent === "rA" ? pair("tA2", "rA2") : pair("tB2", "rB2")),
@@ -392,8 +427,11 @@ async function main() {
         {
           failSecureWrite: (key, value, self) => {
             if (key !== "refresh_token" || value !== "rA2") return false;
-            self.authStorage.clearAuthSession();
-            self.signIn("tB", "rB", "b");
+            if (!switched) {
+              switched = true;
+              self.authStorage.clearAuthSession();
+              self.signIn("tB", "rB", "b");
+            }
             return true;
           },
         },
@@ -405,6 +443,26 @@ async function main() {
       assert.deepStrictEqual(h.authorizationsFor("/a"), ["Bearer tA"], "A's request is not retried");
       assert.deepStrictEqual(h.tokens(), ["tB", "rB"], "B's pair is exactly as B signed in with");
       assert.strictEqual(h.state.sentToLogin, 0, "B is not signed out");
+    }
+
+    // 3e. A 422 cannot be cured by asking again: that session stops refreshing
+    //     and stays signed in. Another account is not affected.
+    {
+      const h = createHarness({
+        refresh: async (sent) => (sent === "rA" ? 422 : pair("tB2", "rB2")),
+        resource: async (auth) => (auth === "Bearer tB2" ? 200 : 401),
+      });
+      await h.signIn("tA", "rA", "a");
+      await within(h.request("api", "/1"));
+      await within(h.request("api", "/2"));
+      await within(h.request("infoApi", "/3"));
+      assert.deepStrictEqual(h.state.refreshesSent, ["rA"], "after a 422 the session does not ask again");
+      assert.strictEqual(h.state.sentToLogin, 0, "and stays signed in");
+      assert.deepStrictEqual(h.tokens(), ["tA", "rA"], "with its tokens kept");
+      await h.switchTo("tB", "rB", "b");
+      const b = await within(h.request("api", "/b"));
+      assert.strictEqual(b.settled, "resolves", "another account still renews");
+      assert.deepStrictEqual(h.state.refreshesSent, ["rA", "rB"], "with its own token");
     }
 
     // 4. 429 holds off further refreshes of that session until Retry-After,
@@ -823,6 +881,55 @@ async function main() {
       assert.strictEqual(cleaned, 1, `logout answered ${answer}: local cleanup runs`);
       assert.strictEqual(h.state.sentToLogin, 0, `logout answered ${answer}: logout navigates itself, once`);
       assert.strictEqual(h.tokenRefresh.refreshStateSize(), 0, `logout answered ${answer}: logout state is released`);
+    }
+
+    // 11c. A server that does not answer does not hold the user on the screen:
+    //      the request has left, the device clears itself within the limit,
+    //      and the late answer changes nothing.
+    {
+      const answer = deferred();
+      const h = createHarness({
+        resource: async () => 200,
+        logout: async () => { await answer.promise; return 200; },
+      });
+      await h.signIn("tA", "rA", "a");
+      const target = await h.authStorage.captureAuthSession();
+      const done = await within(h.logoutSession(target, async () => {}), 4000);
+      assert.strictEqual(done, true, "logout does not wait out a silent server");
+      assert.deepStrictEqual(h.tokens(), [null, null], "the device is cleared");
+      assert.deepStrictEqual(
+        h.state.logoutCalls,
+        [{ authorization: "Bearer tA", body: { refresh_token: "rA" } }],
+        "and the revocation was sent before the session ended",
+      );
+      answer.resolve();
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.strictEqual(h.tokenRefresh.refreshStateSize(), 0, "nothing is held afterwards");
+    }
+    // A refresh that does not answer does not hold logout up either. Its
+    // late 200 is not written back over the signed-out device.
+    {
+      const started = deferred();
+      const answer = deferred();
+      const h = createHarness({
+        refresh: async () => { started.resolve(); await answer.promise; return pair("tA2", "rA2"); },
+        resource: async () => 401,
+      });
+      await h.signIn("tA", "rA", "a");
+      const target = await h.authStorage.captureAuthSession();
+      const request = h.request("api", "/a");
+      assert.notStrictEqual(await within(started.promise), "timed out", "the refresh is pending");
+      const done = await within(h.logoutSession(target, async () => {}), 4000);
+      assert.strictEqual(done, true, "logout does not wait out a pending refresh");
+      assert.deepStrictEqual(
+        h.state.logoutCalls,
+        [{ authorization: "Bearer tA", body: { refresh_token: "rA" } }],
+        "and revokes with the newest token the device has",
+      );
+      answer.resolve();
+      assert.notStrictEqual(await within(request), "timed out", "the pending request settles");
+      assert.deepStrictEqual(h.tokens(), [null, null], "the late refresh is not written back");
+      assert.strictEqual(h.state.sentToLogin, 0, "and no second sign-out follows");
     }
 
     // 11a. Logout releases its state even when reading the tokens fails or
