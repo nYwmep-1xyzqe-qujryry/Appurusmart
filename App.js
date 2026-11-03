@@ -34,11 +34,6 @@ import {
   shouldShowLock,
 } from "./src/services/lockService";
 import { getCurrentUserId } from "./src/services/userSecurityKeys";
-import { preloadBrandAssets } from "./src/assets/brandAssets";
-
-// Warm the bundled logo before navigation mounts so it does not appear late
-// when the user switches between screens.
-preloadBrandAssets();
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -49,7 +44,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      await Promise.all([initI18n(), preloadBrandAssets()]);
+      await initI18n();
       try {
         // Android channels must exist before any authenticated push can arrive.
         // This runs after i18n initialization because channel labels are
