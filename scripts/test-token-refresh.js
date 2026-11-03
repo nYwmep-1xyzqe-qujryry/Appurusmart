@@ -80,7 +80,7 @@ const pair = (access, refresh) => ({ access_token: access, refresh_token: refres
 //
 // failSecureWrite(key, value, harness) -> true makes that keychain write throw;
 // dropSecureWrite(key, value) -> true makes it "succeed" and keep nothing.
-function createHarness(server, { onSecureWrite, failSecureRead, failSecureWrite, dropSecureWrite } = {}) {
+function createHarness(server, { onSecureWrite, failSecureRead, failSecureWrite, dropSecureWrite, removePushToken } = {}) {
   const realAxios = require("axios");
   const { AxiosError } = realAxios;
   const secure = new Map();
@@ -176,7 +176,7 @@ function createHarness(server, { onSecureWrite, failSecureRead, failSecureWrite,
     "./pushRegistrationStorage": { clearPushRegistrationForUser: async () => {} },
     "./notificationService": {
       getStoredPushToken: async () => null,
-      removeTokenFromBackend: async () => false,
+      removeTokenFromBackend: removePushToken ?? (async () => false),
     },
   };
 
@@ -881,6 +881,42 @@ async function main() {
       assert.strictEqual(cleaned, 1, `logout answered ${answer}: local cleanup runs`);
       assert.strictEqual(h.state.sentToLogin, 0, `logout answered ${answer}: logout navigates itself, once`);
       assert.strictEqual(h.tokenRefresh.refreshStateSize(), 0, `logout answered ${answer}: logout state is released`);
+    }
+
+    // 11b-push. The push token is removed before the session is revoked: the
+    //      removal authenticates with the access token that revoking ends, and
+    //      answered 401 it would leave this device receiving the account's
+    //      notifications. A removal that does not answer does not stop logout.
+    {
+      const removal = deferred();
+      let pushRemovals = 0;
+      const h = createHarness(
+        { resource: async () => 200 },
+        { removePushToken: async () => { pushRemovals += 1; await removal.promise; return true; } },
+      );
+      await h.signIn("tA", "rA", "a");
+      const target = await h.authStorage.captureAuthSession();
+      const logout = h.logoutSession(target, async () => {});
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.strictEqual(pushRemovals, 1, "logout removes the push token");
+      assert.deepStrictEqual(h.state.logoutCalls, [], "and does not revoke the session before that is answered");
+      removal.resolve();
+      assert.strictEqual(await within(logout, 4000), true, "logout then completes");
+      assert.strictEqual(h.state.logoutCalls.length, 1, "with the session revoked after the removal");
+    }
+    {
+      const removal = deferred();
+      const h = createHarness(
+        { resource: async () => 200 },
+        { removePushToken: async () => { await removal.promise; return true; } },
+      );
+      await h.signIn("tA", "rA", "a");
+      const target = await h.authStorage.captureAuthSession();
+      const done = await within(h.logoutSession(target, async () => {}), 6000);
+      assert.strictEqual(done, true, "a push removal that never answers does not stop logout");
+      assert.strictEqual(h.state.logoutCalls.length, 1, "the session is still revoked");
+      assert.deepStrictEqual(h.tokens(), [null, null], "and the device cleared");
+      removal.resolve();
     }
 
     // 11c. A server that does not answer does not hold the user on the screen:

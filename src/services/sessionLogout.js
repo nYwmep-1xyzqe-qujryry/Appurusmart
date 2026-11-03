@@ -66,10 +66,12 @@ export async function logoutSession(target, cleanup) {
     // is not this logout's to end.
     const latest = await readSessionCredentials(target).catch(() => null);
     if (latest) {
-      await atMost(
-        Promise.all([removePushToken(latest.session), revokeOnServer(latest)]),
-        LOGOUT_WAIT_MS,
-      );
+      // In this order: revoking ends the access token the push-token removal
+      // authenticates with, and a removal answered 401 would leave this device
+      // receiving the account's notifications after signing out. Only a removal
+      // still unanswered at the limit overlaps with the revocation.
+      await atMost(removePushToken(latest.session), LOGOUT_WAIT_MS);
+      await atMost(revokeOnServer(latest), LOGOUT_WAIT_MS);
     }
 
     return await invalidateAuthSession(target, cleanup);
