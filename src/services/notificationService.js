@@ -1252,11 +1252,13 @@ export async function onLoginSuccess() {
     registerPushToken(),
     loadNotificationSettings(session).then((settings) => syncNotificationSettingsToBackend(settings, session)),
   ]);
+  // The message only: a request error carries its config, Authorization
+  // header included, and this runs in release builds.
   if (pushResult.status === "rejected") {
-    console.warn("PUSH NOTIFICATION SETUP ERROR:", pushResult.reason);
+    console.warn("PUSH NOTIFICATION SETUP ERROR:", pushResult.reason?.message ?? "unknown error");
   }
   if (settingsResult.status === "rejected") {
-    console.warn("NOTIFICATION SETTINGS ERROR:", settingsResult.reason);
+    console.warn("NOTIFICATION SETTINGS ERROR:", settingsResult.reason?.message ?? "unknown error");
   }
 
   syncNotificationInboxFromBackend().catch((error) => {

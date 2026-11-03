@@ -78,6 +78,8 @@ module.exports = {
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
       ],
+      // Comes from the native template; nothing in the app draws over others.
+      blockedPermissions: ["android.permission.SYSTEM_ALERT_WINDOW"],
     },
     web: {
       favicon: "./assets/favicon.png",
