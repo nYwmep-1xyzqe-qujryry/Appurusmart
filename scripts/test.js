@@ -60,6 +60,7 @@ const testSessionFeedback = require("./test-session-feedback");
 const testImports = require("./test-imports");
 const testTokenRefresh = require("./test-token-refresh");
 const testBrandAssets = require("./test-brand-assets");
+const testExpertResource = require("./test-expert-resource");
 
 const parsed = thaiDate.parseISOToDate("2024-10-26");
 assert.equal(parsed.getFullYear(), 2024);
@@ -2458,6 +2459,7 @@ Promise.resolve()
   .then(testImports)
   .then(testTokenRefresh)
   .then(testBrandAssets)
+  .then(testExpertResource)
   .then(testInboxLockOrdering)
   .then(testInboxMutationOrdering)
   .then(testPushRegistrationRecovery)

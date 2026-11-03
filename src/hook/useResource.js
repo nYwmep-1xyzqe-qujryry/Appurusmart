@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import infoApi from "../services/infoApi";
 import { notifyExpertChange } from "../services/expertChanges";
-import { readResourceCache, writeResourceCache } from "../services/resourceCache";
+import { invalidateResourceCache, readResourceCache, writeResourceCache } from "../services/resourceCache";
 import { captureAuthSession, isResourceSessionCurrent, runWithSession, subscribeAuthSession } from "../services/authStorage";
 
 const expertEndpoint = (endpoint) => `/info/expert${endpoint}`;
@@ -28,6 +28,8 @@ const useResource = (endpoint, options = {}) => {
   const requestSequence = useRef(0);
   const paramsKey = JSON.stringify(params);
   const cacheKey = `expert:${endpoint}:${paramsKey}`;
+  // Every params variant of this list, cleared together after a mutation.
+  const resourceCachePrefix = `expert:${endpoint}:`;
 
   useEffect(() => {
     mounted.current = true;
@@ -36,7 +38,12 @@ const useResource = (endpoint, options = {}) => {
 
   const refetch = useCallback(async ({ force = false } = {}) => {
     if (skip) return;
-    if (inFlight.current) return inFlight.current;
+    // A forced refetch follows a change on the server and must see it. A load
+    // already running was asked before the change, so joining it would show
+    // the list as it was — a deleted entry left on screen. The new request
+    // takes the next sequence number, which makes the earlier one discard its
+    // answer instead of writing it over the new list.
+    if (inFlight.current && !force) return inFlight.current;
 
     const request = (async () => {
       const sequence = ++requestSequence.current;
@@ -107,6 +114,14 @@ const useResource = (endpoint, options = {}) => {
     }
   }), [refetch, skip]);
 
+  // Called once the server has confirmed a create, update or delete, before
+  // the list is refetched. The cached list predates the change: left in
+  // place it stays "fresh" for five minutes, and a screen closed before the
+  // refetch landed — whose answer is then discarded — reopened on it, showing
+  // an entry already deleted that answered 404 to edit or delete.
+  const invalidateList = (session) =>
+    invalidateResourceCache(resourceCachePrefix, { scope: session.userId ?? null });
+
   const normalizePayload = (data) => {
     if (!data || typeof data !== "object") return data;
     const out = { ...data };
@@ -137,6 +152,7 @@ const useResource = (endpoint, options = {}) => {
         sessionSnapshot: true,
       });
       if (!await isResourceSessionCurrent(mutationSession)) throw new Error("Session changed");
+      await invalidateList(mutationSession);
       notifyExpertChange(endpoint);
       await refetch({ force: true });
       return res.data?.data ?? res.data;
@@ -147,7 +163,7 @@ const useResource = (endpoint, options = {}) => {
       createLock.current = false;
       if (mounted.current) setSaving(false);
     }
-  }, [endpoint, refetch]);
+  }, [endpoint, refetch, resourceCachePrefix]);
 
   const update = useCallback(async (id, data) => {
     if (updateLock.current) return null;
@@ -161,6 +177,7 @@ const useResource = (endpoint, options = {}) => {
         sessionSnapshot: true,
       });
       if (!await isResourceSessionCurrent(mutationSession)) throw new Error("Session changed");
+      await invalidateList(mutationSession);
       notifyExpertChange(endpoint);
       await refetch({ force: true });
       return res.data?.data ?? res.data;
@@ -171,7 +188,7 @@ const useResource = (endpoint, options = {}) => {
       updateLock.current = false;
       if (mounted.current) setSaving(false);
     }
-  }, [endpoint, refetch]);
+  }, [endpoint, refetch, resourceCachePrefix]);
 
   const remove = useCallback(async (id) => {
     if (removeLock.current) return null;
@@ -185,6 +202,7 @@ const useResource = (endpoint, options = {}) => {
         sessionSnapshot: true,
       });
       if (!await isResourceSessionCurrent(mutationSession)) throw new Error("Session changed");
+      await invalidateList(mutationSession);
       notifyExpertChange(endpoint);
       await refetch({ force: true });
     } catch (err) {
@@ -193,7 +211,7 @@ const useResource = (endpoint, options = {}) => {
       removeLock.current = false;
       if (mounted.current) setRemoving(false);
     }
-  }, [endpoint, refetch]);
+  }, [endpoint, refetch, resourceCachePrefix]);
 
   return { items, loading, error, saving, removing, create, update, remove, refetch };
 };
